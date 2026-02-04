@@ -1,0 +1,47 @@
+# Betriebssystem
+.DS_Store
+Thumbs.db
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# Terraform/OpenTofu
+*.tfstate
+*.tfstate.*
+.terraform/
+.terraform.lock.hcl
+*.tfvars
+!*.tfvars.example
+crash.log
+
+# Ansible
+*.retry
+.vault_pass
+
+# Secrets (unverschlüsselt)
+*.key
+*.pem
+!*.pub
+secrets.yaml
+!*.enc.yaml
+
+# Kubernetes
+kubeconfig
+kubeconfig.yaml
+*.kubeconfig
+
+# Packer
+packer_cache/
+*.box
+
+# Logs
+*.log
+
+# Temporäre Dateien
+tmp/
+temp/
+*.tmp
+*.bak

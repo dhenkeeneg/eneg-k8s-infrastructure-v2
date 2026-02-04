@@ -1,0 +1,20 @@
+creation_rules:
+  # Terraform Secrets
+  - path_regex: terraform/.*\.enc\.yaml$
+    age: >-
+      age1xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
+  
+  # Kubernetes Secrets - DEV
+  - path_regex: kubernetes/environments/dev/secrets/.*\.enc\.yaml$
+    age: >-
+      age1xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
+  
+  # Kubernetes Secrets - TEST
+  - path_regex: kubernetes/environments/test/secrets/.*\.enc\.yaml$
+    age: >-
+      age1xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
+  
+  # Kubernetes Secrets - PROD
+  - path_regex: kubernetes/environments/prod/secrets/.*\.enc\.yaml$
+    age: >-
+      age1xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
