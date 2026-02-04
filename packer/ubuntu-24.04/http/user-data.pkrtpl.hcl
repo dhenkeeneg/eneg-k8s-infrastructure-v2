@@ -46,7 +46,7 @@ autoinstall:
   packages: []
   
   # Keine Updates während Installation - vermeidet Kernel-Mismatch
-  updates: "no"
+  updates: false
   
   # Späte Befehle
   late-commands:
