@@ -36,6 +36,8 @@ kubeconfig.yaml
 # Packer
 packer_cache/
 *.box
+*.auto.pkrvars.hcl
+credentials.pkrvars.hcl
 
 # Logs
 *.log
