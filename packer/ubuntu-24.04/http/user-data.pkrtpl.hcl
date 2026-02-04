@@ -6,6 +6,12 @@ autoinstall:
     layout: de
     variant: nodeadkeys
   
+  # APT: Offline-Installation vom ISO - verhindert Kernel-Mismatch
+  apt:
+    fallback: offline-install
+    geoip: false
+    preserve_sources_list: false
+  
   # Netzwerk: Statische IP für Template-Build
   network:
     version: 2
@@ -40,10 +46,6 @@ autoinstall:
   ssh:
     install-server: true
     allow-pw: true
-  
-  # KEINE zusätzlichen Pakete während Installation
-  # Kernel kommt von der ISO, Updates macht Packer danach
-  packages: []
   
   # Späte Befehle
   late-commands:
