@@ -45,9 +45,6 @@ autoinstall:
   # Kernel kommt von der ISO, Updates macht Packer danach
   packages: []
   
-  # Keine Updates während Installation - vermeidet Kernel-Mismatch
-  updates: false
-  
   # Späte Befehle
   late-commands:
     - sed -i 's/^#*PasswordAuthentication.*/PasswordAuthentication yes/' /target/etc/ssh/sshd_config
