@@ -6,12 +6,6 @@ autoinstall:
     layout: de
     variant: nodeadkeys
   
-  # APT: Offline-Installation vom ISO - verhindert Kernel-Mismatch
-  apt:
-    fallback: offline-install
-    geoip: false
-    preserve_sources_list: false
-  
   # Netzwerk: Statische IP für Template-Build
   network:
     version: 2
