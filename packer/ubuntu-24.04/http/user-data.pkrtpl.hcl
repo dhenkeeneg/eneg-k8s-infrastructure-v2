@@ -6,7 +6,7 @@ autoinstall:
     layout: de
     variant: nodeadkeys
   
-  # Netzwerk: Statische IP für Template-Build
+  # Netzwerk: Statische IP für Template-Build - mit Google DNS
   network:
     version: 2
     ethernets:
@@ -20,9 +20,8 @@ autoinstall:
             via: ${gateway}
         nameservers:
           addresses:
-            - 192.168.161.101
-            - 192.168.161.102
-            - 192.168.161.103
+            - 8.8.8.8
+            - 8.8.4.4
   
   # Storage: Gesamte Disk verwenden mit LVM
   storage:
@@ -40,6 +39,10 @@ autoinstall:
   ssh:
     install-server: true
     allow-pw: true
+
+  # Kernel: Spezifische Version von der ISO verwenden
+  kernel:
+    package: linux-image-6.8.0-71-generic
   
   # Späte Befehle
   late-commands:
