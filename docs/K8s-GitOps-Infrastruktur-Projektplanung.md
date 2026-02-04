@@ -1,8 +1,9 @@
 # GitOps Kubernetes-Infrastruktur auf VMware vSphere
 
-## Projektplanung - Version 1.0
+## Projektplanung - Version 1.1
 
 **Erstellt:** 04.02.2026  
+**Letzte Aktualisierung:** 04.02.2026  
 **Standort:** Hamburg  
 **Projekt:** eNeG K8s Infrastructure v2
 
@@ -72,7 +73,7 @@ Aufbau einer vollständig automatisierten, GitOps-basierten Kubernetes-Infrastru
 ```
 +-----------------------------------------------------------------------------+
 |                              MANAGEMENT                                      |
-|  mgmt.eneg.de (192.168.180.10) - Ubuntu 24.04, 4 vCPU, 8GB RAM, 100GB       |
+|  k8s-mgmt-10.eneg.de (192.168.180.10) - Ubuntu 24.04, 4 vCPU, 8GB RAM, 100GB|
 |  Tools: OpenTofu, Ansible, kubectl, Helm, SOPS, Age, Git                    |
 +-----------------------------------------------------------------------------+
         |
@@ -158,15 +159,19 @@ Aufbau einer vollständig automatisierten, GitOps-basierten Kubernetes-Infrastru
 
 ### Management-VM
 
-- **Hostname:** mgmt.eneg.de
+- **Hostname:** k8s-mgmt-10.eneg.de
 - **IP:** 192.168.180.10
 - **VLAN:** 180
+- **vCenter:** vCenter-A (S2843)
+- **Datastore:** S2843_SSD_01_VMS
+- **Ordner:** eNeG-VM-Produktiv/k8s-mgmt-10
+- **Kompatibilität:** ESXi 8.0 U2 und höher (VM-Version 21)
 
 ### DNS-Einträge (zu erstellen)
 
 ```
 # Management
-mgmt.eneg.de              -> 192.168.180.10
+k8s-mgmt-10.eneg.de       -> 192.168.180.10
 
 # DEV Cluster Nodes
 k8s-dev-21.eneg.de        -> 192.168.180.21
@@ -755,7 +760,7 @@ extraArgs:
 
 | Phase | Beschreibung | Dauer | Status |
 |-------|--------------|-------|--------|
-| 0 | Vorbereitung & Workstation Setup | 1-2 Tage | In Arbeit |
+| 0 | Vorbereitung & Workstation Setup | 1-2 Tage | ✅ Abgeschlossen |
 | 1 | Ubuntu-Template & VM-Automatisierung | 2-3 Tage | Offen |
 | 2 | K3s DEV-Cluster | 1-2 Tage | Offen |
 | 3 | GitOps-Fundament (ArgoCD, SOPS, GitHub) | 2-3 Tage | Offen |
@@ -769,35 +774,53 @@ extraArgs:
 
 **Geschätzte Gesamtdauer:** 20-32 Arbeitstage
 
-### Phase 0: Vorbereitung & Workstation Setup
+### Phase 0: Vorbereitung & Workstation Setup ✅
 
 **Ziel:** Arbeitsstationen und Management-VM bereit für alle Phasen
+
+**Abgeschlossen am:** 04.02.2026
 
 **Windows Laptop:**
 - [x] Git installieren
 - [x] Node.js installieren (für MCP Server)
 - [x] SSH-Key generieren (Ed25519)
 - [x] Desktop Commander MCP konfigurieren
-- [ ] SSH MCP Server einrichten
-- [ ] VS Code mit Extensions installieren
 - [x] kubectl installieren
 
 **MacBook/MacMini:**
 - [x] Desktop Commander MCP konfigurieren
-- [x] allowedDirectories konfigurieren
+- [x] allowedDirectories konfigurieren (/Users/danielhenke/git)
+- [x] Repository geklont
 
 **GitHub:**
-- [x] Repository erstellen (privat)
-- [x] Basis-Struktur anlegen
-- [ ] Deploy Key einrichten
+- [x] Repository erstellen (privat): eneg-k8s-infrastructure-v2
+- [x] Basis-Struktur angelegt
+- [x] SSH-Key für Management-VM hinzugefügt
 
-**Management-VM:**
-- [ ] VM in vCenter-A erstellen
-- [ ] Ubuntu 24.04 installieren
-- [ ] Statische IP konfigurieren (192.168.180.10)
-- [ ] DNS-Eintrag anlegen (mgmt.eneg.de)
-- [ ] SSH-Keys deployen
-- [ ] Tools installieren (OpenTofu, Ansible, Packer, kubectl, Helm, SOPS, Age, Git)
+**Management-VM (k8s-mgmt-10.eneg.de):**
+- [x] VM in vCenter-A erstellt (Host: S2843, Datastore: S2843_SSD_01_VMS)
+- [x] Ubuntu 24.04 LTS installiert
+- [x] Statische IP konfiguriert (192.168.180.10)
+- [x] System aktualisiert (apt update/upgrade)
+- [x] SSH-Key generiert und in GitHub hinterlegt
+- [x] Git konfiguriert (user.name, user.email)
+- [x] Repository geklont nach ~/git/eneg-k8s-infrastructure-v2
+- [x] Alle Tools installiert (siehe Tool-Versionen unten)
+
+**Installierte Tool-Versionen auf k8s-mgmt-10:**
+
+| Tool | Version | Installationsmethode |
+|------|---------|---------------------|
+| OpenTofu | 1.11.4 | install-opentofu.sh (deb) |
+| Ansible | 2.20.2 (core) | PPA ansible/ansible |
+| Packer | 1.15.0 | HashiCorp APT Repository |
+| kubectl | 1.35.0 | Kubernetes APT Repository (v1.35) |
+| Helm | 3.20.0 | get-helm-3 Script |
+| SOPS | 3.11.0 | GitHub Release Binary |
+| Age | 1.1.1 | apt (Ubuntu Repository) |
+| Git | 2.43.0 | apt (Ubuntu Repository) |
+
+**Hinweis:** Bei kubectl wurde initial das v1.32 Repository verwendet, was zu einer veralteten Version führte. Dies wurde korrigiert durch Wechsel auf das v1.35 Repository, da Kubernetes 1.32 am 28.02.2026 End-of-Life erreicht.
 
 
 ---
@@ -845,13 +868,25 @@ docs/
 
 ## Anhang A: Tool-Versionen
 
+### Management-VM (k8s-mgmt-10) - Stand 04.02.2026
+
 | Tool | Version | Hinweis |
 |------|---------|---------|
 | Ubuntu Server | 24.04 LTS | Bis April 2029 unterstützt |
+| OpenTofu | 1.11.4 | Aktuell (Released 21.01.2026) |
+| Ansible | 2.20.2 (core) | Aktuell (Released 29.01.2026) |
+| Packer | 1.15.0 | Aktuell |
+| kubectl | 1.35.0 | Aktuell (K8s 1.35 Released 17.12.2025) |
+| Helm | 3.20.0 | Aktuell |
+| SOPS | 3.11.0 | Aktuell |
+| Age | 1.1.1 | Aktuell |
+| Git | 2.43.0 | Ubuntu Default |
+
+### Kubernetes Cluster (geplant)
+
+| Tool | Version | Hinweis |
+|------|---------|---------|
 | K3s | Latest Stable | Wird bei Installation ermittelt |
-| OpenTofu | 1.11.x | |
-| Ansible | 2.20.x | |
-| Packer | Latest | |
 | ArgoCD | Latest Stable | |
 | Cert-Manager | 1.16.x | |
 | Longhorn | Latest Stable | |
@@ -877,6 +912,7 @@ docs/
 | Datum | Version | Änderung | Autor |
 |-------|---------|----------|-------|
 | 04.02.2026 | 1.0 | Initiale Version | Claude AI / D. Henke |
+| 04.02.2026 | 1.1 | Phase 0 abgeschlossen, Management-VM dokumentiert, Tool-Versionen aktualisiert, Hostname korrigiert (k8s-mgmt-10 statt mgmt) | Claude AI / D. Henke |
 
 ---
 
