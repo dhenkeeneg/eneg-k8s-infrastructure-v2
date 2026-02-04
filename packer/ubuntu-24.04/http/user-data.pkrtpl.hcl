@@ -7,7 +7,6 @@ autoinstall:
     variant: nodeadkeys
   
   # Netzwerk: Statische IP für Template-Build
-  # Wildcard match für alle Ethernet-Interfaces
   network:
     version: 2
     ethernets:
@@ -42,14 +41,12 @@ autoinstall:
     install-server: true
     allow-pw: true
   
-  # Minimale Pakete - Rest wird von Packer installiert
-  packages:
-    - openssh-server
-    - open-vm-tools
-    - cloud-init
+  # KEINE zusätzlichen Pakete während Installation
+  # Kernel kommt von der ISO, Updates macht Packer danach
+  packages: []
   
-  # Updates überspringen während Installation (schneller)
-  updates: security
+  # Keine Updates während Installation - vermeidet Kernel-Mismatch
+  updates: "no"
   
   # Späte Befehle
   late-commands:
