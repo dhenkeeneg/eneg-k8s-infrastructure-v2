@@ -7,22 +7,23 @@ autoinstall:
     variant: nodeadkeys
   
   # Netzwerk: Statische IP für Template-Build
+  # Wildcard match für alle Ethernet-Interfaces
   network:
-    network:
-      version: 2
-      ethernets:
-        ens192:
-          dhcp4: false
+    version: 2
+    ethernets:
+      id0:
+        match:
+          driver: vmxnet3
+        addresses:
+          - ${build_ip}/24
+        routes:
+          - to: default
+            via: ${gateway}
+        nameservers:
           addresses:
-            - ${build_ip}/24
-          routes:
-            - to: default
-              via: ${gateway}
-          nameservers:
-            addresses:
-              - 192.168.161.101
-              - 192.168.161.102
-              - 192.168.161.103
+            - 192.168.161.101
+            - 192.168.161.102
+            - 192.168.161.103
   
   # Storage: Gesamte Disk verwenden mit LVM
   storage:
@@ -41,27 +42,17 @@ autoinstall:
     install-server: true
     allow-pw: true
   
-  # Pakete
+  # Minimale Pakete - Rest wird von Packer installiert
   packages:
     - openssh-server
     - open-vm-tools
     - cloud-init
-    - curl
-    - wget
-    - vim
-    - htop
-    - net-tools
-    - ca-certificates
-    - gnupg
-    - lsb-release
   
-  # Updates
+  # Updates überspringen während Installation (schneller)
   updates: security
   
   # Späte Befehle
   late-commands:
-    # SSH Passwort-Login temporär erlauben (für Packer)
     - sed -i 's/^#*PasswordAuthentication.*/PasswordAuthentication yes/' /target/etc/ssh/sshd_config
-    # sudo ohne Passwort für admin-ubuntu
     - echo '${ssh_username} ALL=(ALL) NOPASSWD:ALL' > /target/etc/sudoers.d/${ssh_username}
     - chmod 0440 /target/etc/sudoers.d/${ssh_username}
