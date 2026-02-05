@@ -5,6 +5,7 @@
 # Die .auto.pkrvars.hcl Dateien werden automatisch geladen
 # =============================================================================
 
-vcenter_username = "OpenTofu@eneg.de"
-vcenter_password = "DEIN_VCENTER_PASSWORT"
-ssh_password     = "TEMPORAERES_BUILD_PASSWORT"
+vcenter_username  = "OpenTofu@eneg.de"
+vcenter_password  = "DEIN_VCENTER_PASSWORT"
+ssh_password      = "KLARTEXT_PASSWORT"
+ssh_password_hash = "$6$DEIN_SHA512_HASH"

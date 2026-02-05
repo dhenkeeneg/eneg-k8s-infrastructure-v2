@@ -111,7 +111,13 @@ variable "ssh_username" {
 variable "ssh_password" {
   type        = string
   sensitive   = true
-  description = "SSH Passwort (wird später durch SSH-Key ersetzt)"
+  description = "SSH Passwort im Klartext (für Packer SSH-Verbindung)"
+}
+
+variable "ssh_password_hash" {
+  type        = string
+  sensitive   = true
+  description = "SSH Passwort als SHA-512 Hash (für Ubuntu autoinstall)"
 }
 
 variable "build_ip" {
@@ -175,10 +181,10 @@ source "vsphere-iso" "ubuntu" {
   cd_content = {
     "meta-data" = file("${path.root}/http/meta-data")
     "user-data" = templatefile("${path.root}/http/user-data.pkrtpl.hcl", {
-      ssh_username = var.ssh_username
-      ssh_password = var.ssh_password
-      build_ip     = var.build_ip
-      gateway      = var.gateway
+      ssh_username      = var.ssh_username
+      ssh_password_hash = var.ssh_password_hash
+      build_ip          = var.build_ip
+      gateway           = var.gateway
     })
   }
   cd_label = "cidata"

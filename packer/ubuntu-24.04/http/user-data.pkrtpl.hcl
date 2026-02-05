@@ -33,7 +33,7 @@ autoinstall:
   identity:
     hostname: ubuntu-template
     username: ${ssh_username}
-    password: "${ssh_password}"
+    password: "${ssh_password_hash}"
   
   # SSH Server aktivieren
   ssh:
