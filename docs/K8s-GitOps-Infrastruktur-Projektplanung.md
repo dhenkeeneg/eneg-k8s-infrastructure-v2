@@ -64,9 +64,20 @@ Aufbau einer vollständig automatisierten, GitOps-basierten Kubernetes-Infrastru
 | vCenter | ESXi Version | Hardware | Datastore |
 |---------|--------------|----------|-----------|
 | vCenter-A | ESXi 8.03 | 2x Dell (48 Cores, 512GB RAM) | S2843_SSD_01_VMS, S3168_SSD_01_VMS |
-| vCenter-B | ESXi 6.7 | 1x Dell (48 Cores, 512GB RAM) | S2842_D08-10_R5_SSD_K8s |
+| vCenter | ESXi 6.7 | 1x Dell (48 Cores, 512GB RAM) | S2842_D08-10_R5_SSD_K8s |
 
 **Ziel:** Migration zu vCenter-A, beide Versionen werden initial unterstützt.
+
+
+### VMware Hosts in vSphere Umgebungen
+
+| vcenter-Name | Host-Nr | Host-Name     | ESX-Version | Hardware                   | Datastore               |
+|--------------|---------|---------------|-------------|----------------------------|-------------------------|
+| vCenter-A    | HOST2   | s2843.eneg.de | ESXi 8.03   | Dell (48 Cores, 512GB RAM) | S2843_SSD_01_VMS        |
+| vCenter-A    | HOST3   | s3168.eneg.de | ESXi 8.03   | Dell (48 Cores, 512GB RAM) | S3168_SSD_01_VMS        |
+|--------------|---------|---------------|-------------|----------------------------|-------------------------|
+| vCenter      | HOST1   | s2842.eneg.de | ESXi 6.7.0  | Dell (48 Cores, 512GB RAM) | S2842_D08-10_R5_SSD_K8s |
+	
 
 ### VM-Übersicht
 
@@ -91,6 +102,22 @@ Aufbau einer vollständig automatisierten, GitOps-basierten Kubernetes-Infrastru
 | 384GB Disk        |   | 512GB Disk        |   | 768GB Disk        |
 +-------------------+   +-------------------+   +-------------------+
 ```
+
+### VM-Verteilung auf die Hosts
+
+Aus jedem Environment soll jeweils eine VM auf einem Host landen. Jeder Host bekommt somit drei neue VMs
+
+Beispiel:
+Host1 - k8s-dev-21
+Host2 - k8s-dev-22
+Host3 - k8s-dev-23
+
+Host1 - k8s-test-21
+Host2 - k8s-test-22
+Host3 - k8s-test-23
+
+usw.
+
 
 ### Ressourcen-Dimensionierung
 
