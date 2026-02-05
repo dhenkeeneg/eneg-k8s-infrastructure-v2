@@ -281,8 +281,8 @@ build {
       "sudo truncate -s 0 /var/log/**/*.log 2>/dev/null || true",
       "",
       "# Bash History löschen",
-      "cat /dev/null > ~/.bash_history",
-      "history -c"
+      "cat /dev/null > ~/.bash_history || true",
+      "sudo rm -f /root/.bash_history || true"
     ]
   }
 }
