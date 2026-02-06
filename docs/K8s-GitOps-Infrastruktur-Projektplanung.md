@@ -181,6 +181,16 @@ usw.
 | TEST | 179 | 192.168.179.0/24 | .247 | 192.168.161.101-103 |
 | PROD | 178 | 192.168.178.0/24 | .247 | 192.168.161.101-103 |
 
+### VMware Port Groups
+
+Die Port Group Namen sind in beiden vCentern identisch:
+
+| Umgebung | VLAN | Port Group Name |
+|----------|------|-----------------|
+| DEV | 180 | VT 180 - K8s Dev |
+| TEST | 179 | VT 179 - K8s Test |
+| PROD | 178 | VT 178 - K8s Prod |
+
 ### IP-Zuweisung
 
 | Rolle | DEV | TEST | PROD |
