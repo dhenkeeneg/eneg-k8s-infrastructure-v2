@@ -805,7 +805,7 @@ extraArgs:
 | Phase | Beschreibung | Dauer | Status |
 |-------|--------------|-------|--------|
 | 0 | Vorbereitung & Workstation Setup | 1-2 Tage | ✅ Abgeschlossen |
-| 1 | Ubuntu-Template & VM-Automatisierung | 2-3 Tage | Offen |
+| 1 | Ubuntu-Template & VM-Automatisierung | 2-3 Tage | ✅ Abgeschlossen |
 | 2 | K3s DEV-Cluster | 1-2 Tage | Offen |
 | 3 | GitOps-Fundament (ArgoCD, SOPS, GitHub) | 2-3 Tage | Offen |
 | 4 | Kubernetes-Basis (MetalLB, Traefik, Cert-Manager, Longhorn) | 2-3 Tage | Offen |
@@ -817,6 +817,8 @@ extraArgs:
 | 10 | Backup & Dokumentation | 2-3 Tage | Offen |
 
 **Geschätzte Gesamtdauer:** 20-32 Arbeitstage
+
+**Detaillierte Phasen-Dokumentation:** [docs/phases/README.md](phases/README.md)
 
 ### Phase 0: Vorbereitung & Workstation Setup ✅
 
@@ -957,6 +959,7 @@ docs/
 |-------|---------|----------|-------|
 | 04.02.2026 | 1.0 | Initiale Version | Claude AI / D. Henke |
 | 04.02.2026 | 1.1 | Phase 0 abgeschlossen, Management-VM dokumentiert, Tool-Versionen aktualisiert, Hostname korrigiert (k8s-mgmt-10 statt mgmt) | Claude AI / D. Henke |
+| 06.02.2026 | 1.2 | Phase 1 abgeschlossen, Phasen-Dokumentation eingeführt (docs/phases/) | Claude AI / D. Henke |
 
 ---
 
