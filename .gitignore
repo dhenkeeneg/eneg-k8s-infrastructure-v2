@@ -14,7 +14,8 @@ Thumbs.db
 .terraform/
 .terraform.lock.hcl
 *.tfvars
-!*.tfvars.example
+!*.example.tfvars
+!credentials.example.tfvars
 crash.log
 
 # Ansible
