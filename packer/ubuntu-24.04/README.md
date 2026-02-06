@@ -9,19 +9,31 @@ Dieses Verzeichnis enthält die Packer-Konfiguration für das Ubuntu 24.04 LTS V
 | Datei | Beschreibung |
 |-------|--------------|
 | `ubuntu-24.04.pkr.hcl` | Haupt-Packer-Konfiguration |
-| `variables.pkrvars.hcl` | Variablen (nicht-sensitiv) |
+| `variables-vcenter-a.pkrvars.hcl` | Variablen für vCenter-A (HOST2, HOST3) |
+| `variables-vcenter-legacy.pkrvars.hcl` | Variablen für vCenter Legacy (HOST1) |
 | `credentials.example.pkrvars.hcl` | Beispiel für Credentials |
 | `credentials.auto.pkrvars.hcl` | Echte Credentials (in .gitignore, nicht committed!) |
 | `http/user-data.pkrtpl.hcl` | Cloud-Init Autoinstall Konfiguration |
 | `http/meta-data` | Cloud-Init Meta-Daten (leer) |
 
+## Zwei vCenter-Umgebungen
+
+Da die Infrastruktur auf zwei vCenter verteilt ist, gibt es zwei Variablen-Dateien:
+
+| vCenter | Variablen-Datei | Hosts | Template-Datastore |
+|---------|-----------------|-------|-------------------|
+| vCenter-A (vcenter-a.eneg.de) | `variables-vcenter-a.pkrvars.hcl` | s2843, s3168 | S2843_HDD_00_BOOT |
+| vCenter Legacy (vcenter.eneg.de) | `variables-vcenter-legacy.pkrvars.hcl` | s2842 | S2842_D08-10_R5_SSD_K8s |
+
+**Hinweis:** Templates können nicht zwischen den vCentern kopiert werden (unterschiedliche ESXi-Versionen). Daher muss in jedem vCenter ein eigenes Template erstellt werden.
+
 ## Voraussetzungen
 
 - Packer >= 1.10.0
 - vSphere Plugin für Packer
-- Zugang zu vCenter-A (vcenter-a.eneg.de)
-- Ubuntu 24.04 ISO im Datastore hochgeladen
-- Netzwerkzugang von der Build-Maschine zum vCenter und zur temporären Build-IP
+- Zugang zu vCenter-A (vcenter-a.eneg.de) und/oder vCenter Legacy (vcenter.eneg.de)
+- Ubuntu 24.04 ISO im jeweiligen Datastore hochgeladen
+- Netzwerkzugang von der Build-Maschine zum vCenter und zur temporären Build-IP (192.168.180.9)
 
 ## Verwendung
 
@@ -60,13 +72,21 @@ packer init ubuntu-24.04.pkr.hcl
 ### 3. Template validieren (optional)
 
 ```bash
-packer validate -var-file="credentials.auto.pkrvars.hcl" -var-file="variables.pkrvars.hcl" ubuntu-24.04.pkr.hcl
+# Für vCenter-A (HOST2, HOST3):
+packer validate -var-file="credentials.auto.pkrvars.hcl" -var-file="variables-vcenter-a.pkrvars.hcl" ubuntu-24.04.pkr.hcl
+
+# Für vCenter Legacy (HOST1):
+packer validate -var-file="credentials.auto.pkrvars.hcl" -var-file="variables-vcenter-legacy.pkrvars.hcl" ubuntu-24.04.pkr.hcl
 ```
 
 ### 4. Template bauen
 
 ```bash
-packer build -var-file="credentials.auto.pkrvars.hcl" -var-file="variables.pkrvars.hcl" ubuntu-24.04.pkr.hcl
+# Für vCenter-A (HOST2, HOST3):
+packer build -var-file="credentials.auto.pkrvars.hcl" -var-file="variables-vcenter-a.pkrvars.hcl" ubuntu-24.04.pkr.hcl
+
+# Für vCenter Legacy (HOST1):
+packer build -var-file="credentials.auto.pkrvars.hcl" -var-file="variables-vcenter-legacy.pkrvars.hcl" ubuntu-24.04.pkr.hcl
 ```
 
 ## Was das Template enthält
