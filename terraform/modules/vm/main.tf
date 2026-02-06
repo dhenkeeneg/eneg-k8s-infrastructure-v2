@@ -95,18 +95,6 @@ resource "vsphere_virtual_machine" "vm" {
     }
   }
 
-  # vApp Properties für cloud-init (wenn Guest Customization deaktiviert)
-  dynamic "vapp" {
-    for_each = var.use_guest_customization ? [] : [1]
-    content {
-      properties = {
-        "instance-id" = var.vm_name
-        "hostname"    = var.hostname
-        "user-data"   = base64encode(var.cloud_init_userdata)
-      }
-    }
-  }
-
   lifecycle {
     ignore_changes = [
       clone[0].template_uuid,

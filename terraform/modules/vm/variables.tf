@@ -96,9 +96,3 @@ variable "use_guest_customization" {
   default     = true
   description = "VMware Guest Customization verwenden (false für ESXi 6.7 mit Ubuntu 24.04)"
 }
-
-variable "cloud_init_userdata" {
-  type        = string
-  default     = ""
-  description = "Cloud-init user-data (nur wenn use_guest_customization=false)"
-}

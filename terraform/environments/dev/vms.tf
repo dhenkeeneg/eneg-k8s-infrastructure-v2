@@ -11,7 +11,7 @@
 # k8s-dev-21 auf HOST1 (s2842) - vCenter Legacy
 # -----------------------------------------------------------------------------
 # HINWEIS: ESXi 6.7 + Ubuntu 24.04 = Guest Customization funktioniert nicht
-#          Stattdessen cloud-init über vApp Properties verwenden
+#          VM wird ohne Customization erstellt, manuelle Konfiguration nötig
 # -----------------------------------------------------------------------------
 
 module "k8s_dev_21" {
@@ -37,44 +37,13 @@ module "k8s_dev_21" {
   memory     = var.vm_memory_mb
   disk_size  = var.vm_disk_gb
 
-  # Netzwerk
+  # Netzwerk (wird nicht angewendet, da Guest Customization deaktiviert)
   ip_address  = "192.168.180.21"
   gateway     = var.gateway
   dns_servers = var.dns_servers
 
-  # ESXi 6.7: Guest Customization deaktivieren, cloud-init verwenden
+  # ESXi 6.7: Guest Customization deaktivieren
   use_guest_customization = false
-  cloud_init_userdata     = <<-EOT
-    #cloud-config
-    hostname: k8s-dev-21
-    fqdn: k8s-dev-21.eneg.de
-    manage_etc_hosts: true
-    
-    write_files:
-      - path: /etc/netplan/50-cloud-init.yaml
-        content: |
-          network:
-            version: 2
-            ethernets:
-              ens160:
-                addresses:
-                  - 192.168.180.21/24
-                routes:
-                  - to: default
-                    via: 192.168.180.247
-                nameservers:
-                  addresses:
-                    - 192.168.161.101
-                    - 192.168.161.102
-                    - 192.168.161.103
-                  search:
-                    - eneg.de
-    
-    runcmd:
-      - netplan apply
-      - ssh-keygen -A
-      - systemctl restart ssh
-  EOT
 }
 
 # -----------------------------------------------------------------------------
