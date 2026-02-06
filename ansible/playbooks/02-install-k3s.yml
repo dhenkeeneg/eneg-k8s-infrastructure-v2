@@ -5,7 +5,7 @@
 #
 # Voraussetzungen:
 #   - SSH-Keys müssen bereits verteilt sein (01-setup-ssh-keys.yml)
-#   - secrets.yml muss erstellt sein mit vault_k3s_token
+#   - secrets.yml muss erstellt sein mit k3s_token (optional)
 #
 # Ausführung:
 #   ansible-playbook playbooks/02-install-k3s.yml
@@ -63,6 +63,17 @@
         path: /usr/local/bin/k3s
       register: k3s_binary
 
+    - name: K3s Token generieren wenn nicht gesetzt
+      ansible.builtin.set_fact:
+        generated_k3s_token: "K10{{ lookup('password', '/dev/null chars=ascii_letters,digits length=48') }}::server::{{ lookup('password', '/dev/null chars=ascii_letters,digits length=48') }}"
+      when: k3s_token == "" or k3s_token is not defined
+      run_once: true
+
+    - name: K3s Token setzen
+      ansible.builtin.set_fact:
+        final_k3s_token: "{{ k3s_token if k3s_token != '' else generated_k3s_token }}"
+      run_once: true
+
     - name: K3s Konfigurationsverzeichnis erstellen
       ansible.builtin.file:
         path: /etc/rancher/k3s
@@ -79,7 +90,7 @@
       ansible.builtin.shell: |
         curl -sfL https://get.k3s.io | \
         INSTALL_K3S_CHANNEL={{ k3s_channel }} \
-        K3S_TOKEN={{ vault_k3s_token }} \
+        K3S_TOKEN={{ final_k3s_token }} \
         sh -s - server \
         --cluster-init
       args:
@@ -147,7 +158,7 @@
       ansible.builtin.shell: |
         curl -sfL https://get.k3s.io | \
         INSTALL_K3S_CHANNEL={{ k3s_channel }} \
-        K3S_TOKEN={{ vault_k3s_token }} \
+        K3S_TOKEN={{ hostvars[groups['k3s_initial'][0]]['final_k3s_token'] }} \
         sh -s - server \
         --server {{ k3s_server_url }}
       args:
