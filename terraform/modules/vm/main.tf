@@ -40,7 +40,6 @@ data "vsphere_virtual_machine" "template" {
   name          = var.template_name
   datacenter_id = data.vsphere_datacenter.dc.id
 }
-
 # =============================================================================
 # VM Resource
 # =============================================================================
@@ -75,19 +74,36 @@ resource "vsphere_virtual_machine" "vm" {
   clone {
     template_uuid = data.vsphere_virtual_machine.template.id
 
-    customize {
-      linux_options {
-        host_name = var.hostname
-        domain    = var.domain
-      }
+    # Guest Customization nur wenn aktiviert (nicht für ESXi 6.7)
+    dynamic "customize" {
+      for_each = var.use_guest_customization ? [1] : []
+      content {
+        linux_options {
+          host_name = var.hostname
+          domain    = var.domain
+        }
 
-      network_interface {
-        ipv4_address = var.ip_address
-        ipv4_netmask = var.netmask
-      }
+        network_interface {
+          ipv4_address = var.ip_address
+          ipv4_netmask = var.netmask
+        }
 
-      ipv4_gateway    = var.gateway
-      dns_server_list = var.dns_servers
+        ipv4_gateway    = var.gateway
+        dns_server_list = var.dns_servers
+        dns_suffix_list = var.dns_suffix_list
+      }
+    }
+  }
+
+  # vApp Properties für cloud-init (wenn Guest Customization deaktiviert)
+  dynamic "vapp" {
+    for_each = var.use_guest_customization ? [] : [1]
+    content {
+      properties = {
+        "instance-id" = var.vm_name
+        "hostname"    = var.hostname
+        "user-data"   = base64encode(var.cloud_init_userdata)
+      }
     }
   }
 

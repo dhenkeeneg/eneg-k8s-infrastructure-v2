@@ -84,3 +84,21 @@ variable "dns_servers" {
   default     = ["192.168.161.101", "192.168.161.102", "192.168.161.103"]
   description = "DNS Server Liste"
 }
+
+variable "dns_suffix_list" {
+  type        = list(string)
+  default     = ["eneg.de"]
+  description = "DNS Search Domains"
+}
+
+variable "use_guest_customization" {
+  type        = bool
+  default     = true
+  description = "VMware Guest Customization verwenden (false für ESXi 6.7 mit Ubuntu 24.04)"
+}
+
+variable "cloud_init_userdata" {
+  type        = string
+  default     = ""
+  description = "Cloud-init user-data (nur wenn use_guest_customization=false)"
+}
