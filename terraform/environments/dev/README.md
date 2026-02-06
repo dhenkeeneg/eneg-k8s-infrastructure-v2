@@ -26,7 +26,9 @@ Erstellt 3 VMs für den DEV K3s-Cluster.
    - `ubuntu-24.04-k8s-template` in vcenter.eneg.de
    - `ubuntu-24.04-k8s-template` in vcenter-a.eneg.de
 
-2. VM-Ordner `K8s-DEV` muss in beiden vCentern existieren
+2. VM-Ordner-Struktur muss in beiden vCentern existieren:
+   - `eNeG-VM-K8s/DEV`
+   - (später: `eNeG-VM-K8s/TEST`, `eNeG-VM-K8s/PROD`)
 
 3. DNS-Einträge sollten vorbereitet sein (optional, aber empfohlen)
 

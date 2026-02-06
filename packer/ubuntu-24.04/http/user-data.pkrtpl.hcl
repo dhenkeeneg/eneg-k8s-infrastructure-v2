@@ -44,6 +44,12 @@ autoinstall:
   kernel:
     package: linux-image-6.8.0-71-generic
   
+  # Pakete installieren (für VMware Guest Customization)
+  packages:
+    - open-vm-tools
+    - util-linux
+    - perl
+  
   # Späte Befehle
   late-commands:
     - sed -i 's/^#*PasswordAuthentication.*/PasswordAuthentication yes/' /target/etc/ssh/sshd_config
