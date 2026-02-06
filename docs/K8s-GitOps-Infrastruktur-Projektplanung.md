@@ -73,10 +73,12 @@ Aufbau einer vollständig automatisierten, GitOps-basierten Kubernetes-Infrastru
 
 | vcenter-Name | Host-Nr | Host-Name     | ESX-Version | Hardware                   | Datastore               |
 |--------------|---------|---------------|-------------|----------------------------|-------------------------|
+| vCenter      | HOST1   | s2842.eneg.de | ESXi 6.7.0  | Dell (48 Cores, 512GB RAM) | S2842_D08-10_R5_SSD_K8s |
+|--------------|---------|---------------|-------------|----------------------------|-------------------------|
 | vCenter-A    | HOST2   | s2843.eneg.de | ESXi 8.03   | Dell (48 Cores, 512GB RAM) | S2843_SSD_01_VMS        |
 | vCenter-A    | HOST3   | s3168.eneg.de | ESXi 8.03   | Dell (48 Cores, 512GB RAM) | S3168_SSD_01_VMS        |
-|--------------|---------|---------------|-------------|----------------------------|-------------------------|
-| vCenter      | HOST1   | s2842.eneg.de | ESXi 6.7.0  | Dell (48 Cores, 512GB RAM) | S2842_D08-10_R5_SSD_K8s |
+
+
 	
 
 ### VM-Übersicht
@@ -103,6 +105,7 @@ Aufbau einer vollständig automatisierten, GitOps-basierten Kubernetes-Infrastru
 +-------------------+   +-------------------+   +-------------------+
 ```
 
+
 ### VM-Verteilung auf die Hosts
 
 Aus jedem Environment soll jeweils eine VM auf einem Host landen. Jeder Host bekommt somit drei neue VMs
@@ -115,6 +118,10 @@ Host3 - k8s-dev-23
 Host1 - k8s-test-21
 Host2 - k8s-test-22
 Host3 - k8s-test-23
+
+Host1 - k8s-prod-21
+Host2 - k8s-prod-22
+Host3 - k8s-prod-23
 
 usw.
 
