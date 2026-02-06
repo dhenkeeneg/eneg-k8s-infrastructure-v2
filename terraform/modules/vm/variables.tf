@@ -90,9 +90,3 @@ variable "dns_suffix_list" {
   default     = ["eneg.de"]
   description = "DNS Search Domains"
 }
-
-variable "use_guest_customization" {
-  type        = bool
-  default     = true
-  description = "VMware Guest Customization verwenden (false für ESXi 6.7 mit Ubuntu 24.04)"
-}

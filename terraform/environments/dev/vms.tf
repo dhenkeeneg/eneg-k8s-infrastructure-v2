@@ -10,9 +10,6 @@
 # -----------------------------------------------------------------------------
 # k8s-dev-21 auf HOST1 (s2842) - vCenter Legacy
 # -----------------------------------------------------------------------------
-# HINWEIS: ESXi 6.7 + Ubuntu 24.04 = Guest Customization funktioniert nicht
-#          VM wird ohne Customization erstellt, manuelle Konfiguration nötig
-# -----------------------------------------------------------------------------
 
 module "k8s_dev_21" {
   source = "../../modules/vm"
@@ -37,13 +34,10 @@ module "k8s_dev_21" {
   memory     = var.vm_memory_mb
   disk_size  = var.vm_disk_gb
 
-  # Netzwerk (wird nicht angewendet, da Guest Customization deaktiviert)
+  # Netzwerk
   ip_address  = "192.168.180.21"
   gateway     = var.gateway
   dns_servers = var.dns_servers
-
-  # ESXi 6.7: Guest Customization deaktivieren
-  use_guest_customization = false
 }
 
 # -----------------------------------------------------------------------------

@@ -74,24 +74,20 @@ resource "vsphere_virtual_machine" "vm" {
   clone {
     template_uuid = data.vsphere_virtual_machine.template.id
 
-    # Guest Customization nur wenn aktiviert (nicht für ESXi 6.7)
-    dynamic "customize" {
-      for_each = var.use_guest_customization ? [1] : []
-      content {
-        linux_options {
-          host_name = var.hostname
-          domain    = var.domain
-        }
-
-        network_interface {
-          ipv4_address = var.ip_address
-          ipv4_netmask = var.netmask
-        }
-
-        ipv4_gateway    = var.gateway
-        dns_server_list = var.dns_servers
-        dns_suffix_list = var.dns_suffix_list
+    customize {
+      linux_options {
+        host_name = var.hostname
+        domain    = var.domain
       }
+
+      network_interface {
+        ipv4_address = var.ip_address
+        ipv4_netmask = var.netmask
+      }
+
+      ipv4_gateway    = var.gateway
+      dns_server_list = var.dns_servers
+      dns_suffix_list = var.dns_suffix_list
     }
   }
 

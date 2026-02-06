@@ -47,7 +47,7 @@ autoinstall:
   # Pakete installieren (für VMware Guest Customization)
   packages:
     - open-vm-tools
-    - util-linux
+    - util-linux-extra
     - perl
   
   # Späte Befehle
