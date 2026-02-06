@@ -1,0 +1,33 @@
+# =============================================================================
+# K3s Server Konfiguration
+# =============================================================================
+# Automatisch generiert von Ansible
+# Dokumentation: https://docs.k3s.io/installation/configuration
+# =============================================================================
+
+# Kubeconfig Berechtigungen (lesbar für alle Benutzer)
+write-kubeconfig-mode: "0644"
+
+# TLS Subject Alternative Names
+tls-san:
+{% for san in k3s_tls_san %}
+  - "{{ san }}"
+{% endfor %}
+
+# Komponenten deaktivieren (werden später via GitOps installiert)
+disable:
+{% for component in k3s_disable %}
+  - "{{ component }}"
+{% endfor %}
+
+# etcd Metriken exponieren (für Monitoring)
+etcd-expose-metrics: true
+
+# Cluster DNS Domain
+cluster-domain: "cluster.local"
+
+# Cluster CIDR (Pod-Netzwerk)
+cluster-cidr: "10.42.0.0/16"
+
+# Service CIDR
+service-cidr: "10.43.0.0/16"

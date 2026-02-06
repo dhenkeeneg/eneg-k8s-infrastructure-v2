@@ -1,0 +1,54 @@
+# =============================================================================
+# Playbook: SSH-Keys auf alle Nodes verteilen
+# =============================================================================
+# Dieses Playbook fügt alle definierten SSH-Keys zu den authorized_keys
+# der K3s-Nodes hinzu und deaktiviert optional Passwort-Login.
+#
+# Ausführung:
+#   ansible-playbook playbooks/01-setup-ssh-keys.yml
+# =============================================================================
+
+---
+- name: Setup SSH Keys auf allen K3s Nodes
+  hosts: k3s_cluster
+  become: true
+  
+  tasks:
+    - name: Sicherstellen dass .ssh Verzeichnis existiert
+      ansible.builtin.file:
+        path: "/home/{{ ansible_user }}/.ssh"
+        state: directory
+        owner: "{{ ansible_user }}"
+        group: "{{ ansible_user }}"
+        mode: '0700'
+
+    - name: SSH authorized_keys Datei erstellen/aktualisieren
+      ansible.builtin.template:
+        src: ../templates/authorized_keys.j2
+        dest: "/home/{{ ansible_user }}/.ssh/authorized_keys"
+        owner: "{{ ansible_user }}"
+        group: "{{ ansible_user }}"
+        mode: '0600'
+        backup: yes
+
+    - name: Root SSH-Zugriff deaktivieren
+      ansible.builtin.lineinfile:
+        path: /etc/ssh/sshd_config
+        regexp: '^#?PermitRootLogin'
+        line: 'PermitRootLogin no'
+        state: present
+      notify: Restart SSH
+
+    - name: Passwort-Authentifizierung deaktivieren
+      ansible.builtin.lineinfile:
+        path: /etc/ssh/sshd_config
+        regexp: '^#?PasswordAuthentication'
+        line: 'PasswordAuthentication no'
+        state: present
+      notify: Restart SSH
+
+  handlers:
+    - name: Restart SSH
+      ansible.builtin.service:
+        name: ssh
+        state: restarted

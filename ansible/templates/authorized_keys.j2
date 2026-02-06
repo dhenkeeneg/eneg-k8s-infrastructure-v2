@@ -1,0 +1,18 @@
+# =============================================================================
+# SSH Authorized Keys - Automatisch generiert von Ansible
+# =============================================================================
+# NICHT MANUELL BEARBEITEN! Änderungen werden bei nächstem Ansible-Lauf
+# überschrieben.
+#
+# Um Keys hinzuzufügen oder zu entfernen:
+#   1. Bearbeiten Sie ansible/inventory/dev/group_vars/all.yml
+#   2. Führen Sie aus: ansible-playbook playbooks/01-setup-ssh-keys.yml
+#
+# Dokumentation: docs/phases/phase-2-k3s-cluster.md
+# =============================================================================
+
+{% for key in ssh_authorized_keys %}
+# {{ key.comment }}
+{{ key.key }}
+
+{% endfor %}

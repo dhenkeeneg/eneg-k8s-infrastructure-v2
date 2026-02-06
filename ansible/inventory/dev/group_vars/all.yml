@@ -1,0 +1,71 @@
+# =============================================================================
+# Ansible Group Variables - DEV Environment
+# =============================================================================
+
+# -----------------------------------------------------------------------------
+# K3s Konfiguration
+# -----------------------------------------------------------------------------
+
+# K3s Version (leer = aktuelle stable)
+k3s_version: ""
+
+# K3s Channel (stable, latest, testing)
+k3s_channel: "stable"
+
+# Cluster Token - wird aus secrets.yml geladen
+# k3s_token: "{{ vault_k3s_token }}"
+
+# API Server Endpoint (erster Node für initiales Setup)
+k3s_server_url: "https://192.168.180.21:6443"
+
+# TLS SANs - zusätzliche Namen/IPs für das API-Zertifikat
+k3s_tls_san:
+  - "192.168.180.21"
+  - "192.168.180.22"
+  - "192.168.180.23"
+  - "k8s-dev-21.eneg.de"
+  - "k8s-dev-22.eneg.de"
+  - "k8s-dev-23.eneg.de"
+
+# Komponenten die NICHT installiert werden sollen
+# (wir installieren diese später via GitOps)
+k3s_disable:
+  - traefik
+  - servicelb
+  - local-storage
+
+# Zusätzliche Server-Argumente
+k3s_server_extra_args: >-
+  --write-kubeconfig-mode 0644
+  --etcd-expose-metrics
+
+# -----------------------------------------------------------------------------
+# SSH Keys für Zugriff auf die Nodes
+# -----------------------------------------------------------------------------
+
+ssh_authorized_keys:
+  # Management-VM (k8s-mgmt-10)
+  - comment: "k8s-mgmt-10.eneg.de"
+    key: "{{ lookup('file', '~/.ssh/id_ed25519.pub') }}"
+  
+  # Windows Laptop
+  - comment: "d.henke@eneg.de (Windows Laptop)"
+    key: "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIFN1xvxvSr48/g+SxUK9cHcwsqcmz4AlyZPrxJ6uEYjh d.henke@eneg.de"
+  
+  # MacMini
+  - comment: "danielhenke@Mac.localdomain (MacMini)"
+    key: "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAILrOLG2pCnAguM5hzD6HaHXpigKLXjsSSpJ79xvLhgSi danielhenke@Mac.localdomain"
+  
+  # MacBook
+  - comment: "danielhenke@MacBook-Pro (MacBook)"
+    key: "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIDm7pFaLd2LZGLfySx4G4/fax5KPgRy/HgXjHBwCM4LZ danielhenke@MacBook-Pro-von-Daniel.local"
+
+# -----------------------------------------------------------------------------
+# Systemkonfiguration
+# -----------------------------------------------------------------------------
+
+# Timezone
+system_timezone: "Europe/Berlin"
+
+# Lokale
+system_locale: "de_DE.UTF-8"
