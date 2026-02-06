@@ -27,6 +27,7 @@ crash.log
 *.pem
 !*.pub
 secrets.yaml
+secrets.yml
 !*.enc.yaml
 
 # Kubernetes
