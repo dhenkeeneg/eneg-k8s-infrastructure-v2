@@ -132,6 +132,12 @@ variable "gateway" {
   description = "Gateway für das Build-Netzwerk"
 }
 
+variable "vm_version" {
+  type        = number
+  default     = 21
+  description = "VM Hardware Version (14 für ESXi 6.7, 21 für ESXi 8.0)"
+}
+
 # =============================================================================
 # Source: VMware vSphere ISO
 # =============================================================================
@@ -153,7 +159,7 @@ source "vsphere-iso" "ubuntu" {
   # VM Konfiguration
   vm_name              = var.vm_name
   guest_os_type        = "ubuntu64Guest"
-  vm_version           = 21
+  vm_version           = var.vm_version
   firmware             = "efi"
   CPUs                 = var.vm_cpus
   cpu_cores            = var.vm_cpus

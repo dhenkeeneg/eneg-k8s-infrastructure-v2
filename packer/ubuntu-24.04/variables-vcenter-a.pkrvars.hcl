@@ -22,6 +22,7 @@ vm_name      = "ubuntu-24.04-k8s-template"
 vm_cpus      = 2
 vm_memory    = 4096
 vm_disk_size = 51200
+vm_version   = 21  # ESXi 8.0 U2+
 
 # SSH User (Passwort wird separat übergeben)
 ssh_username = "admin-ubuntu"
