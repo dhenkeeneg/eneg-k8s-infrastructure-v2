@@ -24,7 +24,7 @@ module "k8s_dev_21" {
   datastore     = "S2842_D08-10_R5_SSD_K8s"
   network       = var.network
   template_name = var.template_name
-  folder        = "eNeG-VM-K8s/DEV"
+  folder        = vsphere_folder.k8s_dev_legacy.path
 
   # VM Konfiguration
   vm_name    = "k8s-dev-21"
@@ -57,7 +57,7 @@ module "k8s_dev_22" {
   datastore     = "S2843_SSD_01_VMS"
   network       = var.network
   template_name = var.template_name
-  folder        = "eNeG-VM-K8s/DEV"
+  folder        = vsphere_folder.k8s_dev_a.path
 
   # VM Konfiguration
   vm_name    = "k8s-dev-22"
@@ -90,7 +90,7 @@ module "k8s_dev_23" {
   datastore     = "S3168_SSD_01_VMS"
   network       = var.network
   template_name = var.template_name
-  folder        = "eNeG-VM-K8s/DEV"
+  folder        = vsphere_folder.k8s_dev_a.path
 
   # VM Konfiguration
   vm_name    = "k8s-dev-23"

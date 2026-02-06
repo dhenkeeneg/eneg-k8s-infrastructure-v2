@@ -29,7 +29,7 @@ variable "template_name" {
 
 variable "folder" {
   type        = string
-  description = "VM Folder in vCenter"
+  description = "VM Folder in vCenter (z.B. 'eNeG-VM-K8s/DEV')"
 }
 
 variable "vm_name" {
