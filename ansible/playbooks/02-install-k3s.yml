@@ -86,15 +86,24 @@
         dest: /etc/rancher/k3s/config.yaml
         mode: '0644'
 
-    - name: K3s auf Initial Server installieren
+    - name: Installierte K3s Version prüfen
+      ansible.builtin.shell: |
+        if [ -f /usr/local/bin/k3s ]; then
+          /usr/local/bin/k3s --version | head -n1 | awk '{print $3}'
+        else
+          echo "not_installed"
+        fi
+      register: k3s_current_version
+      changed_when: false
+
+    - name: K3s auf Initial Server installieren/upgraden
       ansible.builtin.shell: |
         curl -sfL https://get.k3s.io | \
         INSTALL_K3S_VERSION={{ k3s_version }} \
         K3S_TOKEN={{ final_k3s_token }} \
         sh -s - server \
         --cluster-init
-      args:
-        creates: /usr/local/bin/k3s
+      when: k3s_current_version.stdout != k3s_version
       environment:
         INSTALL_K3S_SKIP_START: "false"
 
@@ -153,15 +162,24 @@
         dest: /etc/rancher/k3s/config.yaml
         mode: '0644'
 
-    - name: K3s auf Additional Server installieren
+    - name: Installierte K3s Version prüfen
+      ansible.builtin.shell: |
+        if [ -f /usr/local/bin/k3s ]; then
+          /usr/local/bin/k3s --version | head -n1 | awk '{print $3}'
+        else
+          echo "not_installed"
+        fi
+      register: k3s_current_version
+      changed_when: false
+
+    - name: K3s auf Additional Server installieren/upgraden
       ansible.builtin.shell: |
         curl -sfL https://get.k3s.io | \
         INSTALL_K3S_VERSION={{ k3s_version }} \
         K3S_TOKEN={{ hostvars[groups['k3s_initial_server'][0]]['k3s_cluster_token'] }} \
         sh -s - server \
         --server {{ k3s_server_url }}
-      args:
-        creates: /usr/local/bin/k3s
+      when: k3s_current_version.stdout != k3s_version
       environment:
         INSTALL_K3S_SKIP_START: "false"
 
