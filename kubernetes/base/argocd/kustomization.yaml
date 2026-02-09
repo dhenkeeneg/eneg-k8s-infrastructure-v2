@@ -1,0 +1,12 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+namespace: argocd
+
+resources:
+  - argocd-cm.yaml
+
+# Später hier weitere ArgoCD-Konfigurationen hinzufügen:
+# - argocd-rbac-cm.yaml
+# - argocd-notifications-cm.yaml
+# - ingress.yaml (Phase 4)
