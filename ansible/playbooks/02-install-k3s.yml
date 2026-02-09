@@ -122,7 +122,6 @@
     - name: Node-Token als Fakt setzen
       ansible.builtin.set_fact:
         k3s_cluster_token: "{{ k3s_node_token.content | b64decode | trim }}"
-      delegate_to: localhost
       delegate_facts: true
 
 # =============================================================================
