@@ -89,7 +89,7 @@
     - name: K3s auf Initial Server installieren
       ansible.builtin.shell: |
         curl -sfL https://get.k3s.io | \
-        INSTALL_K3S_CHANNEL={{ k3s_channel }} \
+        INSTALL_K3S_VERSION={{ k3s_version }} \
         K3S_TOKEN={{ final_k3s_token }} \
         sh -s - server \
         --cluster-init
@@ -156,7 +156,7 @@
     - name: K3s auf Additional Server installieren
       ansible.builtin.shell: |
         curl -sfL https://get.k3s.io | \
-        INSTALL_K3S_CHANNEL={{ k3s_channel }} \
+        INSTALL_K3S_VERSION={{ k3s_version }} \
         K3S_TOKEN={{ hostvars[groups['k3s_initial_server'][0]]['k3s_cluster_token'] }} \
         sh -s - server \
         --server {{ k3s_server_url }}

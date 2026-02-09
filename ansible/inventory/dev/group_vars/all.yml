@@ -6,13 +6,8 @@
 # K3s Konfiguration
 # -----------------------------------------------------------------------------
 
-# K3s Version (leer = aktuelle vom gewählten Channel)
-k3s_version: ""
-
-# K3s Channel (stable, latest, testing)
-# DEV: latest = neueste K3s Version (aktuell K8s 1.35+)
-# TEST/PROD: stable = getestete stabile Version
-k3s_channel: "latest"
+# K3s Version (fest gepinnt für Reproduzierbarkeit)
+k3s_version: "v1.35.0+k3s3"
 
 # Cluster Token - wird aus secrets.yml geladen
 # k3s_token: "{{ vault_k3s_token }}"
