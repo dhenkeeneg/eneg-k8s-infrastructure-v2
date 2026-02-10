@@ -1,20 +1,17 @@
+# SOPS Configuration für Age-Verschlüsselung
+# https://github.com/getsops/sops
+
 creation_rules:
-  # Terraform Secrets
-  - path_regex: terraform/.*\.enc\.yaml$
-    age: >-
-      age1xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
-  
-  # Kubernetes Secrets - DEV
-  - path_regex: kubernetes/environments/dev/secrets/.*\.enc\.yaml$
-    age: >-
-      age1xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
-  
-  # Kubernetes Secrets - TEST
-  - path_regex: kubernetes/environments/test/secrets/.*\.enc\.yaml$
-    age: >-
-      age1xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
-  
-  # Kubernetes Secrets - PROD
-  - path_regex: kubernetes/environments/prod/secrets/.*\.enc\.yaml$
-    age: >-
-      age1xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
+  # Regel 1: Alle Secrets in kubernetes/ verschlüsseln
+  - path_regex: kubernetes/.*/secrets/.*\.yaml$
+    encrypted_regex: ^(data|stringData)$
+    age: age1fdqtcha9jnzqafe5t6hed6v5sv858x2tt6nwuw00u3luyxuaqcxqh5mcrm
+
+  # Regel 2: Alle .enc.yaml Dateien verschlüsseln
+  - path_regex: .*\.enc\.yaml$
+    encrypted_regex: ^(data|stringData|spec)$
+    age: age1fdqtcha9jnzqafe5t6hed6v5sv858x2tt6nwuw00u3luyxuaqcxqh5mcrm
+
+  # Regel 3: Terraform/Ansible Credentials
+  - path_regex: (terraform|ansible)/.*credentials.*\.yaml$
+    age: age1fdqtcha9jnzqafe5t6hed6v5sv858x2tt6nwuw00u3luyxuaqcxqh5mcrm

@@ -30,6 +30,12 @@ secrets.yaml
 secrets.yml
 !*.enc.yaml
 
+# Age/SOPS Keys
+.age/
+*.age.key
+*-key.txt
+!*-key.txt.pub
+
 # Kubernetes
 kubeconfig
 kubeconfig.yaml
