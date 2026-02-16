@@ -1,9 +1,9 @@
 # GitOps Kubernetes-Infrastruktur auf VMware vSphere
 
-## Projektplanung - Version 1.1
+## Projektplanung - Version 1.3
 
 **Erstellt:** 04.02.2026  
-**Letzte Aktualisierung:** 04.02.2026  
+**Letzte Aktualisierung:** 16.02.2026  
 **Standort:** Hamburg  
 **Projekt:** eNeG K8s Infrastructure v2
 
@@ -12,7 +12,7 @@
 ## Inhaltsverzeichnis
 
 1. [Executive Summary](#1-executive-summary)
-2. [Infrastruktur-Übersicht](#2-infrastruktur-übersicht)
+2. [Infrastruktur-Ãœbersicht](#2-infrastruktur-Ã¼bersicht)
 3. [Architektur-Entscheidungen](#3-architektur-entscheidungen)
 4. [Netzwerk-Konfiguration](#4-netzwerk-konfiguration)
 5. [Naming Conventions](#5-naming-conventions)
@@ -32,16 +32,16 @@
 
 ### Projektziel
 
-Aufbau einer vollständig automatisierten, GitOps-basierten Kubernetes-Infrastruktur mit drei Umgebungen (DEV, TEST, PROD) auf VMware vSphere.
+Aufbau einer vollstÃ¤ndig automatisierten, GitOps-basierten Kubernetes-Infrastruktur mit drei Umgebungen (DEV, TEST, PROD) auf VMware vSphere.
 
 ### Kernprinzipien
 
 - **Infrastructure as Code:** Alle Ressourcen werden durch Code definiert (OpenTofu, Ansible, Kubernetes Manifests)
-- **GitOps:** Git als Single Source of Truth, ArgoCD für automatische Synchronisation
-- **Promotion Pipeline:** Änderungen durchlaufen immer DEV → TEST → PROD
-- **Stabilität vor Geschwindigkeit:** Erprobte, stabile Lösungen haben Vorrang
+- **GitOps:** Git als Single Source of Truth, ArgoCD fÃ¼r automatische Synchronisation
+- **Promotion Pipeline:** Ã„nderungen durchlaufen immer DEV â†’ TEST â†’ PROD
+- **StabilitÃ¤t vor Geschwindigkeit:** Erprobte, stabile LÃ¶sungen haben Vorrang
 
-### Technologie-Stack (Kurzübersicht)
+### Technologie-Stack (KurzÃ¼bersicht)
 
 | Bereich | Technologie |
 |---------|-------------|
@@ -53,35 +53,31 @@ Aufbau einer vollständig automatisierten, GitOps-basierten Kubernetes-Infrastru
 | Storage | Longhorn (Distributed Block Storage) |
 | Datenbanken | CloudNativePG (PostgreSQL), MariaDB Galera |
 | Monitoring | Prometheus, Grafana, Loki, AlertManager |
-| Secrets | SOPS + Age (verschlüsselt in Git) |
+| Secrets | SOPS + Age (verschlÃ¼sselt in Git) |
 
 ---
 
-## 2. Infrastruktur-Übersicht
+## 2. Infrastruktur-Ãœbersicht
 
 ### VMware vSphere Umgebung
 
 | vCenter | ESXi Version | Hardware | Datastore |
 |---------|--------------|----------|-----------|
-| vCenter-A | ESXi 8.03 | 2x Dell (48 Cores, 512GB RAM) | S2843_SSD_01_VMS, S3168_SSD_01_VMS |
-| vCenter | ESXi 6.7 | 1x Dell (48 Cores, 512GB RAM) | S2842_D08-10_R5_SSD_K8s |
+| vCenter-A | ESXi 8.0.3 | 3x Dell (48 Cores, 512GB RAM) | S2842_SSD_01_VMS, S2843_SSD_01_VMS, S3168_SSD_01_VMS |
 
-**Ziel:** Migration zu vCenter-A, beide Versionen werden initial unterstützt.
+**Hinweis:** Seit Februar 2026 gibt es nur noch vcenter-a.eneg.de. Das alte vCenter (vcenter.eneg.de, ESXi 6.7) wurde dekommissioniert. S2842 wurde neu aufgebaut mit ESXi 8.0.3.
 
 
 ### VMware Hosts in vSphere Umgebungen
 
 | vcenter-Name | Host-Nr | Host-Name     | ESX-Version | Hardware                   | Datastore               |
 |--------------|---------|---------------|-------------|----------------------------|-------------------------|
-| vCenter      | HOST1   | s2842.eneg.de | ESXi 6.7.0  | Dell (48 Cores, 512GB RAM) | S2842_D08-10_R5_SSD_K8s |
-|--------------|---------|---------------|-------------|----------------------------|-------------------------|
-| vCenter-A    | HOST2   | s2843.eneg.de | ESXi 8.03   | Dell (48 Cores, 512GB RAM) | S2843_SSD_01_VMS        |
-| vCenter-A    | HOST3   | s3168.eneg.de | ESXi 8.03   | Dell (48 Cores, 512GB RAM) | S3168_SSD_01_VMS        |
-
-
+| vCenter-A    | HOST1   | s2842.eneg.de | ESXi 8.0.3  | Dell (48 Cores, 512GB RAM) | S2842_SSD_01_VMS        |
+| vCenter-A    | HOST2   | s2843.eneg.de | ESXi 8.0.3  | Dell (48 Cores, 512GB RAM) | S2843_SSD_01_VMS        |
+| vCenter-A    | HOST3   | s3168.eneg.de | ESXi 8.0.3  | Dell (48 Cores, 512GB RAM) | S3168_SSD_01_VMS        |
 	
 
-### VM-Übersicht
+### VM-Ãœbersicht
 
 ```
 +-----------------------------------------------------------------------------+
@@ -105,7 +101,6 @@ Aufbau einer vollständig automatisierten, GitOps-basierten Kubernetes-Infrastru
 +-------------------+   +-------------------+   +-------------------+
 ```
 
-
 ### VM-Verteilung auf die Hosts
 
 Aus jedem Environment soll jeweils eine VM auf einem Host landen. Jeder Host bekommt somit drei neue VMs
@@ -118,10 +113,6 @@ Host3 - k8s-dev-23
 Host1 - k8s-test-21
 Host2 - k8s-test-22
 Host3 - k8s-test-23
-
-Host1 - k8s-prod-21
-Host2 - k8s-prod-22
-Host3 - k8s-prod-23
 
 usw.
 
@@ -145,9 +136,9 @@ usw.
 
 | Kriterium | K3s | MicroK8s |
 |-----------|-----|----------|
-| Kontrolle | Volle Kontrolle über alle Komponenten | Snap-basiert, eingeschränkt |
-| Größe | ~40MB Binary | Größer durch Snap |
-| OS-Unabhängigkeit | Funktioniert identisch auf allen Linux | Snap-Abhängigkeit |
+| Kontrolle | Volle Kontrolle Ã¼ber alle Komponenten | Snap-basiert, eingeschrÃ¤nkt |
+| GrÃ¶ÃŸe | ~40MB Binary | GrÃ¶ÃŸer durch Snap |
+| OS-UnabhÃ¤ngigkeit | Funktioniert identisch auf allen Linux | Snap-AbhÃ¤ngigkeit |
 | GitOps-Integration | Alle Komponenten selbst verwaltet | Einige Addons "black box" |
 | Debugging | Separate Prozesse, einfacher | Komplexer |
 
@@ -156,16 +147,16 @@ usw.
 **Entscheidung:** Ubuntu statt Debian
 
 - Bessere Kubernetes-Dokumentation und Community-Support
-- Neuere Kernel für VMware Tools Kompatibilität
+- Neuere Kernel fÃ¼r VMware Tools KompatibilitÃ¤t
 - 5 Jahre Support (10 mit Ubuntu Pro)
-- Einfacher für Lernphase
+- Einfacher fÃ¼r Lernphase
 
 ### Datenbanken: Kubernetes-native
 
 **Entscheidung:** CloudNativePG + MariaDB Galera innerhalb Kubernetes
 
 - CNCF Sandbox Projekt (CloudNativePG)
-- Vollständige GitOps-Integration
+- VollstÃ¤ndige GitOps-Integration
 - Automatisches HA/Failover
 - Native Backup-Integration
 
@@ -180,16 +171,6 @@ usw.
 | DEV | 180 | 192.168.180.0/24 | .247 | 192.168.161.101-103 |
 | TEST | 179 | 192.168.179.0/24 | .247 | 192.168.161.101-103 |
 | PROD | 178 | 192.168.178.0/24 | .247 | 192.168.161.101-103 |
-
-### VMware Port Groups
-
-Die Port Group Namen sind in beiden vCentern identisch:
-
-| Umgebung | VLAN | Port Group Name |
-|----------|------|-----------------|
-| DEV | 180 | VT 180 - K8s Dev |
-| TEST | 179 | VT 179 - K8s Test |
-| PROD | 178 | VT 178 - K8s Prod |
 
 ### IP-Zuweisung
 
@@ -209,9 +190,9 @@ Die Port Group Namen sind in beiden vCentern identisch:
 - **vCenter:** vCenter-A (S2843)
 - **Datastore:** S2843_SSD_01_VMS
 - **Ordner:** eNeG-VM-Produktiv/k8s-mgmt-10
-- **Kompatibilität:** ESXi 8.0 U2 und höher (VM-Version 21)
+- **KompatibilitÃ¤t:** ESXi 8.0 U2 und hÃ¶her (VM-Version 21)
 
-### DNS-Einträge (zu erstellen)
+### DNS-EintrÃ¤ge (zu erstellen)
 
 ```
 # Management
@@ -250,7 +231,7 @@ k8s-prod-23.eneg.de       -> 192.168.178.23
 
 - Lowercase mit Bindestrichen
 - Keine Umgebungs-Suffixe in Kubernetes-Ressourcen (da separate Cluster)
-- Konsistent über alle Ebenen
+- Konsistent Ã¼ber alle Ebenen
 
 ### Schema
 
@@ -269,20 +250,20 @@ k8s-prod-23.eneg.de       -> 192.168.178.23
 
 ```
 namespaces:
-├── argocd              # GitOps Controller
-├── cert-manager        # SSL-Zertifikate
-├── traefik             # Ingress Controller
-├── metallb-system      # LoadBalancer
-├── longhorn-system     # Storage
-├── databases           # CloudNativePG + MariaDB Galera
-├── monitoring          # Prometheus, Grafana, Loki, AlertManager
-├── n8n                 # Workflow Automation
-├── odoo                # ERP System
-├── openproject         # Projektmanagement
-├── keycloak            # Identity Management
-├── nextcloud           # File Sharing (später)
-├── gitea               # Git Repository (später)
-└── ...                 # Weitere Apps
+â”œâ”€â”€ argocd              # GitOps Controller
+â”œâ”€â”€ cert-manager        # SSL-Zertifikate
+â”œâ”€â”€ traefik             # Ingress Controller
+â”œâ”€â”€ metallb-system      # LoadBalancer
+â”œâ”€â”€ longhorn-system     # Storage
+â”œâ”€â”€ databases           # CloudNativePG + MariaDB Galera
+â”œâ”€â”€ monitoring          # Prometheus, Grafana, Loki, AlertManager
+â”œâ”€â”€ n8n                 # Workflow Automation
+â”œâ”€â”€ odoo                # ERP System
+â”œâ”€â”€ openproject         # Projektmanagement
+â”œâ”€â”€ keycloak            # Identity Management
+â”œâ”€â”€ nextcloud           # File Sharing (spÃ¤ter)
+â”œâ”€â”€ gitea               # Git Repository (spÃ¤ter)
+â””â”€â”€ ...                 # Weitere Apps
 ```
 
 
@@ -302,7 +283,7 @@ namespaces:
 | Komponente | Beschreibung |
 |------------|--------------|
 | K3s | Lightweight Kubernetes (HA mit 3 Server-Nodes) |
-| Calico | CNI für Netzwerk und Network Policies |
+| Calico | CNI fÃ¼r Netzwerk und Network Policies |
 | MetalLB | Bare-Metal LoadBalancer (Layer 2) |
 | Traefik | Ingress Controller |
 | Cert-Manager | SSL-Zertifikatsverwaltung |
@@ -314,7 +295,7 @@ namespaces:
 |------------|--------------|
 | ArgoCD | GitOps Continuous Delivery |
 | Kustomize | Kubernetes-native Configuration Management |
-| SOPS + Age | Secret-Verschlüsselung in Git |
+| SOPS + Age | Secret-VerschlÃ¼sselung in Git |
 | GitHub | Git Repository (privat, Monorepo) |
 
 ### Layer 3: Datenbanken
@@ -353,7 +334,7 @@ namespaces:
 
 ### Layer 7: Business Applications
 
-**Pilot-Anwendungen (Priorität 1):**
+**Pilot-Anwendungen (PrioritÃ¤t 1):**
 
 | App | Datenbank | User | Beschreibung |
 |-----|-----------|------|--------------|
@@ -361,7 +342,7 @@ namespaces:
 | OpenProject | PostgreSQL | 25 | Projektmanagement |
 | Odoo | PostgreSQL | 50 | ERP System |
 
-**Weitere Anwendungen (Priorität 2):**
+**Weitere Anwendungen (PrioritÃ¤t 2):**
 
 | App | Datenbank | User | Beschreibung |
 |-----|-----------|------|--------------|
@@ -381,58 +362,58 @@ namespaces:
 
 ```
 k8s-infrastructure/
-├── README.md
-├── .sops.yaml                    # SOPS Verschlüsselungsregeln
-├── .gitignore
-│
-├── docs/                         # Dokumentation
-│   ├── architecture/
-│   ├── runbooks/
-│   └── decisions/
-│
-├── terraform/                    # OpenTofu
-│   ├── modules/
-│   │   └── vm/
-│   ├── environments/
-│   │   ├── dev/
-│   │   ├── test/
-│   │   └── prod/
-│   └── vcenter-credentials.enc.yaml
-│
-├── ansible/
-│   ├── inventory/
-│   ├── playbooks/
-│   └── roles/
-│
-├── packer/
-│   └── ubuntu-24.04/
-│
-└── kubernetes/
-    ├── base/                     # Gemeinsame Basis
-    │   ├── argocd/
-    │   ├── metallb/
-    │   ├── traefik/
-    │   ├── cert-manager/
-    │   ├── longhorn/
-    │   ├── cloudnative-pg/
-    │   ├── mariadb-galera/
-    │   ├── monitoring/
-    │   └── apps/
-    │
-    └── environments/
-        ├── dev/
-        │   ├── kustomization.yaml
-        │   ├── patches/
-        │   └── secrets/
-        ├── test/
-        └── prod/
+â”œâ”€â”€ README.md
+â”œâ”€â”€ .sops.yaml                    # SOPS VerschlÃ¼sselungsregeln
+â”œâ”€â”€ .gitignore
+â”‚
+â”œâ”€â”€ docs/                         # Dokumentation
+â”‚   â”œâ”€â”€ architecture/
+â”‚   â”œâ”€â”€ runbooks/
+â”‚   â””â”€â”€ decisions/
+â”‚
+â”œâ”€â”€ terraform/                    # OpenTofu
+â”‚   â”œâ”€â”€ modules/
+â”‚   â”‚   â””â”€â”€ vm/
+â”‚   â”œâ”€â”€ environments/
+â”‚   â”‚   â”œâ”€â”€ dev/
+â”‚   â”‚   â”œâ”€â”€ test/
+â”‚   â”‚   â””â”€â”€ prod/
+â”‚   â””â”€â”€ vcenter-credentials.enc.yaml
+â”‚
+â”œâ”€â”€ ansible/
+â”‚   â”œâ”€â”€ inventory/
+â”‚   â”œâ”€â”€ playbooks/
+â”‚   â””â”€â”€ roles/
+â”‚
+â”œâ”€â”€ packer/
+â”‚   â””â”€â”€ ubuntu-24.04/
+â”‚
+â””â”€â”€ kubernetes/
+    â”œâ”€â”€ base/                     # Gemeinsame Basis
+    â”‚   â”œâ”€â”€ argocd/
+    â”‚   â”œâ”€â”€ metallb/
+    â”‚   â”œâ”€â”€ traefik/
+    â”‚   â”œâ”€â”€ cert-manager/
+    â”‚   â”œâ”€â”€ longhorn/
+    â”‚   â”œâ”€â”€ cloudnative-pg/
+    â”‚   â”œâ”€â”€ mariadb-galera/
+    â”‚   â”œâ”€â”€ monitoring/
+    â”‚   â””â”€â”€ apps/
+    â”‚
+    â””â”€â”€ environments/
+        â”œâ”€â”€ dev/
+        â”‚   â”œâ”€â”€ kustomization.yaml
+        â”‚   â”œâ”€â”€ patches/
+        â”‚   â””â”€â”€ secrets/
+        â”œâ”€â”€ test/
+        â””â”€â”€ prod/
 ```
 
 ### Git Workflow: Single Branch + Kustomize
 
-**Branch-Strategie:** Alle Änderungen auf `main`
+**Branch-Strategie:** Alle Ã„nderungen auf `main`
 
-**Promotion-Pfad:** DEV → TEST → PROD
+**Promotion-Pfad:** DEV â†’ TEST â†’ PROD
 
 ```
 +------------------------------------------------------------------+
@@ -440,15 +421,15 @@ k8s-infrastructure/
 |                                                                  |
 |  kubernetes/base/app/          Gemeinsame Definition             |
 |       |                                                          |
-|       +-- environments/dev/    Kustomize Overlay für DEV         |
+|       +-- environments/dev/    Kustomize Overlay fÃ¼r DEV         |
 |       |       |                                                  |
 |       |       +-- ArgoCD DEV synct automatisch                   |
 |       |                                                          |
-|       +-- environments/test/   Kustomize Overlay für TEST        |
+|       +-- environments/test/   Kustomize Overlay fÃ¼r TEST        |
 |       |       |                                                  |
 |       |       +-- ArgoCD TEST synct automatisch                  |
 |       |                                                          |
-|       +-- environments/prod/   Kustomize Overlay für PROD        |
+|       +-- environments/prod/   Kustomize Overlay fÃ¼r PROD        |
 |               |                                                  |
 |               +-- ArgoCD PROD synct automatisch                  |
 +------------------------------------------------------------------+
@@ -456,8 +437,8 @@ k8s-infrastructure/
 
 ### Deployment-Workflow
 
-1. **Änderung entwickeln:**
-   - Änderung in `kubernetes/base/` oder `environments/dev/`
+1. **Ã„nderung entwickeln:**
+   - Ã„nderung in `kubernetes/base/` oder `environments/dev/`
    - Lokales Testen mit `kustomize build environments/dev/`
 
 2. **Nach DEV deployen:**
@@ -466,12 +447,12 @@ k8s-infrastructure/
    - Testen in DEV
 
 3. **Nach TEST promoten:**
-   - Overlay in `environments/test/` anpassen (falls nötig)
+   - Overlay in `environments/test/` anpassen (falls nÃ¶tig)
    - `git commit && git push`
    - ArgoCD synct automatisch nach TEST-Cluster
 
 4. **Nach PROD promoten:**
-   - Overlay in `environments/prod/` anpassen (falls nötig)
+   - Overlay in `environments/prod/` anpassen (falls nÃ¶tig)
    - `git commit && git push`
    - ArgoCD synct automatisch nach PROD-Cluster
 
@@ -482,7 +463,7 @@ k8s-infrastructure/
 
 ### Architektur: Ein Cluster pro Umgebung
 
-**Entscheidung:** Hybrid-Ansatz für Ressourceneffizienz
+**Entscheidung:** Hybrid-Ansatz fÃ¼r Ressourceneffizienz
 
 ```
 +------------------------------------------------------------------+
@@ -543,8 +524,8 @@ spec:
 | Backup-Typ | Methode | Frequenz | Retention |
 |------------|---------|----------|-----------|
 | WAL-Archivierung | Kontinuierlich auf S3 | Echtzeit | 7 Tage |
-| Physical Backup | Barman (Full Cluster) | Täglich 02:00 | 30 Tage |
-| Logical Backup | pg_dump (ScheduledBackup) | Täglich 03:00 | 30 Tage |
+| Physical Backup | Barman (Full Cluster) | TÃ¤glich 02:00 | 30 Tage |
+| Logical Backup | pg_dump (ScheduledBackup) | TÃ¤glich 03:00 | 30 Tage |
 
 ### pg_dump ScheduledBackup
 
@@ -659,23 +640,23 @@ route:
 
 ## 10. Backup-Strategie
 
-### Übersicht
+### Ãœbersicht
 
 | Was | Wohin | Frequenz | Retention | Tool |
 |-----|-------|----------|-----------|------|
 | PostgreSQL (WAL) | S3 (QuObject) | Kontinuierlich | 7 Tage | CloudNativePG |
-| PostgreSQL (Full) | S3 (QuObject) | Täglich 02:00 | 30 Tage | Barman |
-| PostgreSQL (Dump) | S3 (QuObject) | Täglich 03:00 | 30 Tage | pg_dump |
-| MariaDB | S3/NFS | Täglich 02:30 | 30 Tage | mariabackup |
-| Kubernetes Resources | S3 (QuObject) | Täglich 04:00 | 14 Tage | Velero |
-| Longhorn Volumes | S3/NFS | Täglich 05:00 | 14 Tage | Longhorn |
+| PostgreSQL (Full) | S3 (QuObject) | TÃ¤glich 02:00 | 30 Tage | Barman |
+| PostgreSQL (Dump) | S3 (QuObject) | TÃ¤glich 03:00 | 30 Tage | pg_dump |
+| MariaDB | S3/NFS | TÃ¤glich 02:30 | 30 Tage | mariabackup |
+| Kubernetes Resources | S3 (QuObject) | TÃ¤glich 04:00 | 14 Tage | Velero |
+| Longhorn Volumes | S3/NFS | TÃ¤glich 05:00 | 14 Tage | Longhorn |
 | OpenTofu State | S3 (QuObject) | Bei jedem Apply | Versioniert | S3 Backend |
 | VMs | Veeam | Bestehend | Bestehend | Veeam |
 
 ### Backup-Ziele
 
-- **Primär:** nas10.eneg.de (QuObject S3)
-- **Sekundär:** Weitere Sicherung auf andere Medien (nicht Teil dieses Projekts)
+- **PrimÃ¤r:** nas10.eneg.de (QuObject S3)
+- **SekundÃ¤r:** Weitere Sicherung auf andere Medien (nicht Teil dieses Projekts)
 
 ### S3 Buckets (zu erstellen)
 
@@ -692,7 +673,7 @@ route:
 | Szenario | Verfahren |
 |----------|-----------|
 | App-Deployment fehlerhaft | ArgoCD: Git Revert -> Auto-Sync |
-| Kubernetes Namespace gelöscht | Velero Restore |
+| Kubernetes Namespace gelÃ¶scht | Velero Restore |
 | Datenbank-Korruption | CloudNativePG Point-in-Time Recovery |
 | Einzelne Tabellen wiederherstellen | pg_dump Restore |
 | VM ausgefallen | Veeam Restore |
@@ -707,8 +688,8 @@ route:
 | Zugriff | Methode | Details |
 |---------|---------|---------|
 | SSH auf VMs | SSH-Key (Ed25519) | Kein Passwort-Login |
-| vCenter API | Service Account | Dedizierter User für OpenTofu |
-| GitHub | Deploy Key (read-only) | Für ArgoCD |
+| vCenter API | Service Account | Dedizierter User fÃ¼r OpenTofu |
+| GitHub | Deploy Key (read-only) | FÃ¼r ArgoCD |
 | kubectl | kubeconfig | Management-VM + Windows Laptop + MacBook |
 | App-Login | Lokale Admins + Keycloak SSO | 1-3 lokale Admins pro App |
 
@@ -722,7 +703,7 @@ route:
 
 - Namespace-Isolation via Calico
 - Nur explizit erlaubte Kommunikation
-- Ingress nur über Traefik
+- Ingress nur Ã¼ber Traefik
 
 ### Policy Engine (Kyverno)
 
@@ -738,7 +719,7 @@ route:
 
 ### Let's Encrypt via DNS-01 Challenge (IONOS)
 
-**Bereits konfiguriert im Vorgängerprojekt:**
+**Bereits konfiguriert im VorgÃ¤ngerprojekt:**
 
 - Domain: eneg.de (bei IONOS gehostet)
 - Cert-Manager Version: v1.16.2
@@ -787,7 +768,7 @@ stringData:
   IONOS_SECRET: "<aus 1Password>"
 ```
 
-### DNS-Konfiguration für externe Resolver
+### DNS-Konfiguration fÃ¼r externe Resolver
 
 ```yaml
 # cert-manager-values.yaml
@@ -800,35 +781,33 @@ extraArgs:
 
 ## 13. Implementierungsplan
 
-### Phasen-Übersicht
+### Phasen-Ãœbersicht
 
 | Phase | Beschreibung | Dauer | Status |
 |-------|--------------|-------|--------|
 | 0 | Vorbereitung & Workstation Setup | 1-2 Tage | ✅ Abgeschlossen |
 | 1 | Ubuntu-Template & VM-Automatisierung | 2-3 Tage | ✅ Abgeschlossen |
-| 2 | K3s DEV-Cluster | 1-2 Tage | Offen |
-| 3 | GitOps-Fundament (ArgoCD, SOPS, GitHub) | 2-3 Tage | Offen |
+| 2 | K3s DEV-Cluster | 1 Tag | ✅ Abgeschlossen |
+| 3 | GitOps-Fundament (ArgoCD, SOPS, GitHub) | 2-3 Tage | ✅ Abgeschlossen |
 | 4 | Kubernetes-Basis (MetalLB, Traefik, Cert-Manager, Longhorn) | 2-3 Tage | Offen |
 | 5 | Datenbank-Cluster (CloudNativePG, MariaDB Galera) | 2-3 Tage | Offen |
 | 6 | Pilot-Apps (n8n, OpenProject, Odoo) | 3-5 Tage | Offen |
 | 7 | Monitoring-Stack | 2-3 Tage | Offen |
 | 8 | TEST & PROD Rollout | 2-3 Tage | Offen |
-| 9 | Security & Härtung | 3-5 Tage | Offen |
+| 9 | Security & HÃ¤rtung | 3-5 Tage | Offen |
 | 10 | Backup & Dokumentation | 2-3 Tage | Offen |
 
-**Geschätzte Gesamtdauer:** 20-32 Arbeitstage
+**GeschÃ¤tzte Gesamtdauer:** 20-32 Arbeitstage
 
-**Detaillierte Phasen-Dokumentation:** [docs/phases/README.md](phases/README.md)
+### Phase 0: Vorbereitung & Workstation Setup âœ…
 
-### Phase 0: Vorbereitung & Workstation Setup ✅
-
-**Ziel:** Arbeitsstationen und Management-VM bereit für alle Phasen
+**Ziel:** Arbeitsstationen und Management-VM bereit fÃ¼r alle Phasen
 
 **Abgeschlossen am:** 04.02.2026
 
 **Windows Laptop:**
 - [x] Git installieren
-- [x] Node.js installieren (für MCP Server)
+- [x] Node.js installieren (fÃ¼r MCP Server)
 - [x] SSH-Key generieren (Ed25519)
 - [x] Desktop Commander MCP konfigurieren
 - [x] kubectl installieren
@@ -841,7 +820,7 @@ extraArgs:
 **GitHub:**
 - [x] Repository erstellen (privat): eneg-k8s-infrastructure-v2
 - [x] Basis-Struktur angelegt
-- [x] SSH-Key für Management-VM hinzugefügt
+- [x] SSH-Key fÃ¼r Management-VM hinzugefÃ¼gt
 
 **Management-VM (k8s-mgmt-10.eneg.de):**
 - [x] VM in vCenter-A erstellt (Host: S2843, Datastore: S2843_SSD_01_VMS)
@@ -866,8 +845,49 @@ extraArgs:
 | Age | 1.1.1 | apt (Ubuntu Repository) |
 | Git | 2.43.0 | apt (Ubuntu Repository) |
 
-**Hinweis:** Bei kubectl wurde initial das v1.32 Repository verwendet, was zu einer veralteten Version führte. Dies wurde korrigiert durch Wechsel auf das v1.35 Repository, da Kubernetes 1.32 am 28.02.2026 End-of-Life erreicht.
+**Hinweis:** Bei kubectl wurde initial das v1.32 Repository verwendet, was zu einer veralteten Version fÃ¼hrte. Dies wurde korrigiert durch Wechsel auf das v1.35 Repository, da Kubernetes 1.32 am 28.02.2026 End-of-Life erreicht.
 
+### Phase 2: K3s HA-Cluster Installation ✅
+
+**Ziel:** Automatisierte K3s HA-Installation mit Ansible
+
+**Abgeschlossen am:** 09.02.2026
+
+**Erreichte Ziele:**
+- [x] Ansible-Struktur aufgebaut (Inventory, Playbooks, Roles)
+- [x] SSH-Key-Management implementiert
+- [x] K3s v1.35.0+k3s3 auf 3 Nodes installiert
+- [x] HA-Cluster mit embedded etcd konfiguriert
+- [x] Version-Pinning statt Channels implementiert
+- [x] Upgrade-Fähigkeit durch Versions-Check
+- [x] Comprehensive Documentation (README, SSH-Keys, Troubleshooting)
+
+**Cluster-Status:**
+```
+k8s-dev-21   Ready    control-plane,etcd   v1.35.0+k3s3
+k8s-dev-22   Ready    control-plane,etcd   v1.35.0+k3s3
+k8s-dev-23   Ready    control-plane,etcd   v1.35.0+k3s3
+```
+
+**Wichtige Learnings:**
+- K3s Token-Format: Simple Password für ersten Server, K10-Format für Additional Servers
+- Version Pinning bevorzugt gegenüber Channels für Reproduzierbarkeit
+- Token niemals bei laufendem Cluster ändern (etcd-Verschlüsselung!)
+- Upgrade-Erkennung durch Version-Vergleich implementiert
+
+**Dokumentation:**
+- `docs/phase-02-abschluss.md` - Vollständiger Phasenbericht
+- `ansible/README.md` - Ansible-Nutzungsanleitung
+- `ansible/SSH-KEYS.md` - SSH-Key Quick Reference
+- `docs/SSH-KEY-MANAGEMENT.md` - Umfassende SSH-Dokumentation
+
+**kubeconfig-Speicherort:**
+- Management-VM: `~/git/eneg-k8s-infrastructure-v2/kubeconfig-dev.yaml`
+
+**Deaktivierte K3s-Komponenten (für GitOps):**
+- Traefik (wird in Phase 4 manuell installiert)
+- ServiceLB (wird durch MetalLB ersetzt)
+- Local-Storage (wird durch Longhorn ersetzt)
 
 ---
 
@@ -875,40 +895,40 @@ extraArgs:
 
 ### Speicherort
 
-- **Primär:** `/docs` im Git Repository
+- **PrimÃ¤r:** `/docs` im Git Repository
 - **Format:** Markdown (.md)
-- **Ergänzend:** README.md in jedem Unterverzeichnis
+- **ErgÃ¤nzend:** README.md in jedem Unterverzeichnis
 
 ### Dokumentationsstruktur
 
 ```
 docs/
-├── architecture/
-│   ├── overview.md
-│   ├── network.md
-│   ├── storage.md
-│   └── security.md
-├── runbooks/
-│   ├── deployment.md
-│   ├── backup-restore.md
-│   ├── troubleshooting.md
-│   └── disaster-recovery.md
-├── decisions/
-│   ├── ADR-001-kubernetes-distribution.md
-│   ├── ADR-002-database-strategy.md
-│   └── ...
-└── guides/
-    ├── onboarding.md
-    ├── kubectl-access.md
-    └── adding-new-app.md
+â”œâ”€â”€ architecture/
+â”‚   â”œâ”€â”€ overview.md
+â”‚   â”œâ”€â”€ network.md
+â”‚   â”œâ”€â”€ storage.md
+â”‚   â””â”€â”€ security.md
+â”œâ”€â”€ runbooks/
+â”‚   â”œâ”€â”€ deployment.md
+â”‚   â”œâ”€â”€ backup-restore.md
+â”‚   â”œâ”€â”€ troubleshooting.md
+â”‚   â””â”€â”€ disaster-recovery.md
+â”œâ”€â”€ decisions/
+â”‚   â”œâ”€â”€ ADR-001-kubernetes-distribution.md
+â”‚   â”œâ”€â”€ ADR-002-database-strategy.md
+â”‚   â””â”€â”€ ...
+â””â”€â”€ guides/
+    â”œâ”€â”€ onboarding.md
+    â”œâ”€â”€ kubectl-access.md
+    â””â”€â”€ adding-new-app.md
 ```
 
 ### Dokumentationsprinzipien
 
 1. **Aktuell halten:** Dokumentation wird direkt nach erfolgreicher Implementierung erstellt
-2. **Versioniert:** Alle Änderungen via Git nachvollziehbar
+2. **Versioniert:** Alle Ã„nderungen via Git nachvollziehbar
 3. **Praktisch:** Fokus auf Runbooks und konkrete Anleitungen
-4. **Entscheidungen dokumentieren:** Architecture Decision Records (ADRs) für wichtige Entscheidungen
+4. **Entscheidungen dokumentieren:** Architecture Decision Records (ADRs) fÃ¼r wichtige Entscheidungen
 
 ---
 
@@ -918,7 +938,7 @@ docs/
 
 | Tool | Version | Hinweis |
 |------|---------|---------|
-| Ubuntu Server | 24.04 LTS | Bis April 2029 unterstützt |
+| Ubuntu Server | 24.04 LTS | Bis April 2029 unterstÃ¼tzt |
 | OpenTofu | 1.11.4 | Aktuell (Released 21.01.2026) |
 | Ansible | 2.20.2 (core) | Aktuell (Released 29.01.2026) |
 | Packer | 1.15.0 | Aktuell |
@@ -941,25 +961,24 @@ docs/
 
 ---
 
-## Anhang B: Kontakte & Zugänge
+## Anhang B: Kontakte & ZugÃ¤nge
 
 | System | Zugangsdaten |
 |--------|--------------|
-| vCenter-A | In 1Password |
-| vCenter-B | In 1Password |
+| vCenter-A (vcenter-a.eneg.de) | In 1Password |
 | IONOS API | In 1Password |
 | GitHub | eneg-k8s-infrastructure-v2 |
 | NAS (nas10.eneg.de) | In 1Password |
 
 ---
 
-## Änderungshistorie
+## Ã„nderungshistorie
 
-| Datum | Version | Änderung | Autor |
+| Datum | Version | Ã„nderung | Autor |
 |-------|---------|----------|-------|
 | 04.02.2026 | 1.0 | Initiale Version | Claude AI / D. Henke |
-| 04.02.2026 | 1.1 | Phase 0 abgeschlossen, Management-VM dokumentiert, Tool-Versionen aktualisiert, Hostname korrigiert (k8s-mgmt-10 statt mgmt) | Claude AI / D. Henke |
-| 06.02.2026 | 1.2 | Phase 1 abgeschlossen, Phasen-Dokumentation eingeführt (docs/phases/) | Claude AI / D. Henke |
+| 09.02.2026 | 1.2 | Phase 2 abgeschlossen: K3s v1.35.0+k3s3 HA-Cluster mit Ansible installiert, Version-Pinning implementiert, Umfassende Dokumentation erstellt | Claude AI / D. Henke |
+| 16.02.2026 | 1.3 | Infrastruktur-Migration: Single vCenter (vcenter-a.eneg.de), S2842 neu aufgebaut (ESXi 8.0.3), Clean Slate DEV-Cluster mit K3s v1.35.1+k3s1, Rolling Upgrade implementiert, Phase 1+3 abgeschlossen | Claude AI / D. Henke |
 
 ---
 
