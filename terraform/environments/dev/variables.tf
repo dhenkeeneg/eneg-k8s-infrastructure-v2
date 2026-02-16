@@ -3,19 +3,13 @@
 # =============================================================================
 
 # -----------------------------------------------------------------------------
-# vCenter Verbindungen
+# vCenter Verbindung (einziges vCenter seit Feb 2026)
 # -----------------------------------------------------------------------------
 
-variable "vcenter_legacy_server" {
-  type        = string
-  default     = "vcenter.eneg.de"
-  description = "vCenter Legacy Server (für s2842)"
-}
-
-variable "vcenter_a_server" {
+variable "vcenter_server" {
   type        = string
   default     = "vcenter-a.eneg.de"
-  description = "vCenter-A Server (für s2843, s3168)"
+  description = "vCenter Server"
 }
 
 variable "vcenter_username" {
@@ -27,6 +21,16 @@ variable "vcenter_password" {
   type        = string
   sensitive   = true
   description = "vCenter Passwort"
+}
+
+# -----------------------------------------------------------------------------
+# vSphere Datacenter
+# -----------------------------------------------------------------------------
+
+variable "datacenter" {
+  type        = string
+  default     = "eNeG-Datacenter"
+  description = "vSphere Datacenter Name"
 }
 
 # -----------------------------------------------------------------------------
@@ -48,7 +52,7 @@ variable "domain" {
 variable "template_name" {
   type        = string
   default     = "ubuntu-24.04-k8s-template"
-  description = "Name des VM Templates (in beiden vCentern gleich)"
+  description = "Name des VM Templates in vCenter-A"
 }
 
 # -----------------------------------------------------------------------------

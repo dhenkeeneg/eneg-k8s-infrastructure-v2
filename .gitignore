@@ -39,6 +39,7 @@ secrets.yml
 # Kubernetes
 kubeconfig
 kubeconfig.yaml
+kubeconfig-*.yaml
 *.kubeconfig
 
 # Packer

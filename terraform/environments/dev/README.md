@@ -1,78 +1,56 @@
-# =============================================================================
-# DEV Environment - README
-# =============================================================================
+# DEV Environment - OpenTofu Konfiguration
 
-# DEV Kubernetes Cluster
+## Übersicht
 
-Erstellt 3 VMs für den DEV K3s-Cluster.
+Erstellt die 3 K3s DEV-Cluster VMs aus einem Ubuntu 24.04 Template.
+
+**Alle Hosts sind in vcenter-a.eneg.de (ESXi 8.0.3)**
 
 ## VM-Verteilung
 
-| VM | Host | vCenter | IP | Datastore |
-|----|------|---------|-----|-----------|
-| k8s-dev-21 | s2842.eneg.de | vcenter.eneg.de | 192.168.180.21 | S2842_D08-10_R5_SSD_K8s |
-| k8s-dev-22 | s2843.eneg.de | vcenter-a.eneg.de | 192.168.180.22 | S2843_SSD_01_VMS |
-| k8s-dev-23 | s3168.eneg.de | vcenter-a.eneg.de | 192.168.180.23 | S3168_SSD_01_VMS |
-
-## Ressourcen pro VM
-
-- **vCPU:** 4
-- **RAM:** 12 GB
-- **Disk:** 384 GB
+| VM | Host | Datastore | IP |
+|----|------|-----------|-----|
+| k8s-dev-21 | s2842.eneg.de | S2842_SSD_01_VMS | 192.168.180.21 |
+| k8s-dev-22 | s2843.eneg.de | S2843_SSD_01_VMS | 192.168.180.22 |
+| k8s-dev-23 | s3168.eneg.de | S3168_SSD_01_VMS | 192.168.180.23 |
 
 ## Voraussetzungen
 
-1. VM-Templates müssen in beiden vCentern existieren:
-   - `ubuntu-24.04-k8s-template` in vcenter.eneg.de
-   - `ubuntu-24.04-k8s-template` in vcenter-a.eneg.de
-
-2. VM-Ordner-Struktur muss in beiden vCentern existieren:
-   - `eNeG-VM-K8s/DEV`
-   - (später: `eNeG-VM-K8s/TEST`, `eNeG-VM-K8s/PROD`)
-
-3. DNS-Einträge sollten vorbereitet sein (optional, aber empfohlen)
+- VM-Template `ubuntu-24.04-k8s-template` in vCenter-A vorhanden
+- VM-Ordner `eNeG-VM-K8s/DEV` in vCenter-A vorhanden
+- Portgroup `VT 180 - K8s Dev` auf allen Hosts konfiguriert
 
 ## Verwendung
 
-### 1. Credentials-Datei erstellen
-
 ```bash
-cd terraform/environments/dev
+# 1. In DEV-Umgebung wechseln
+cd ~/git/eneg-k8s-infrastructure-v2/terraform/environments/dev
+
+# 2. Credentials-Datei erstellen (einmalig)
 cp credentials.example.tfvars credentials.auto.tfvars
 nano credentials.auto.tfvars
-```
 
-### 2. OpenTofu initialisieren
-
-```bash
+# 3. Initialisieren
 tofu init
-```
 
-### 3. Plan prüfen
-
-```bash
+# 4. Plan prüfen
 tofu plan
-```
 
-### 4. VMs erstellen
-
-```bash
+# 5. VMs erstellen
 tofu apply
 ```
 
-### 5. VMs löschen (falls nötig)
+## Nach der Erstellung
 
-```bash
-tofu destroy
-```
+VMs werden automatisch mit statischer IP konfiguriert (Guest Customization).
+Nach dem Erstellen:
 
-## Hinweise
+1. SSH-Keys verteilen (Ansible Phase 2, Playbook 01)
+2. K3s installieren (Ansible Phase 2, Playbook 02)
 
-- Die Credentials-Datei (`credentials.auto.tfvars`) ist in `.gitignore` und wird NICHT committed
-- Der vCenter-Benutzername muss exakt `OpenTofu@eneg.de` lauten (Groß-/Kleinschreibung beachten!)
-- Nach dem Erstellen der VMs können diese per SSH erreicht werden:
-  ```bash
-  ssh admin-ubuntu@192.168.180.21
-  ssh admin-ubuntu@192.168.180.22
-  ssh admin-ubuntu@192.168.180.23
-  ```
+## Änderungshistorie
+
+| Datum | Änderung |
+|-------|----------|
+| 06.02.2026 | Initiale Erstellung mit Dual-vCenter-Support |
+| 16.02.2026 | Migration auf Single vCenter (vcenter-a.eneg.de), S2842 neu aufgebaut mit ESXi 8.0.3 |

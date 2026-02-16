@@ -1,30 +1,28 @@
 # =============================================================================
 # DEV Environment - VM Definitionen
 # =============================================================================
+# Alle 3 Hosts sind in vcenter-a.eneg.de (ESXi 8.0.3)
+#
 # VM-Verteilung:
-#   k8s-dev-21 -> HOST1 (s2842) -> vCenter Legacy
-#   k8s-dev-22 -> HOST2 (s2843) -> vCenter-A
-#   k8s-dev-23 -> HOST3 (s3168) -> vCenter-A
+#   k8s-dev-21 -> HOST1 (s2842) -> S2842_SSD_01_VMS
+#   k8s-dev-22 -> HOST2 (s2843) -> S2843_SSD_01_VMS
+#   k8s-dev-23 -> HOST3 (s3168) -> S3168_SSD_01_VMS
 # =============================================================================
 
 # -----------------------------------------------------------------------------
-# k8s-dev-21 auf HOST1 (s2842) - vCenter Legacy
+# k8s-dev-21 auf HOST1 (s2842)
 # -----------------------------------------------------------------------------
 
 module "k8s_dev_21" {
   source = "../../modules/vm"
 
-  providers = {
-    vsphere = vsphere.vcenter_legacy
-  }
-
-  # vCenter Legacy Einstellungen
-  datacenter    = "eNeG"
+  # vCenter-A Einstellungen
+  datacenter    = var.datacenter
   host          = "s2842.eneg.de"
-  datastore     = "S2842_D08-10_R5_SSD_K8s"
+  datastore     = "S2842_SSD_01_VMS"
   network       = var.network
   template_name = var.template_name
-  folder        = vsphere_folder.k8s_dev_legacy.path
+  folder        = "eNeG-VM-K8s/DEV"
 
   # VM Konfiguration
   vm_name    = "k8s-dev-21"
@@ -41,23 +39,19 @@ module "k8s_dev_21" {
 }
 
 # -----------------------------------------------------------------------------
-# k8s-dev-22 auf HOST2 (s2843) - vCenter-A
+# k8s-dev-22 auf HOST2 (s2843)
 # -----------------------------------------------------------------------------
 
 module "k8s_dev_22" {
   source = "../../modules/vm"
 
-  providers = {
-    vsphere = vsphere.vcenter_a
-  }
-
   # vCenter-A Einstellungen
-  datacenter    = "eNeG-Datacenter"
+  datacenter    = var.datacenter
   host          = "s2843.eneg.de"
   datastore     = "S2843_SSD_01_VMS"
   network       = var.network
   template_name = var.template_name
-  folder        = vsphere_folder.k8s_dev_a.path
+  folder        = "eNeG-VM-K8s/DEV"
 
   # VM Konfiguration
   vm_name    = "k8s-dev-22"
@@ -74,23 +68,19 @@ module "k8s_dev_22" {
 }
 
 # -----------------------------------------------------------------------------
-# k8s-dev-23 auf HOST3 (s3168) - vCenter-A
+# k8s-dev-23 auf HOST3 (s3168)
 # -----------------------------------------------------------------------------
 
 module "k8s_dev_23" {
   source = "../../modules/vm"
 
-  providers = {
-    vsphere = vsphere.vcenter_a
-  }
-
   # vCenter-A Einstellungen
-  datacenter    = "eNeG-Datacenter"
+  datacenter    = var.datacenter
   host          = "s3168.eneg.de"
   datastore     = "S3168_SSD_01_VMS"
   network       = var.network
   template_name = var.template_name
-  folder        = vsphere_folder.k8s_dev_a.path
+  folder        = "eNeG-VM-K8s/DEV"
 
   # VM Konfiguration
   vm_name    = "k8s-dev-23"

@@ -3,6 +3,7 @@
 # =============================================================================
 # Projekt: eNeG K8s Infrastructure v2
 # Umgebung: DEV (VLAN 180)
+# vCenter: vcenter-a.eneg.de (einziges vCenter seit Feb 2026)
 # =============================================================================
 
 terraform {
@@ -24,24 +25,11 @@ terraform {
 }
 
 # =============================================================================
-# Provider: vCenter Legacy (für HOST1/s2842)
+# Provider: vCenter-A (einziges vCenter für alle Hosts)
 # =============================================================================
 
 provider "vsphere" {
-  alias                = "vcenter_legacy"
-  vsphere_server       = var.vcenter_legacy_server
-  user                 = var.vcenter_username
-  password             = var.vcenter_password
-  allow_unverified_ssl = true
-}
-
-# =============================================================================
-# Provider: vCenter-A (für HOST2/s2843 und HOST3/s3168)
-# =============================================================================
-
-provider "vsphere" {
-  alias                = "vcenter_a"
-  vsphere_server       = var.vcenter_a_server
+  vsphere_server       = var.vcenter_server
   user                 = var.vcenter_username
   password             = var.vcenter_password
   allow_unverified_ssl = true
