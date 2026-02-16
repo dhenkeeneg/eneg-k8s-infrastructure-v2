@@ -1,7 +1,8 @@
 # =============================================================================
-# Playbook: K3s HA-Cluster Installation
+# Playbook: K3s HA-Cluster Installation & Upgrade
 # =============================================================================
 # Installiert K3s im HA-Modus mit embedded etcd auf 3 Server-Nodes.
+# Unterstützt sowohl Erstinstallation als auch Rolling Upgrades.
 #
 # Voraussetzungen:
 #   - SSH-Keys müssen bereits verteilt sein (01-setup-ssh-keys.yml)
@@ -12,6 +13,13 @@
 #
 # Mit Vault:
 #   ansible-playbook playbooks/02-install-k3s.yml --ask-vault-pass
+#
+# Upgrade-Verhalten:
+#   - Erkennt ob K3s bereits installiert ist
+#   - Bei Erstinstallation: Volle Installation mit cluster-init/server-join
+#   - Bei Upgrade: Rolling Update (Binary ersetzen, Service neu starten)
+#   - Upgrade erfolgt sequentiell (serial: 1) um Cluster-Verfügbarkeit
+#     zu gewährleisten
 # =============================================================================
 
 ---
@@ -47,31 +55,55 @@
         regexp: '.*swap.*'
         state: absent
 
+    - name: Prüfen ob K3s bereits installiert ist
+      ansible.builtin.stat:
+        path: /usr/local/bin/k3s
+      register: k3s_binary
+
+    - name: Installierte K3s Version prüfen
+      ansible.builtin.shell: |
+        if [ -f /usr/local/bin/k3s ]; then
+          /usr/local/bin/k3s --version | head -n1 | awk '{print $3}'
+        else
+          echo "not_installed"
+        fi
+      register: k3s_current_version
+      changed_when: false
+
+    - name: Installations-Modus bestimmen
+      ansible.builtin.set_fact:
+        k3s_needs_install: "{{ k3s_current_version.stdout == 'not_installed' }}"
+        k3s_needs_upgrade: "{{ k3s_current_version.stdout != 'not_installed' and k3s_current_version.stdout != k3s_version }}"
+      
+    - name: Aktuellen Status anzeigen
+      ansible.builtin.debug:
+        msg: >-
+          Node {{ inventory_hostname }}:
+          Aktuell={{ k3s_current_version.stdout }},
+          Ziel={{ k3s_version }},
+          Install={{ k3s_needs_install }},
+          Upgrade={{ k3s_needs_upgrade }}
+
 # =============================================================================
-# K3s auf erstem Server installieren (Cluster initialisieren)
+# K3s auf erstem Server installieren (nur bei Erstinstallation)
 # =============================================================================
 
-- name: K3s Initial Server installieren
+- name: K3s Initial Server - Erstinstallation
   hosts: k3s_initial_server
   become: true
   vars_files:
     - ../inventory/dev/group_vars/secrets.yml
   
   tasks:
-    - name: Prüfen ob K3s bereits installiert ist
-      ansible.builtin.stat:
-        path: /usr/local/bin/k3s
-      register: k3s_binary
-
     - name: K3s Token generieren wenn nicht gesetzt
       ansible.builtin.set_fact:
         generated_k3s_token: "{{ lookup('password', '/dev/null chars=ascii_letters,digits length=64') }}"
-      when: k3s_token == "" or k3s_token is not defined
+      when: (k3s_token is not defined or k3s_token == "") and k3s_needs_install
       run_once: true
 
     - name: K3s Token setzen
       ansible.builtin.set_fact:
-        final_k3s_token: "{{ k3s_token if k3s_token != '' else generated_k3s_token }}"
+        final_k3s_token: "{{ k3s_token if (k3s_token is defined and k3s_token != '') else (generated_k3s_token | default('')) }}"
       run_once: true
 
     - name: K3s Konfigurationsverzeichnis erstellen
@@ -86,24 +118,14 @@
         dest: /etc/rancher/k3s/config.yaml
         mode: '0644'
 
-    - name: Installierte K3s Version prüfen
-      ansible.builtin.shell: |
-        if [ -f /usr/local/bin/k3s ]; then
-          /usr/local/bin/k3s --version | head -n1 | awk '{print $3}'
-        else
-          echo "not_installed"
-        fi
-      register: k3s_current_version
-      changed_when: false
-
-    - name: K3s auf Initial Server installieren/upgraden
+    - name: K3s Initial Server installieren (Cluster initialisieren)
       ansible.builtin.shell: |
         curl -sfL https://get.k3s.io | \
         INSTALL_K3S_VERSION={{ k3s_version }} \
         K3S_TOKEN={{ final_k3s_token }} \
         sh -s - server \
         --cluster-init
-      when: k3s_current_version.stdout != k3s_version
+      when: k3s_needs_install
       environment:
         INSTALL_K3S_SKIP_START: "false"
 
@@ -113,15 +135,18 @@
         host: "{{ ansible_host }}"
         delay: 10
         timeout: 300
+      when: k3s_needs_install
 
     - name: Warten bis Node Ready ist
       ansible.builtin.shell: |
-        /usr/local/bin/k3s kubectl get node {{ inventory_hostname }} -o jsonpath='{.status.conditions[?(@.type=="Ready")].status}'
+        /usr/local/bin/k3s kubectl get node {{ inventory_hostname }} \
+        -o jsonpath='{.status.conditions[?(@.type=="Ready")].status}'
       register: node_ready
       until: node_ready.stdout == "True"
       retries: 30
       delay: 10
       changed_when: false
+      when: k3s_needs_install
 
     - name: Node-Token für weitere Server holen
       ansible.builtin.slurp:
@@ -134,52 +159,39 @@
       delegate_facts: true
 
 # =============================================================================
-# K3s auf weiteren Servern installieren (Cluster beitreten)
+# K3s auf weiteren Servern installieren (nur bei Erstinstallation)
 # =============================================================================
 
-- name: K3s Additional Servers installieren
+- name: K3s Additional Servers - Erstinstallation
   hosts: k3s_additional_servers
   become: true
-  serial: 1  # Einen Server nach dem anderen
+  serial: 1
   vars_files:
     - ../inventory/dev/group_vars/secrets.yml
   
   tasks:
-    - name: Prüfen ob K3s bereits installiert ist
-      ansible.builtin.stat:
-        path: /usr/local/bin/k3s
-      register: k3s_binary
-
     - name: K3s Konfigurationsverzeichnis erstellen
       ansible.builtin.file:
         path: /etc/rancher/k3s
         state: directory
         mode: '0755'
+      when: k3s_needs_install
 
     - name: K3s Config-Datei erstellen
       ansible.builtin.template:
         src: ../templates/k3s-config.yaml.j2
         dest: /etc/rancher/k3s/config.yaml
         mode: '0644'
+      when: k3s_needs_install
 
-    - name: Installierte K3s Version prüfen
-      ansible.builtin.shell: |
-        if [ -f /usr/local/bin/k3s ]; then
-          /usr/local/bin/k3s --version | head -n1 | awk '{print $3}'
-        else
-          echo "not_installed"
-        fi
-      register: k3s_current_version
-      changed_when: false
-
-    - name: K3s auf Additional Server installieren/upgraden
+    - name: K3s Additional Server installieren (Cluster beitreten)
       ansible.builtin.shell: |
         curl -sfL https://get.k3s.io | \
         INSTALL_K3S_VERSION={{ k3s_version }} \
         K3S_TOKEN={{ hostvars[groups['k3s_initial_server'][0]]['k3s_cluster_token'] }} \
         sh -s - server \
         --server {{ k3s_server_url }}
-      when: k3s_current_version.stdout != k3s_version
+      when: k3s_needs_install
       environment:
         INSTALL_K3S_SKIP_START: "false"
 
@@ -189,15 +201,81 @@
         host: "{{ ansible_host }}"
         delay: 10
         timeout: 300
+      when: k3s_needs_install
 
     - name: Warten bis Node Ready ist
       ansible.builtin.shell: |
-        /usr/local/bin/k3s kubectl get node {{ inventory_hostname }} -o jsonpath='{.status.conditions[?(@.type=="Ready")].status}'
+        /usr/local/bin/k3s kubectl get node {{ inventory_hostname }} \
+        -o jsonpath='{.status.conditions[?(@.type=="Ready")].status}'
       register: node_ready
       until: node_ready.stdout == "True"
       retries: 30
       delay: 10
       changed_when: false
+      when: k3s_needs_install
+
+# =============================================================================
+# Rolling Upgrade (wenn K3s bereits installiert ist)
+# =============================================================================
+
+- name: K3s Rolling Upgrade
+  hosts: k3s_cluster
+  become: true
+  serial: 1
+  order: sorted
+  vars_files:
+    - ../inventory/dev/group_vars/secrets.yml
+  
+  tasks:
+    - name: "Upgrade {{ inventory_hostname }} von {{ k3s_current_version.stdout }} auf {{ k3s_version }}"
+      ansible.builtin.debug:
+        msg: "Starte Rolling Upgrade auf {{ inventory_hostname }}"
+      when: k3s_needs_upgrade
+
+    - name: K3s Binary aktualisieren (ohne Service-Neustart)
+      ansible.builtin.shell: |
+        curl -sfL https://get.k3s.io | \
+        INSTALL_K3S_VERSION={{ k3s_version }} \
+        INSTALL_K3S_SKIP_START=true \
+        sh -s -
+      when: k3s_needs_upgrade
+
+    - name: K3s Service neu starten
+      ansible.builtin.systemd:
+        name: k3s
+        state: restarted
+        daemon_reload: true
+      when: k3s_needs_upgrade
+
+    - name: Warten bis K3s API erreichbar ist
+      ansible.builtin.wait_for:
+        port: 6443
+        host: "{{ ansible_host }}"
+        delay: 5
+        timeout: 120
+      when: k3s_needs_upgrade
+
+    - name: Warten bis Node Ready ist
+      ansible.builtin.shell: |
+        /usr/local/bin/k3s kubectl get node {{ inventory_hostname }} \
+        -o jsonpath='{.status.conditions[?(@.type=="Ready")].status}'
+      register: node_ready
+      until: node_ready.stdout == "True"
+      retries: 30
+      delay: 10
+      changed_when: false
+      when: k3s_needs_upgrade
+
+    - name: Neue Version bestätigen
+      ansible.builtin.shell: /usr/local/bin/k3s --version | head -n1
+      register: k3s_new_version
+      changed_when: false
+      when: k3s_needs_upgrade
+
+    - name: "Upgrade-Status {{ inventory_hostname }}"
+      ansible.builtin.debug:
+        msg: "{{ inventory_hostname }} erfolgreich aktualisiert auf: {{ k3s_new_version.stdout }}"
+      when: k3s_needs_upgrade
 
 # =============================================================================
 # Cluster-Status prüfen und kubeconfig holen
@@ -240,7 +318,7 @@
       ansible.builtin.debug:
         msg: |
           ============================================================
-          K3s Cluster erfolgreich installiert!
+          K3s Cluster erfolgreich installiert/aktualisiert!
           
           kubeconfig wurde gespeichert unter:
             {{ playbook_dir }}/../../kubeconfig-dev.yaml
