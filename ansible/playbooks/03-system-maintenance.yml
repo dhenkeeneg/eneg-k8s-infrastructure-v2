@@ -1,0 +1,106 @@
+# =============================================================================
+# Playbook: System-Wartung (Updates, Passwort, Reboot)
+# =============================================================================
+# Führt System-Updates durch, setzt Passwörter und rebootet bei Bedarf.
+#
+# Ausführung:
+#   # Alles (Updates + Passwort + Reboot wenn nötig)
+#   ansible-playbook playbooks/03-system-maintenance.yml
+#
+#   # Nur Updates
+#   ansible-playbook playbooks/03-system-maintenance.yml --tags updates
+#
+#   # Nur Passwort ändern
+#   ansible-playbook playbooks/03-system-maintenance.yml --tags password
+#
+#   # Nur Reboot (wenn nötig)
+#   ansible-playbook playbooks/03-system-maintenance.yml --tags reboot
+# =============================================================================
+
+---
+- name: System-Wartung
+  hosts: k3s_cluster
+  become: true
+  serial: 1
+  order: reverse_sorted
+  vars_files:
+    - ../inventory/dev/group_vars/secrets.yml
+
+  tasks:
+    # =========================================================================
+    # Passwort ändern
+    # =========================================================================
+    
+    - name: admin-ubuntu Passwort aktualisieren
+      ansible.builtin.user:
+        name: admin-ubuntu
+        password: "{{ admin_ubuntu_password_hash }}"
+        update_password: always
+      when: admin_ubuntu_password_hash is defined and admin_ubuntu_password_hash != "" and admin_ubuntu_password_hash != "REPLACE_WITH_PASSWORD_HASH"
+      tags: password
+
+    # =========================================================================
+    # System-Updates
+    # =========================================================================
+
+    - name: APT Cache aktualisieren
+      ansible.builtin.apt:
+        update_cache: yes
+      tags: updates
+
+    - name: Alle Pakete aktualisieren
+      ansible.builtin.apt:
+        upgrade: dist
+        autoremove: yes
+        autoclean: yes
+      register: apt_upgrade
+      tags: updates
+
+    - name: Aktualisierte Pakete anzeigen
+      ansible.builtin.debug:
+        msg: "{{ apt_upgrade.stdout_lines | default(['Keine Updates']) }}"
+      when: apt_upgrade.changed
+      tags: updates
+
+    # =========================================================================
+    # Reboot wenn nötig
+    # =========================================================================
+
+    - name: Prüfen ob Reboot erforderlich ist
+      ansible.builtin.stat:
+        path: /var/run/reboot-required
+      register: reboot_required
+      tags: reboot
+
+    - name: "Node {{ inventory_hostname }} wird rebootet (Kernel-Update)"
+      ansible.builtin.reboot:
+        reboot_timeout: 300
+        msg: "Ansible: System-Update erfordert Neustart"
+      when: reboot_required.stat.exists
+      tags: reboot
+
+    - name: Warten bis K3s nach Reboot wieder Ready ist
+      ansible.builtin.shell: |
+        /usr/local/bin/k3s kubectl get node {{ inventory_hostname }} \
+        -o jsonpath='{.status.conditions[?(@.type=="Ready")].status}'
+      register: node_ready
+      until: node_ready.stdout == "True"
+      retries: 30
+      delay: 10
+      changed_when: false
+      when: reboot_required.stat.exists
+      tags: reboot
+
+    - name: Node-Status nach Wartung anzeigen
+      ansible.builtin.shell: /usr/local/bin/k3s kubectl get nodes -o wide
+      register: node_status
+      changed_when: false
+      run_once: true
+      delegate_to: "{{ groups['k3s_initial_server'][0] }}"
+      tags: always
+
+    - name: Cluster-Status
+      ansible.builtin.debug:
+        msg: "{{ node_status.stdout_lines }}"
+      run_once: true
+      tags: always
