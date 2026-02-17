@@ -1,41 +1,60 @@
 # ArgoCD Base Configuration
 
-Diese Konfiguration enthält die grundlegende ArgoCD-Installation mit SOPS-Support für verschlüsselte Secrets.
+## Übersicht
 
-## SOPS-Integration
+Dieses Verzeichnis enthält die ArgoCD-Konfiguration, die via App-of-Apps Self-Management synchronisiert wird.
 
-ArgoCD ist so konfiguriert, dass es SOPS-verschlüsselte Secrets automatisch entschlüsseln kann:
+## Dateien
 
-### Komponenten:
-- **argocd-cm.yaml**: ArgoCD ConfigMap mit SOPS-Plugin Konfiguration
-- **age-secret-sealed.yaml**: Template für Age Private Key Secret (nicht im Git!)
-- **repository-secret.enc.yaml**: SOPS-verschlüsselter GitHub Deploy Key
+| Datei | Beschreibung |
+|-------|-------------|
+| `argocd-cm.yaml` | ConfigMap mit KSOPS/Kustomize Build-Options |
+| `argocd-repo-server-ksops-patch.yaml` | Strategic Merge Patch: KSOPS v4.4.0 im Repo-Server |
+| `kustomization.yaml` | Kustomize Root (bindet alles zusammen) |
+| `secrets/` | SOPS-verschlüsselte Secrets |
 
-### Age Key Setup (einmalig auf Management-VM):
+## KSOPS Integration
+
+ArgoCD verwendet KSOPS (Kustomize-SOPS) v4.4.0, um SOPS-verschlüsselte Secrets
+automatisch beim Sync zu entschlüsseln.
+
+### Wie es funktioniert
+
+1. Ein **Init-Container** (`viaductoss/ksops:v4.4.0`) kopiert die `ksops` und `kustomize` Binaries
+2. Der **Age Private Key** wird als Kubernetes Secret (`sops-age`) im argocd Namespace bereitgestellt
+3. Die **ConfigMap** (`argocd-cm`) aktiviert `--enable-alpha-plugins --enable-exec`
+4. ArgoCD baut Kustomize mit KSOPS und entschlüsselt dabei automatisch
+
+### Voraussetzung: Age-Key Secret
+
+Das Secret `sops-age` muss **manuell** im Cluster erstellt werden (einmalig):
 
 ```bash
-# 1. Age Secret für ArgoCD erstellen
-kubectl create secret generic argocd-age-key \
-  --from-file=age.agekey=/home/admin-ubuntu/.age/key.txt \
+kubectl create secret generic sops-age \
+  --from-file=keys.txt=/path/to/age/key.txt \
   -n argocd
-
-# 2. Verification
-kubectl get secret argocd-age-key -n argocd
 ```
 
-### Funktionsweise:
-1. Init Container lädt SOPS und Age binaries herunter
-2. Age Private Key wird als Secret gemountet
-3. SOPS nutzt den Key zur Entschlüsselung von `.enc.yaml` Dateien
-4. ArgoCD kann verschlüsselte Secrets aus Git deployen
+### Secret-Generator Pattern
 
-### Test:
-Nach dem Deployment sollte ArgoCD die verschlüsselten Repository-Credentials nutzen können:
+Für jede App mit SOPS-Secrets wird ein `secret-generator.yaml` erstellt:
 
-```bash
-# ArgoCD Repo Server Logs prüfen
-kubectl logs -n argocd -l app.kubernetes.io/name=argocd-repo-server --tail=50
+```yaml
+apiVersion: viaduct.ai/v1
+kind: ksops
+metadata:
+  name: my-secret-generator
+  annotations:
+    config.kubernetes.io/function: |
+      exec:
+        path: ksops
+files:
+  - ./secrets/my-secret.enc.yaml
 ```
 
-## Nächste Schritte:
-- Phase 4: MetalLB, Traefik, Cert-Manager, Longhorn via ArgoCD deployen
+Und in der `kustomization.yaml` referenziert:
+
+```yaml
+generators:
+  - secret-generator.yaml
+```

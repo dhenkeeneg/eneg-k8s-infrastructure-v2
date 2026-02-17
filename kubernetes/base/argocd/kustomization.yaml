@@ -6,7 +6,6 @@ namespace: argocd
 resources:
   - argocd-cm.yaml
 
-# Später hier weitere ArgoCD-Konfigurationen hinzufügen:
-# - argocd-rbac-cm.yaml
-# - argocd-notifications-cm.yaml
-# - ingress.yaml (Phase 4)
+# Strategic Merge Patch für KSOPS im Repo-Server
+patches:
+  - path: argocd-repo-server-ksops-patch.yaml

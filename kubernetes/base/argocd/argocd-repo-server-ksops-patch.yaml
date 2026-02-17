@@ -1,0 +1,57 @@
+---
+# ArgoCD Repo Server Patch für KSOPS
+# Installiert KSOPS v4.4.0 als Kustomize-Plugin und mountet den Age-Key
+# Dadurch kann ArgoCD SOPS-verschlüsselte Secrets automatisch entschlüsseln
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: argocd-repo-server
+  namespace: argocd
+spec:
+  template:
+    spec:
+      # Init-Container: Installiert KSOPS + Kustomize aus dem offiziellen Image
+      initContainers:
+        - name: install-ksops
+          image: viaductoss/ksops:v4.4.0
+          command: ["/bin/sh", "-c"]
+          args:
+            - echo "Installing KSOPS...";
+              mv ksops /custom-tools/;
+              mv kustomize /custom-tools/;
+              echo "Done.";
+          volumeMounts:
+            - mountPath: /custom-tools
+              name: custom-tools
+
+      # Volumes für KSOPS-Binaries und Age-Key
+      volumes:
+        - name: custom-tools
+          emptyDir: {}
+        - name: sops-age
+          secret:
+            secretName: sops-age
+            items:
+              - key: keys.txt
+                path: keys.txt
+
+      # Container-Patches für den Repo-Server
+      containers:
+        - name: argocd-repo-server
+          env:
+            - name: XDG_CONFIG_HOME
+              value: /.config
+            - name: SOPS_AGE_KEY_FILE
+              value: /.config/sops/age/keys.txt
+          volumeMounts:
+            # KSOPS-eigenes Kustomize (überschreibt eingebautes)
+            - mountPath: /usr/local/bin/kustomize
+              name: custom-tools
+              subPath: kustomize
+            # KSOPS Binary im PATH
+            - mountPath: /usr/local/bin/ksops
+              name: custom-tools
+              subPath: ksops
+            # Age Private Key für SOPS-Entschlüsselung
+            - mountPath: /.config/sops/age
+              name: sops-age
