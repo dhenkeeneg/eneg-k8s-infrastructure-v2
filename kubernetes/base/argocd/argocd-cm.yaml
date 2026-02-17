@@ -1,3 +1,5 @@
+---
+# ArgoCD ConfigMap mit SOPS-Plugin Konfiguration
 apiVersion: v1
 kind: ConfigMap
 metadata:
@@ -7,8 +9,55 @@ metadata:
     app.kubernetes.io/name: argocd-cm
     app.kubernetes.io/part-of: argocd
 data:
-  # Repository-Konfiguration
-  repositories: |
-    - url: git@github.com:dhenkeeneg/eneg-k8s-infrastructure-v2.git
-      name: eneg-k8s-infrastructure-v2
-      type: git
+  # Repository Server zusätzliche Volume Mounts für SOPS
+  reposerver.volumes: |
+    - name: custom-tools
+      emptyDir: {}
+    - name: age-secret
+      secret:
+        secretName: argocd-age-key
+        items:
+          - key: age.agekey
+            path: keys.txt
+
+  # Init Container für SOPS Binary Installation
+  reposerver.init.containers: |
+    - name: install-sops
+      image: alpine:3.19
+      command:
+        - sh
+        - -c
+        - |
+          wget -O /custom-tools/sops https://github.com/getsops/sops/releases/download/v3.9.3/sops-v3.9.3.linux.amd64
+          chmod +x /custom-tools/sops
+          wget -O /custom-tools/age https://github.com/FiloSottile/age/releases/download/v1.2.1/age-v1.2.1-linux-amd64.tar.gz
+          tar -xzf /custom-tools/age -C /custom-tools/ --strip-components=1 age/age
+          chmod +x /custom-tools/age
+      volumeMounts:
+        - name: custom-tools
+          mountPath: /custom-tools
+
+  # Volume Mounts für den Repo Server
+  reposerver.volumeMounts: |
+    - name: custom-tools
+      mountPath: /usr/local/bin/sops
+      subPath: sops
+    - name: custom-tools
+      mountPath: /usr/local/bin/age
+      subPath: age
+    - name: age-secret
+      mountPath: /home/argocd/.config/sops/age
+      readOnly: true
+
+  # Environment Variable für SOPS Age Key
+  reposerver.env: |
+    - name: SOPS_AGE_KEY_FILE
+      value: /home/argocd/.config/sops/age/keys.txt
+    - name: XDG_CONFIG_HOME
+      value: /home/argocd/.config
+
+  # Kustomize Build Options mit SOPS Support
+  kustomize.buildOptions: --enable-alpha-plugins --enable-exec
+
+  # Server URL (wird später in environments/ überschrieben)
+  url: https://argocd-dev.eneg.de

@@ -1,40 +1,41 @@
 # ArgoCD Base Configuration
 
-Diese Konfiguration wird von ArgoCD selbst verwaltet (App-of-Apps Pattern).
+Diese Konfiguration enthält die grundlegende ArgoCD-Installation mit SOPS-Support für verschlüsselte Secrets.
 
-## Struktur
+## SOPS-Integration
 
-```
-base/argocd/
-├── README.md                           # Diese Datei
-├── kustomization.yaml                  # Kustomize Einstiegspunkt
-├── argocd-cm.yaml                      # ConfigMap für Repository
-├── repository-secret-template.yaml     # Template (Secret wird manuell erstellt)
-└── namespace.yaml                      # ArgoCD Namespace (bereits existiert)
-```
+ArgoCD ist so konfiguriert, dass es SOPS-verschlüsselte Secrets automatisch entschlüsseln kann:
 
-## Self-Management
+### Komponenten:
+- **argocd-cm.yaml**: ArgoCD ConfigMap mit SOPS-Plugin Konfiguration
+- **age-secret-sealed.yaml**: Template für Age Private Key Secret (nicht im Git!)
+- **repository-secret.enc.yaml**: SOPS-verschlüsselter GitHub Deploy Key
 
-ArgoCD verwaltet seine eigene Konfiguration aus diesem Git-Repository.
+### Age Key Setup (einmalig auf Management-VM):
 
-**Application:** `argocd` (im Namespace `argocd`)
-**Source:** `kubernetes/base/argocd`
-**Destination:** Cluster: `in-cluster`, Namespace: `argocd`
-
-## Secrets
-
-**Wichtig:** Das Repository-Secret wird NICHT in Git committed!
-
-Manuell erstellen:
 ```bash
-kubectl create secret generic repo-eneg-k8s-infrastructure-v2 \
-  -n argocd \
-  --from-literal=type=git \
-  --from-literal=url=git@github.com:dhenkeeneg/eneg-k8s-infrastructure-v2.git \
-  --from-file=sshPrivateKey=~/.ssh/argocd-deploy-key
+# 1. Age Secret für ArgoCD erstellen
+kubectl create secret generic argocd-age-key \
+  --from-file=age.agekey=/home/admin-ubuntu/.age/key.txt \
+  -n argocd
 
-kubectl label secret repo-eneg-k8s-infrastructure-v2 -n argocd \
-  argocd.argoproj.io/secret-type=repository
+# 2. Verification
+kubectl get secret argocd-age-key -n argocd
 ```
 
-Später: SOPS + Age für Secret-Management
+### Funktionsweise:
+1. Init Container lädt SOPS und Age binaries herunter
+2. Age Private Key wird als Secret gemountet
+3. SOPS nutzt den Key zur Entschlüsselung von `.enc.yaml` Dateien
+4. ArgoCD kann verschlüsselte Secrets aus Git deployen
+
+### Test:
+Nach dem Deployment sollte ArgoCD die verschlüsselten Repository-Credentials nutzen können:
+
+```bash
+# ArgoCD Repo Server Logs prüfen
+kubectl logs -n argocd -l app.kubernetes.io/name=argocd-repo-server --tail=50
+```
+
+## Nächste Schritte:
+- Phase 4: MetalLB, Traefik, Cert-Manager, Longhorn via ArgoCD deployen

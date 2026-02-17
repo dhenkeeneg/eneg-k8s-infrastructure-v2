@@ -42,6 +42,9 @@ kubeconfig.yaml
 kubeconfig-*.yaml
 *.kubeconfig
 
+# ArgoCD Age Secret (wird manuell auf Cluster angelegt)
+age-secret-sealed.yaml
+
 # Packer
 packer_cache/
 *.box
