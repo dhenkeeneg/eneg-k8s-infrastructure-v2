@@ -51,7 +51,8 @@ ingressRoute:
     matchRule: Host(`traefik-dev.eneg.de`)
     entryPoints:
       - websecure
-    tls: {}
+    tls:
+      secretName: traefik-dashboard-tls
 
 # --- Logs ---
 logs:
