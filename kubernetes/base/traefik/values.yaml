@@ -7,23 +7,25 @@ deployment:
   replicas: 2
 
 # --- Entrypoints ---
+# v39.0.0 Breaking Change: http options require explicit 'http' nesting
 ports:
   web:
     port: 80
     exposedPort: 80
     protocol: TCP
-    # HTTP -> HTTPS Redirect
-    redirections:
-      entryPoint:
-        to: websecure
-        scheme: https
-        permanent: true
+    http:
+      redirections:
+        entryPoint:
+          to: websecure
+          scheme: https
+          permanent: true
   websecure:
     port: 443
     exposedPort: 443
     protocol: TCP
-    tls:
-      enabled: true
+    http:
+      tls:
+        enabled: true
 
 # --- Service (MetalLB) ---
 service:
