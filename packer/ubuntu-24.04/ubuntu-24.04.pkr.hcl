@@ -99,7 +99,7 @@ variable "vm_memory" {
 variable "vm_disk_size" {
   type        = number
   default     = 51200
-  description = "Disk-Größe in MB (50GB)"
+  description = "Disk-Größe in MB für das Template (50GB). VMs werden durch OpenTofu auf die gewünschte Größe gesetzt, cloud-init growpart erweitert LVM+Filesystem automatisch beim ersten Boot."
 }
 
 variable "ssh_username" {

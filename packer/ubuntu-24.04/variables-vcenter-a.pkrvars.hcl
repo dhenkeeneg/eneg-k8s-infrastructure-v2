@@ -15,7 +15,7 @@ vcenter_folder     = "eNeG-VM-Vorlagen"
 vcenter_insecure   = true
 
 # ISO Pfad
-iso_path = "[S2843_HDD_00_BOOT] eNeG-ISO/ubuntu-24.04.3-live-server-amd64.iso"
+iso_path = "[S3168_HDD_00_BOOT] eNeG-ISO/ubuntu-24.04.4-live-server-amd64.iso"
 
 # VM Template Konfiguration
 vm_name      = "ubuntu-24.04-k8s-template"

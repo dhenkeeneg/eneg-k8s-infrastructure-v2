@@ -40,16 +40,28 @@ autoinstall:
     install-server: true
     allow-pw: true
 
-  # Kernel: Spezifische Version von der ISO verwenden
+  # Kernel: Standard GA Kernel (kein Version-Pinning)
   kernel:
-    package: linux-image-6.8.0-71-generic
-  
-  # Pakete installieren (für VMware Guest Customization)
+    package: linux-image-generic
+
+  # Pakete installieren (für VMware Guest Customization + Disk-Erweiterung)
   packages:
     - open-vm-tools
     - util-linux-extra
     - perl
+    - cloud-guest-utils
+    - cloud-initramfs-growroot
   
+  # Cloud-init: Automatische Disk-Erweiterung beim ersten Boot nach Clone
+  # Wenn vSphere die Disk vergrößert (z.B. 50GB Template -> 384GB VM),
+  # erweitert cloud-init beim ersten Boot automatisch Partition + LVM + Filesystem
+  user-data:
+    growpart:
+      mode: auto
+      devices: ['/']
+      ignore_growroot_disabled: false
+    resize_rootfs: true
+
   # Späte Befehle
   late-commands:
     - sed -i 's/^#*PasswordAuthentication.*/PasswordAuthentication yes/' /target/etc/ssh/sshd_config
