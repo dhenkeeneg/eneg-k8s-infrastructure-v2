@@ -8,8 +8,8 @@
 # vCenter Verbindung
 vcenter_server     = "vcenter-a.eneg.de"
 vcenter_datacenter = "eNeG-Datacenter"
-vcenter_host       = "s2843.eneg.de"
-vcenter_datastore  = "S2843_HDD_00_BOOT"
+vcenter_host       = "s3168.eneg.de"
+vcenter_datastore  = "S3168_HDD_00_BOOT"
 vcenter_network    = "VT 180 - K8s Dev"
 vcenter_folder     = "eNeG-VM-Vorlagen"
 vcenter_insecure   = true
