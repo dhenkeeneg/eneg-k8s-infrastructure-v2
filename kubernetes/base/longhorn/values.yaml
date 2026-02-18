@@ -1,0 +1,85 @@
+# Longhorn Helm Chart Values
+# Chart: longhorn/longhorn v1.9.2
+# Distributed Block Storage für K3s HA-Cluster
+# https://charts.longhorn.io
+
+# -----------------------------------------------------------------------
+# Default Settings
+# -----------------------------------------------------------------------
+defaultSettings:
+  # Anzahl Replicas pro Volume (2 bei 3 Nodes: optimal für Space/Performance)
+  defaultReplicaCount: 2
+
+  # Data Locality: Replica bevorzugt auf dem Node wo der Pod läuft
+  defaultDataLocality: best-effort
+
+  # Replica Auto-Balance zwischen Nodes
+  replicaAutoBalance: best-effort
+
+  # Disk-Reservierung: 25% des Disk-Space werden freigehalten
+  storageReservedPercentageForDefaultDisk: 25
+
+  # Over-Provisioning: 200% (Thin Provisioning)
+  storageOverProvisioningPercentage: 200
+
+  # Standard Datenpfad auf den Nodes
+  defaultDataPath: /var/lib/longhorn
+
+  # ArgoCD-Kompatibilität: preUpgradeChecker deaktivieren (PFLICHT für ArgoCD)
+  # Verhindert Job-Konflikte bei ArgoCD-Sync
+  upgradeChecker: false
+
+  # Node-Drain-Verhalten: Replicas vor Drain auf andere Nodes verschieben
+  nodeDrainPolicy: block-if-contains-last-replica
+
+  # Automatisches Aufräumen von verwaisten Ressourcen
+  orphanAutoDeletion: true
+
+# -----------------------------------------------------------------------
+# Ingress (deaktiviert - wir nutzen Traefik IngressRoute)
+# -----------------------------------------------------------------------
+ingress:
+  enabled: false
+
+# -----------------------------------------------------------------------
+# ArgoCD-Kompatibilität
+# -----------------------------------------------------------------------
+preUpgradeChecker:
+  jobEnabled: false
+
+# -----------------------------------------------------------------------
+# Ressourcen: Manager (läuft auf jedem Node als DaemonSet)
+# -----------------------------------------------------------------------
+longhornManager:
+  resources:
+    requests:
+      cpu: 100m
+      memory: 128Mi
+    limits:
+      cpu: 500m
+      memory: 512Mi
+
+# -----------------------------------------------------------------------
+# Ressourcen: Driver
+# -----------------------------------------------------------------------
+longhornDriver:
+  resources:
+    requests:
+      cpu: 50m
+      memory: 64Mi
+    limits:
+      cpu: 200m
+      memory: 256Mi
+
+# -----------------------------------------------------------------------
+# Ressourcen: UI
+# -----------------------------------------------------------------------
+longhornUI:
+  resources:
+    requests:
+      cpu: 50m
+      memory: 64Mi
+    limits:
+      cpu: 100m
+      memory: 128Mi
+  replicas: 1
