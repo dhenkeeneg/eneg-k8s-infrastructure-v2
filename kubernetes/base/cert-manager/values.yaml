@@ -1,0 +1,44 @@
+# Cert-Manager Helm Chart Values für DEV-Umgebung
+# Chart: jetstack/cert-manager v1.17.2
+# Stabile LTS-Version, gut erprobt
+
+# CRDs mit installieren
+crds:
+  enabled: true
+  keep: true
+
+# DNS01 Recursive Nameservers (Split-DNS Fix)
+extraArgs:
+  - --dns01-recursive-nameservers=8.8.8.8:53,1.1.1.1:53
+  - --dns01-recursive-nameservers-only
+
+# Logging
+global:
+  logLevel: 2
+
+# Ressourcen
+resources:
+  requests:
+    cpu: 50m
+    memory: 64Mi
+  limits:
+    cpu: 200m
+    memory: 256Mi
+
+webhook:
+  resources:
+    requests:
+      cpu: 25m
+      memory: 32Mi
+    limits:
+      cpu: 100m
+      memory: 128Mi
+
+cainjector:
+  resources:
+    requests:
+      cpu: 50m
+      memory: 64Mi
+    limits:
+      cpu: 200m
+      memory: 256Mi

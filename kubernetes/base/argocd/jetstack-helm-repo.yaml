@@ -1,0 +1,14 @@
+---
+# Jetstack Helm Repository für ArgoCD (cert-manager)
+apiVersion: v1
+kind: Secret
+metadata:
+  name: jetstack-helm-repo
+  namespace: argocd
+  labels:
+    argocd.argoproj.io/secret-type: repository
+type: Opaque
+stringData:
+  type: helm
+  name: jetstack
+  url: https://charts.jetstack.io
