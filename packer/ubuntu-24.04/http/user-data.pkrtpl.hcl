@@ -2,6 +2,7 @@
 autoinstall:
   version: 1
   locale: de_DE.UTF-8
+  timezone: Europe/Berlin
   keyboard:
     layout: de
     variant: nodeadkeys
