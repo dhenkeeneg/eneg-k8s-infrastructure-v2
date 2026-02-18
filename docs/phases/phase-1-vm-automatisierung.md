@@ -18,8 +18,11 @@ Automatisierte Erstellung von Ubuntu 24.04 VM-Templates und Deployment der DEV-C
 
 | Template | vCenter | ESXi Version | VM Version | Datastore |
 |----------|---------|--------------|------------|-----------|
-| ubuntu-24.04-k8s-template | vcenter.eneg.de | 6.7 | 14 | S2842_D08-10_R5_SSD_K8s |
-| ubuntu-24.04-k8s-template | vcenter-a.eneg.de | 8.0 | 21 | S2843_SSD_01_VMS |
+| ubuntu-24.04-k8s-template | vcenter-a.eneg.de | 8.0 | 21 | S3168_HDD_00_BOOT |
+
+**Hinweis (18.02.2026):** Template wurde auf Ubuntu 24.04.4 aktualisiert. Build-Host
+ist jetzt s3168.eneg.de (ISO liegt auf S3168_HDD_00_BOOT). Legacy vCenter (ESXi 6.7)
+wird nicht mehr unterstützt – alle VMs laufen auf vCenter-A.
 
 ### DEV-Cluster VMs
 
@@ -241,5 +244,6 @@ Werte sind in 1Password unter "K8s Infrastructure v2" gespeichert.
 
 | Datum | Änderung |
 |-------|----------|
+| 18.02.2026 | Template auf Ubuntu 24.04.4 aktualisiert, Build-Host auf s3168, growpart für automatische Disk-Erweiterung, Timezone Europe/Berlin, GA Kernel statt Version-Pinning |
 | 06.02.2026 | Phase 1 abgeschlossen, Dokumentation erstellt |
 | 05.02.2026 | Packer Templates und OpenTofu Konfiguration erstellt |
