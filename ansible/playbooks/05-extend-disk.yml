@@ -1,0 +1,106 @@
+# =============================================================================
+# Playbook: Disk-Erweiterung (Partition + LVM + Filesystem)
+# =============================================================================
+# Erweitert die Root-Partition, LVM Volume Group und das Filesystem
+# auf die volle Disk-Größe die in vSphere bereits gesetzt ist.
+#
+# Voraussetzung: vSphere Disk wurde bereits auf Zielgröße gesetzt
+#
+# Ausführung:
+#   ansible-playbook ansible/playbooks/05-extend-disk.yml \
+#     -i ansible/inventory/dev/hosts.ini
+#
+# Kein Reboot erforderlich!
+# =============================================================================
+
+---
+- name: Disk-Erweiterung - Partition, LVM und Filesystem
+  hosts: k3s_cluster
+  become: true
+  serial: 1
+
+  vars:
+    disk_device: /dev/sda
+    partition_number: "3"
+    vg_name: ubuntu-vg
+    lv_name: ubuntu-lv
+    lv_path: /dev/ubuntu-vg/ubuntu-lv
+
+  tasks:
+
+    # =========================================================================
+    # Ist-Zustand anzeigen
+    # =========================================================================
+
+    - name: Disk-Status vor Erweiterung anzeigen
+      ansible.builtin.shell: |
+        echo "=== lsblk ===" && lsblk -o NAME,SIZE,TYPE,MOUNTPOINT | grep -v loop
+        echo "=== Partition ===" && parted {{ disk_device }} print 2>/dev/null | grep -E "Number|sda3|Partition"
+        echo "=== VG ===" && vgdisplay {{ vg_name }} | grep -E "VG Size|Free"
+        echo "=== LV ===" && lvdisplay {{ lv_path }} | grep -E "LV Size|Current"
+        echo "=== DF ===" && df -h /
+      register: status_before
+      changed_when: false
+
+    - name: Status vor Erweiterung
+      ansible.builtin.debug:
+        msg: "{{ status_before.stdout_lines }}"
+
+    # =========================================================================
+    # Partition erweitern
+    # =========================================================================
+
+    - name: Partition {{ partition_number }} auf maximale Größe erweitern (growpart)
+      ansible.builtin.command:
+        cmd: growpart {{ disk_device }} {{ partition_number }}
+      register: growpart_result
+      changed_when: "'CHANGED' in growpart_result.stdout"
+      failed_when: growpart_result.rc != 0 and 'NOCHANGE' not in growpart_result.stdout
+
+    - name: Growpart Ergebnis
+      ansible.builtin.debug:
+        msg: "{{ growpart_result.stdout }}"
+
+    # =========================================================================
+    # LVM erweitern
+    # =========================================================================
+
+    - name: Physical Volume auf neue Partitionsgröße erweitern (pvresize)
+      ansible.builtin.command:
+        cmd: pvresize {{ disk_device }}{{ partition_number }}
+      register: pvresize_result
+      changed_when: true
+
+    - name: Logical Volume auf 100% der VG erweitern (lvextend)
+      ansible.builtin.command:
+        cmd: lvextend -l +100%FREE {{ lv_path }}
+      register: lvextend_result
+      changed_when: true
+      failed_when: lvextend_result.rc != 0 and 'already' not in lvextend_result.stderr
+
+    # =========================================================================
+    # Filesystem erweitern
+    # =========================================================================
+
+    - name: ext4 Filesystem auf neue LV-Größe erweitern (resize2fs)
+      ansible.builtin.command:
+        cmd: resize2fs {{ lv_path }}
+      register: resize2fs_result
+      changed_when: true
+
+    # =========================================================================
+    # Ist-Zustand nach Erweiterung anzeigen
+    # =========================================================================
+
+    - name: Disk-Status nach Erweiterung anzeigen
+      ansible.builtin.shell: |
+        echo "=== lsblk ===" && lsblk -o NAME,SIZE,TYPE,MOUNTPOINT | grep -v loop
+        echo "=== VG ===" && vgdisplay {{ vg_name }} | grep -E "VG Size|Free"
+        echo "=== LV ===" && lvdisplay {{ lv_path }} | grep -E "LV Size"
+        echo "=== DF ===" && df -h /
+      register: status_after
+      changed_when: false
+
+    - name: Status nach Erweiterung
+      ansible.builtin.debug:
+        msg: "{{ status_after.stdout_lines }}"
