@@ -1,0 +1,141 @@
+# =============================================================================
+# Playbook: Longhorn Storage - Node Voraussetzungen
+# =============================================================================
+# Installiert und konfiguriert alle Voraussetzungen für Longhorn v1.9.2
+# auf allen K3s-Nodes.
+#
+# Was dieses Playbook macht:
+#   1. Fehlende Pakete installieren (nfs-common)
+#   2. iscsid + open-iscsi aktivieren und starten
+#   3. Kernel-Module laden (iscsi_tcp, dm_crypt)
+#   4. Kernel-Module persistent machen (nach Reboot verfügbar)
+#   5. multipathd deaktivieren (Konflikt mit Longhorn/iSCSI)
+#
+# Voraussetzungen:
+#   - SSH-Keys müssen verteilt sein (01-setup-ssh-keys.yml ausgeführt)
+#   - open-iscsi und cryptsetup bereits installiert (geprüft)
+#
+# Ausführung:
+#   ansible-playbook playbooks/04-longhorn-prerequisites.yml
+#
+# Prüfung nach Ausführung:
+#   ansible k3s_servers -i inventory/dev/hosts.ini \
+#     -m shell \
+#     -a "systemctl is-active iscsid open-iscsi; lsmod | grep -E 'iscsi_tcp|dm_crypt'"
+# =============================================================================
+
+- name: Longhorn Node Voraussetzungen
+  hosts: k3s_servers
+  become: true
+  gather_facts: true
+
+  vars:
+    longhorn_packages:
+      - nfs-common
+
+    longhorn_kernel_modules:
+      - iscsi_tcp
+      - dm_crypt
+
+    longhorn_services_enable:
+      - iscsid
+      - open-iscsi
+
+    longhorn_services_disable:
+      - multipathd
+
+  tasks:
+
+    # -------------------------------------------------------------------------
+    # 1. Pakete installieren
+    # -------------------------------------------------------------------------
+    - name: Paket-Cache aktualisieren
+      ansible.builtin.apt:
+        update_cache: true
+        cache_valid_time: 3600
+
+    - name: Longhorn-Abhängigkeiten installieren
+      ansible.builtin.apt:
+        name: "{{ longhorn_packages }}"
+        state: present
+      register: packages_installed
+
+    - name: Installierte Pakete anzeigen
+      ansible.builtin.debug:
+        msg: "Installiert: {{ item }}"
+      loop: "{{ longhorn_packages }}"
+      when: packages_installed.changed
+
+    # -------------------------------------------------------------------------
+    # 2. Kernel-Module persistent konfigurieren
+    # -------------------------------------------------------------------------
+    - name: Kernel-Module persistent konfigurieren (nach Reboot)
+      ansible.builtin.copy:
+        dest: /etc/modules-load.d/longhorn.conf
+        content: |
+          # Longhorn Storage - Kernel Module
+          # Automatisch geladen durch 04-longhorn-prerequisites.yml
+          iscsi_tcp
+          dm_crypt
+        owner: root
+        group: root
+        mode: '0644'
+
+    # -------------------------------------------------------------------------
+    # 3. Kernel-Module sofort laden
+    # -------------------------------------------------------------------------
+    - name: Kernel-Modul iscsi_tcp laden
+      community.general.modprobe:
+        name: iscsi_tcp
+        state: present
+
+    - name: Kernel-Modul dm_crypt laden
+      community.general.modprobe:
+        name: dm_crypt
+        state: present
+
+    # -------------------------------------------------------------------------
+    # 4. iSCSI Dienste aktivieren und starten
+    # -------------------------------------------------------------------------
+    - name: iSCSI Dienste aktivieren und starten
+      ansible.builtin.systemd:
+        name: "{{ item }}"
+        state: started
+        enabled: true
+        daemon_reload: true
+      loop: "{{ longhorn_services_enable }}"
+
+    # -------------------------------------------------------------------------
+    # 5. multipathd deaktivieren (Konflikt mit Longhorn)
+    # -------------------------------------------------------------------------
+    - name: multipathd stoppen und deaktivieren
+      ansible.builtin.systemd:
+        name: multipathd
+        state: stopped
+        enabled: false
+        masked: true
+      ignore_errors: true  # Falls multipathd nicht installiert ist
+
+    # -------------------------------------------------------------------------
+    # 6. Abschlusskontrolle
+    # -------------------------------------------------------------------------
+    - name: Service-Status prüfen
+      ansible.builtin.systemd:
+        name: "{{ item }}"
+      register: service_status
+      loop: "{{ longhorn_services_enable }}"
+
+    - name: Service-Status ausgeben
+      ansible.builtin.debug:
+        msg: "{{ item.item }}: {{ item.status.ActiveState }}"
+      loop: "{{ service_status.results }}"
+
+    - name: Geladene Kernel-Module prüfen
+      ansible.builtin.shell:
+        cmd: "lsmod | grep -E 'iscsi_tcp|dm_crypt' | awk '{print $1}'"
+      register: loaded_modules
+      changed_when: false
+
+    - name: Kernel-Module Status ausgeben
+      ansible.builtin.debug:
+        msg: "Geladene Module: {{ loaded_modules.stdout_lines }}"
