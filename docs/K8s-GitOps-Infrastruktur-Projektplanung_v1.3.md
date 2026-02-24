@@ -861,7 +861,7 @@ extraArgs:
 - [x] K3s v1.35.0+k3s3 auf 3 Nodes installiert
 - [x] HA-Cluster mit embedded etcd konfiguriert
 - [x] Version-Pinning statt Channels implementiert
-- [x] Upgrade-FÃ¤higkeit durch Versions-Check
+- [x] Upgrade-Fähigkeit durch Versions-Check
 - [x] Comprehensive Documentation (README, SSH-Keys, Troubleshooting)
 
 **Cluster-Status:**
@@ -872,13 +872,13 @@ k8s-dev-23   Ready    control-plane,etcd   v1.35.0+k3s3
 ```
 
 **Wichtige Learnings:**
-- K3s Token-Format: Simple Password fÃ¼r ersten Server, K10-Format fÃ¼r Additional Servers
-- Version Pinning bevorzugt gegenÃ¼ber Channels fÃ¼r Reproduzierbarkeit
-- Token niemals bei laufendem Cluster Ã¤ndern (etcd-VerschlÃ¼sselung!)
+- K3s Token-Format: Simple Password für ersten Server, K10-Format für Additional Servers
+- Version Pinning bevorzugt gegenüber Channels für Reproduzierbarkeit
+- Token niemals bei laufendem Cluster ändern (etcd-Verschlüsselung!)
 - Upgrade-Erkennung durch Version-Vergleich implementiert
 
 **Dokumentation:**
-- `docs/phase-02-abschluss.md` - VollstÃ¤ndiger Phasenbericht
+- `docs/phase-02-abschluss.md` - Vollständiger Phasenbericht
 - `ansible/README.md` - Ansible-Nutzungsanleitung
 - `ansible/SSH-KEYS.md` - SSH-Key Quick Reference
 - `docs/SSH-KEY-MANAGEMENT.md` - Umfassende SSH-Dokumentation
@@ -886,7 +886,7 @@ k8s-dev-23   Ready    control-plane,etcd   v1.35.0+k3s3
 **kubeconfig-Speicherort:**
 - Management-VM: `~/git/eneg-k8s-infrastructure-v2/kubeconfig-dev.yaml`
 
-**Deaktivierte K3s-Komponenten (fÃ¼r GitOps):**
+**Deaktivierte K3s-Komponenten (für GitOps):**
 - Traefik (wird in Phase 4 manuell installiert)
 - ServiceLB (wird durch MetalLB ersetzt)
 - Local-Storage (wird durch Longhorn ersetzt)
