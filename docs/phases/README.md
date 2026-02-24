@@ -14,7 +14,7 @@
 | 2 | K3s DEV-Cluster | ✅ Abgeschlossen | [phase-02-abschluss.md](phase-02-abschluss.md) |
 | 3 | GitOps-Fundament (ArgoCD, SOPS, GitHub) | ✅ Abgeschlossen | [phase-03-abschluss.md](phase-03-abschluss.md) / [phase-03b-abschluss.md](phase-03b-abschluss.md) |
 | 4 | Kubernetes-Basis (MetalLB, Traefik, Cert-Manager, Longhorn) | ✅ Abgeschlossen | [phase-04-abschluss.md](phase-04-abschluss.md) |
-| 5 | Datenbank-Cluster (CloudNativePG, MariaDB Galera) | ⏳ Nächste | - |
+| 5 | Datenbank-Cluster (CloudNativePG, MariaDB Galera) | ⏳ In Arbeit | [phase-05-datenbanken.md](phase-05-datenbanken.md) |
 | 6 | Pilot-Apps (n8n, OpenProject, Odoo) | 🔲 Offen | - |
 | 7 | Monitoring-Stack | 🔲 Offen | - |
 | 8 | TEST & PROD Rollout | 🔲 Offen | - |
@@ -23,9 +23,10 @@
 
 ---
 
-## Aktueller Stand (18.02.2026)
+## Aktueller Stand (24.02.2026)
 
 **Letzte abgeschlossene Phase:** Phase 4  
+**Aktuelle Phase:** Phase 5 (Datenbank-Cluster)  
 **Aktuelle Infrastruktur:**
 
 | Komponente | Version | Status |
