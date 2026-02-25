@@ -1,0 +1,33 @@
+---
+# ArgoCD Application: CloudNativePG Databases
+# Deployed alle CNPG Database CRDs (n8n, etc.)
+# aus dem databases/ Verzeichnis
+# Sync-Wave 6: Nach den Clustern (Wave 5) und Secrets (Wave 4)
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: cnpg-databases
+  namespace: argocd
+  annotations:
+    argocd.argoproj.io/sync-wave: "6"
+  finalizers:
+    - resources-finalizer.argocd.argoproj.io
+spec:
+  project: default
+
+  source:
+    repoURL: git@github.com:dhenkeeneg/eneg-k8s-infrastructure-v2.git
+    targetRevision: main
+    path: kubernetes/base/cloudnative-pg/databases
+
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: databases
+
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
+    syncOptions:
+      - CreateNamespace=true
+      - ServerSideApply=true

@@ -1,0 +1,18 @@
+---
+# CloudNativePG Database: n8n
+# Erstellt die n8n-Datenbank deklarativ auf dem cnpg-shared Cluster
+# Owner ist die managed role "n8n" (definiert in cnpg-shared.yaml)
+apiVersion: postgresql.cnpg.io/v1
+kind: Database
+metadata:
+  name: n8n
+  namespace: databases
+  labels:
+    app.kubernetes.io/part-of: cloudnative-pg
+    app.kubernetes.io/managed-by: argocd
+    app.kubernetes.io/component: database
+spec:
+  name: n8n
+  owner: n8n
+  cluster:
+    name: cnpg-shared
