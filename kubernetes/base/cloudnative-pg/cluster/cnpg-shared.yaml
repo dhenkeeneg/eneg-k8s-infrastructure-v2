@@ -16,6 +16,9 @@ spec:
   instances: 3
   primaryUpdateStrategy: unsupervised
 
+  # Superuser-Zugang fuer pg_dumpall Backups
+  enableSuperuserAccess: true
+
   # PostgreSQL Konfiguration (DEV-Dimensionierung)
   postgresql:
     parameters:
