@@ -1,0 +1,61 @@
+---
+# ConfigMap: PostgreSQL Logical Backup Script
+# Verwendet pg_dumpall fuer vollstaendige Sicherung aller Datenbanken
+# Alles in einem Container: postgres:17 hat pg_dumpall, bash, python3
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: cnpg-logical-backup-script
+  namespace: databases
+  labels:
+    app.kubernetes.io/part-of: cloudnative-pg
+data:
+  backup.sh: |
+    #!/bin/bash
+    set -euo pipefail
+    echo "=== PostgreSQL Logical Backup ==="
+    echo "Cluster: ${CLUSTER_NAME}"
+    echo "Start: $(date -u +%Y-%m-%dT%H:%M:%SZ)"
+
+    TIMESTAMP=$(date -u +%Y-%m-%d_%H%M%S)
+    DUMP_FILE="/tmp/${CLUSTER_NAME}_${TIMESTAMP}.sql.gz"
+    S3_KEY="${S3_PREFIX}${CLUSTER_NAME}_${TIMESTAMP}.sql.gz"
+
+    # Phase 1: pg_dumpall
+    echo "Running pg_dumpall against ${PGHOST}..."
+    pg_dumpall \
+      -h "${PGHOST}" \
+      -p "${PGPORT:-5432}" \
+      -U "${PGUSER}" \
+      --clean \
+      --if-exists | gzip > "${DUMP_FILE}"
+
+    DUMP_SIZE=$(du -h "${DUMP_FILE}" | cut -f1)
+    echo "Dump created: ${DUMP_FILE} (${DUMP_SIZE})"
+
+    # Phase 2: Install awscli + Upload
+    echo "Installing awscli..."
+    pip install --quiet --break-system-packages awscli 2>/dev/null
+
+    echo "Uploading to s3://${S3_BUCKET}/${S3_KEY}..."
+    aws s3 cp "${DUMP_FILE}" "s3://${S3_BUCKET}/${S3_KEY}" \
+      --endpoint-url "${S3_ENDPOINT}"
+    echo "Upload complete"
+
+    # Phase 3: Retention - alte Backups loeschen
+    echo "Cleaning backups older than ${RETENTION_DAYS} days..."
+    CUTOFF=$(date -u -d "-${RETENTION_DAYS} days" +%Y-%m-%d)
+
+    aws s3 ls "s3://${S3_BUCKET}/${S3_PREFIX}" \
+      --endpoint-url "${S3_ENDPOINT}" | while read -r line; do
+      FNAME=$(echo "${line}" | awk '{print $NF}')
+      FDATE=$(echo "${FNAME}" | grep -oP '\d{4}-\d{2}-\d{2}' || true)
+      if [ -n "${FDATE}" ] && [ "${FDATE}" \< "${CUTOFF}" ]; then
+        echo "Deleting: ${FNAME}"
+        aws s3 rm "s3://${S3_BUCKET}/${S3_PREFIX}${FNAME}" \
+          --endpoint-url "${S3_ENDPOINT}"
+      fi
+    done
+
+    rm -f "${DUMP_FILE}"
+    echo "=== Backup completed: $(date -u +%Y-%m-%dT%H:%M:%SZ) ==="
