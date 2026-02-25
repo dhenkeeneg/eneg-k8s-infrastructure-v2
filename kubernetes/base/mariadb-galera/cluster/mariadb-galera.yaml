@@ -20,7 +20,7 @@ spec:
     enabled: true
     primary:
       podIndex: 0
-      automaticFailover: true
+      autoFailover: true
     sst: mariabackup
     replicaThreads: 1
     agent:
