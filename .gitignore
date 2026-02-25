@@ -33,6 +33,7 @@ secrets.yml
 # SOPS: Unverschluesselte Secret-Vorlagen (die .enc.yaml Versionen sind OK)
 **/secrets/s3-credentials.yaml
 **/secrets/mariadb-credentials.yaml
+**/secrets/n8n-db-credentials.yaml
 
 # Age/SOPS Keys
 .age/

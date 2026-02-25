@@ -74,6 +74,16 @@ spec:
           key: SECRET_ACCESS_KEY
     retentionPolicy: "7d"
 
+  # Managed Roles (deklarativ, Passwoerter aus SOPS Secrets)
+  managed:
+    roles:
+      - name: n8n
+        login: true
+        createdb: false
+        superuser: false
+        passwordSecret:
+          name: n8n-db-credentials
+
   # Monitoring (vorbereitet fuer Phase 7)
   monitoring:
     enablePodMonitor: false
