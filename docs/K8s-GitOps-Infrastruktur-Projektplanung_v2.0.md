@@ -66,19 +66,17 @@ mit drei Umgebungen (DEV, TEST, PROD) auf VMware vSphere.
 
 | vCenter | ESXi Version | Hardware | Datastore |
 |---------|--------------|----------|-----------|
-| vCenter-A | ESXi 8.03 | 2x Dell (48 Cores, 512GB RAM) | S2843_SSD_01_VMS, S3168_SSD_01_VMS |
-| vCenter (Legacy) | ESXi 6.7 | 1x Dell (48 Cores, 512GB RAM) | S2842_D08-10_R5_SSD_K8s |
+| vCenter-A | ESXi 8.03 | 3x Dell (48 Cores, 512GB RAM) | S2842_SSD_01_VMS, S2843_SSD_01_VMS, S3168_SSD_01_VMS |
 
-**Ziel:** Migration zu vCenter-A abgeschlossen. Alle K8s-VMs laufen auf ESXi 8.x.
-Der Legacy-vCenter (ESXi 6.7) wird fuer K8s nicht mehr verwendet.
+**Alle K8s-VMs laufen auf ESXi 8.03 in vCenter-A.**
 
 ### VMware Hosts
 
 | vCenter | Host-Nr | Host-Name | ESX-Version | Datastore |
 |---------|---------|-----------|-------------|-----------|
+| vCenter-A | HOST1 | s2842.eneg.de | ESXi 8.03 | S2842_SSD_01_VMS |
 | vCenter-A | HOST2 | s2843.eneg.de | ESXi 8.03 | S2843_SSD_01_VMS |
 | vCenter-A | HOST3 | s3168.eneg.de | ESXi 8.03 | S3168_SSD_01_VMS |
-| vCenter (Legacy) | HOST1 | s2842.eneg.de | ESXi 6.7.0 | S2842_D08-10_R5_SSD_K8s |
 
 ### VM-Uebersicht
 
@@ -110,9 +108,9 @@ Jeder Host bekommt aus jedem Environment genau eine VM:
 
 | Host | DEV | TEST | PROD |
 |------|-----|------|------|
-| s2842 (ESXi 6.7) | k8s-dev-21 | k8s-test-21 | k8s-prod-21 |
-| s2843 (ESXi 8.0) | k8s-dev-22 | k8s-test-22 | k8s-prod-22 |
-| s3168 (ESXi 8.0) | k8s-dev-23 | k8s-test-23 | k8s-prod-23 |
+| s2842 (ESXi 8.03) | k8s-dev-21 | k8s-test-21 | k8s-prod-21 |
+| s2843 (ESXi 8.03) | k8s-dev-22 | k8s-test-22 | k8s-prod-22 |
+| s3168 (ESXi 8.03) | k8s-dev-23 | k8s-test-23 | k8s-prod-23 |
 
 ### Ressourcen-Dimensionierung
 
@@ -281,8 +279,7 @@ namespaces:
 
 | Komponente | Version | Status |
 |------------|---------|--------|
-| VMware vSphere | 8.03 | Produktiv |
-| VMware vSphere (Legacy) | 6.7 | Nicht mehr fuer K8s |
+| VMware vSphere | 8.03 (3 Hosts in vCenter-A) | Produktiv |
 | Ubuntu Server | 24.04.4 LTS | Produktiv |
 | Packer Template | 24.04.4 (s3168) | Aktuell |
 
@@ -721,7 +718,7 @@ extraArgs:
 - `util-linux-extra` (nicht `util-linux`) fuer VMware Guest Customization
 - SSH Host Keys muessen nach Clone neu generiert werden (Systemd-Service)
 - Netplan-Konflikte: Alle Configs im Cleanup loeschen
-- VM Hardware Version: ESXi 6.7 = v14, ESXi 8.0 = v21
+- VM Hardware Version: ESXi 8.03 = v21 (alle Hosts nun auf ESXi 8.03)
 
 **Template-Update (18.02.2026):**
 - Ubuntu 24.04.3 -> 24.04.4
