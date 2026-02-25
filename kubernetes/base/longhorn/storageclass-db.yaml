@@ -1,0 +1,25 @@
+---
+# Longhorn StorageClass fuer Datenbank-Workloads
+# Optimiert fuer PostgreSQL (CNPG) und MariaDB (Galera)
+#
+# Unterschiede zur Standard-StorageClass:
+# - numberOfReplicas: 1 (DB repliziert selbst via Streaming Replication / Galera)
+# - dataLocality: strict-local (eliminiert Netzwerk-Latenz fuer Disk I/O)
+# - reclaimPolicy: Retain (Volumes nie automatisch loeschen)
+# - volumeBindingMode: WaitForFirstConsumer (Volume wird erst erstellt wenn Pod scheduled)
+apiVersion: storage.k8s.io/v1
+kind: StorageClass
+metadata:
+  name: longhorn-db
+  labels:
+    app.kubernetes.io/part-of: longhorn
+    app.kubernetes.io/managed-by: argocd
+provisioner: driver.longhorn.io
+allowVolumeExpansion: true
+reclaimPolicy: Retain
+volumeBindingMode: WaitForFirstConsumer
+parameters:
+  numberOfReplicas: "1"
+  dataLocality: "strict-local"
+  staleReplicaTimeout: "30"
+  fsType: "ext4"

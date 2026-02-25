@@ -1,0 +1,39 @@
+---
+# ArgoCD App-of-Apps: DEV Infrastructure
+# Ueberwacht das Verzeichnis environments/dev/infrastructure/ und deployed
+# automatisch alle ArgoCD Application-Manifests (*-app.yaml) darin.
+#
+# Einmalig manuell deployen:
+#   kubectl apply -f kubernetes/bootstrap/dev-infrastructure-app.yaml
+#
+# Danach werden alle neuen Apps in environments/dev/infrastructure/
+# automatisch erkannt und deployed (Auto-Sync).
+#
+# Spaeter analog fuer TEST und PROD:
+#   kubectl apply -f kubernetes/bootstrap/test-infrastructure-app.yaml
+#   kubectl apply -f kubernetes/bootstrap/prod-infrastructure-app.yaml
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: dev-infrastructure
+  namespace: argocd
+  finalizers:
+    - resources-finalizer.argocd.argoproj.io
+spec:
+  project: default
+
+  source:
+    repoURL: git@github.com:dhenkeeneg/eneg-k8s-infrastructure-v2.git
+    targetRevision: main
+    path: kubernetes/environments/dev/infrastructure
+
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: argocd
+
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
+    syncOptions:
+      - ServerSideApply=true
