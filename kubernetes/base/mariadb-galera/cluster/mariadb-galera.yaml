@@ -63,7 +63,7 @@ spec:
     max_connections=200
     character_set_server=utf8mb4
     collation_server=utf8mb4_unicode_ci
-    log_error_verbosity=3
+    log_warnings=2
     slow_query_log=ON
     long_query_time=2
 
