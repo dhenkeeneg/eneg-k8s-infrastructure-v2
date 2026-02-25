@@ -1,0 +1,16 @@
+---
+# mariadb-operator Helm Values
+# Chart: mariadb-operator v25.10.4
+# Repository: https://helm.mariadb.com/mariadb-operator
+#
+# Minimale Konfiguration fuer DEV
+
+# Monitoring: Wird in Phase 7 aktiviert
+metrics:
+  enabled: false
+
+# Webhook: Nutzt eigenen cert-controller (nicht cert-manager)
+webhook:
+  cert:
+    certManager:
+      enabled: false
