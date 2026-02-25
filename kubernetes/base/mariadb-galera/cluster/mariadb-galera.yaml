@@ -1,0 +1,76 @@
+---
+# MariaDB Galera Cluster
+# MariaDB 11.8.6 LTS mit 3 Nodes (Multi-Master)
+# Apps: Nextcloud, i-doit, KixDesk (Datenbanken werden in Phase 6 angelegt)
+apiVersion: k8s.mariadb.com/v1alpha1
+kind: MariaDB
+metadata:
+  name: mariadb-galera
+  namespace: databases
+  labels:
+    app.kubernetes.io/part-of: mariadb-galera
+    app.kubernetes.io/managed-by: argocd
+spec:
+  # MariaDB Image
+  image: mariadb:11.8.6
+
+  # Galera Cluster mit 3 Nodes
+  replicas: 3
+  galera:
+    enabled: true
+    primary:
+      podIndex: 0
+      automaticFailover: true
+    sst: mariabackup
+    replicaThreads: 1
+    agent:
+      gracefulShutdownTimeout: 5s
+    recovery:
+      enabled: true
+      clusterHealthyTimeout: 3m
+      clusterBootstrapTimeout: 10m
+
+  # Root-Passwort aus Secret
+  rootPasswordSecretKeyRef:
+    name: mariadb-credentials
+    key: ROOT_PASSWORD
+    generate: false
+
+  # Storage
+  storage:
+    size: 20Gi
+    storageClassName: longhorn-db
+
+  # Resources (DEV-Dimensionierung)
+  resources:
+    requests:
+      memory: "512Mi"
+      cpu: "250m"
+    limits:
+      memory: "1Gi"
+      cpu: "1000m"
+
+  # MariaDB Konfiguration (DEV)
+  myCnf: |
+    [mariadb]
+    bind-address=*
+    default_storage_engine=InnoDB
+    binlog_format=ROW
+    innodb_autoinc_lock_mode=2
+    innodb_buffer_pool_size=512M
+    innodb_log_file_size=256M
+    innodb_flush_log_at_trx_commit=2
+    max_connections=200
+    character_set_server=utf8mb4
+    collation_server=utf8mb4_unicode_ci
+    log_error_verbosity=3
+    slow_query_log=ON
+    long_query_time=2
+
+  # Update-Strategie
+  updateStrategy:
+    type: ReplicasFirstPrimaryLast
+
+  # Monitoring (vorbereitet fuer Phase 7)
+  metrics:
+    enabled: false
