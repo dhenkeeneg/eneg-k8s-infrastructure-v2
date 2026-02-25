@@ -81,6 +81,9 @@ spec:
         login: true
         createdb: false
         superuser: false
+        inherit: true
+        connectionLimit: -1
+        ensure: present
         passwordSecret:
           name: n8n-db-credentials
 
