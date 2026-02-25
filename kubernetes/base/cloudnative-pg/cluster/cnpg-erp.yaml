@@ -58,7 +58,7 @@ spec:
       cpu: "500m"
     limits:
       memory: "2Gi"
-      cpu: "2000m"
+      cpu: "2"
 
   # Backup auf S3 (WAL-Archivierung)
   backup:
