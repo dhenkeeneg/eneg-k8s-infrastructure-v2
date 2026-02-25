@@ -1,7 +1,7 @@
 ---
 # ConfigMap: PostgreSQL Logical Backup Script
 # Verwendet pg_dumpall fuer vollstaendige Sicherung aller Datenbanken
-# Alles in einem Container: postgres:17 hat pg_dumpall, bash, python3
+# Container: postgres:17 (Debian Trixie) mit apt-get install awscli
 apiVersion: v1
 kind: ConfigMap
 metadata:
@@ -21,21 +21,23 @@ data:
     DUMP_FILE="/tmp/${CLUSTER_NAME}_${TIMESTAMP}.sql.gz"
     S3_KEY="${S3_PREFIX}${CLUSTER_NAME}_${TIMESTAMP}.sql.gz"
 
-    # Phase 1: pg_dumpall
+    # Phase 1: pg_dumpall (alle Datenbanken, Rollen, Tablespaces)
     echo "Running pg_dumpall against ${PGHOST}..."
     pg_dumpall \
       -h "${PGHOST}" \
       -p "${PGPORT:-5432}" \
       -U "${PGUSER}" \
       --clean \
-      --if-exists | gzip > "${DUMP_FILE}"
+      --if-exists \
+      --no-role-passwords | gzip > "${DUMP_FILE}"
 
     DUMP_SIZE=$(du -h "${DUMP_FILE}" | cut -f1)
     echo "Dump created: ${DUMP_FILE} (${DUMP_SIZE})"
 
-    # Phase 2: Install awscli + Upload
+    # Phase 2: awscli installieren + Upload
     echo "Installing awscli..."
-    pip install --quiet --break-system-packages awscli 2>/dev/null
+    apt-get update -qq && apt-get install -y -qq awscli >/dev/null 2>&1
+    echo "awscli installed"
 
     echo "Uploading to s3://${S3_BUCKET}/${S3_KEY}..."
     aws s3 cp "${DUMP_FILE}" "s3://${S3_BUCKET}/${S3_KEY}" \
