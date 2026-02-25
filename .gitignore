@@ -34,6 +34,7 @@ secrets.yml
 **/secrets/s3-credentials.yaml
 **/secrets/mariadb-credentials.yaml
 **/secrets/n8n-db-credentials.yaml
+**/secrets/n8n-secrets.yaml
 
 # Age/SOPS Keys
 .age/
