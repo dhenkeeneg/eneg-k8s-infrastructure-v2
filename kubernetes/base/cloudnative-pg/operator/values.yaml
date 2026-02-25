@@ -1,0 +1,16 @@
+---
+# CloudNativePG Operator Helm Values
+# Chart: cloudnative-pg v0.27.1 (Operator v1.28.1)
+# Repository: https://cloudnative-pg.github.io/charts
+#
+# Minimale Konfiguration - Defaults sind gut gewaehlt.
+# Nur explizit aendern was noetig ist.
+
+# CRDs mit dem Chart installieren
+crds:
+  create: true
+
+# Monitoring: Wird in Phase 7 (Monitoring-Stack) aktiviert
+monitoring:
+  grafanaDashboard:
+    create: false
