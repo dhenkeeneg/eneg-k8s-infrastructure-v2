@@ -1,7 +1,7 @@
 # Phasen-Übersicht
 
 **Projekt:** eNeG K8s Infrastructure v2  
-**Stand:** 18.02.2026
+**Stand:** 25.02.2026
 
 ---
 
@@ -14,7 +14,7 @@
 | 2 | K3s DEV-Cluster | ✅ Abgeschlossen | [phase-02-abschluss.md](phase-02-abschluss.md) |
 | 3 | GitOps-Fundament (ArgoCD, SOPS, GitHub) | ✅ Abgeschlossen | [phase-03-abschluss.md](phase-03-abschluss.md) / [phase-03b-abschluss.md](phase-03b-abschluss.md) |
 | 4 | Kubernetes-Basis (MetalLB, Traefik, Cert-Manager, Longhorn) | ✅ Abgeschlossen | [phase-04-abschluss.md](phase-04-abschluss.md) |
-| 5 | Datenbank-Cluster (CloudNativePG, MariaDB Galera) | ⏳ In Arbeit | [phase-05-datenbanken.md](phase-05-datenbanken.md) |
+| 5 | Datenbank-Cluster (CloudNativePG, MariaDB Galera) | ✅ Abgeschlossen | [phase-05-abschluss.md](phase-05-abschluss.md) |
 | 6 | Pilot-Apps (n8n, OpenProject, Odoo) | 🔲 Offen | - |
 | 7 | Monitoring-Stack | 🔲 Offen | - |
 | 8 | TEST & PROD Rollout | 🔲 Offen | - |
@@ -23,25 +23,30 @@
 
 ---
 
-## Aktueller Stand (24.02.2026)
+## Aktueller Stand (25.02.2026)
 
-**Letzte abgeschlossene Phase:** Phase 4  
-**Aktuelle Phase:** Phase 5 (Datenbank-Cluster)  
+**Letzte abgeschlossene Phase:** Phase 5  
+**Naechste Phase:** Phase 6 (Pilot-Apps)  
 **Aktuelle Infrastruktur:**
 
 | Komponente | Version | Status |
 |------------|---------|--------|
-| Management-VM (k8s-mgmt-10) | Ubuntu 24.04 | ✅ Läuft |
-| DEV-VM k8s-dev-21 | Ubuntu 24.04, 384GB | ✅ Läuft |
-| DEV-VM k8s-dev-22 | Ubuntu 24.04, 384GB | ✅ Läuft |
-| DEV-VM k8s-dev-23 | Ubuntu 24.04, 384GB | ✅ Läuft |
-| K3s Cluster | v1.35.1+k3s1 | ✅ Läuft (3-Node HA) |
+| Management-VM (k8s-mgmt-10) | Ubuntu 24.04 | ✅ Laeuft |
+| DEV-VM k8s-dev-21 | Ubuntu 24.04, 384GB | ✅ Laeuft |
+| DEV-VM k8s-dev-22 | Ubuntu 24.04, 384GB | ✅ Laeuft |
+| DEV-VM k8s-dev-23 | Ubuntu 24.04, 384GB | ✅ Laeuft |
+| K3s Cluster | v1.35.1+k3s1 | ✅ Laeuft (3-Node HA) |
 | ArgoCD | v3.3.0 | ✅ Synced + Healthy |
 | MetalLB | v0.15.3 | ✅ Synced + Healthy |
 | Traefik | v3.6.7 | ✅ Synced + Healthy |
 | Cert-Manager | v1.17.2 | ✅ Synced + Healthy |
 | IONOS Webhook | latest | ✅ Synced + Healthy |
 | Longhorn | v1.9.2 | ✅ Synced + Healthy |
+| CloudNativePG Operator | 1.28.1 | ✅ Synced + Healthy |
+| PostgreSQL cnpg-shared | 17.8 (3/3 Healthy) | ✅ Synced + Healthy |
+| PostgreSQL cnpg-erp | 17.8 (3/3 Healthy) | ✅ Synced + Healthy |
+| mariadb-operator | 25.10.4 | ✅ Synced + Healthy |
+| MariaDB Galera | 11.8.6 LTS (3 Nodes) | ✅ Synced + Healthy |
 | Ubuntu Template | 24.04.4 | ✅ Aktualisiert (s3168) |
 | TEST-VMs | - | 🔲 Phase 8 |
 | PROD-VMs | - | 🔲 Phase 8 |

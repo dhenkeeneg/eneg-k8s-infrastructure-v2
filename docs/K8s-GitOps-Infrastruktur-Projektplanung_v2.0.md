@@ -3,7 +3,7 @@
 ## Projektplanung - Version 2.0
 
 **Erstellt:** 04.02.2026  
-**Letzte Aktualisierung:** 18.02.2026  
+**Letzte Aktualisierung:** 25.02.2026  
 **Standort:** Essen  
 **Projekt:** eNeG K8s Infrastructure v2
 
@@ -311,8 +311,8 @@ namespaces:
 
 | Komponente | Version | Status |
 |------------|---------|--------|
-| CloudNativePG Operator | - | Phase 5 |
-| MariaDB Galera | - | Phase 5 |
+| CloudNativePG Operator | 1.28.1 (Chart 0.27.1) | ✅ Installiert |
+| MariaDB Galera | 11.8.6 LTS (Operator 25.10.4) | ✅ Installiert |
 
 ### Layer 4: Monitoring und Observability
 
@@ -673,7 +673,7 @@ extraArgs:
 | 2 | K3s DEV-Cluster | 1-2 Tage | ✅ Abgeschlossen (09.02.2026) |
 | 3 | GitOps-Fundament (ArgoCD, SOPS, GitHub) | 2-3 Tage | ✅ Abgeschlossen (10.02.2026) |
 | 4 | Kubernetes-Basis (MetalLB, Traefik, Cert-Manager, Longhorn) | 2-3 Tage | ✅ Abgeschlossen (18.02.2026) |
-| 5 | Datenbank-Cluster (CloudNativePG, MariaDB Galera) | 2-3 Tage | ⏳ In Arbeit |
+| 5 | Datenbank-Cluster (CloudNativePG, MariaDB Galera) | 2-3 Tage | ✅ Abgeschlossen (25.02.2026) |
 | 6 | Pilot-Apps (n8n, OpenProject, Odoo) | 3-5 Tage | 🔲 Offen |
 | 7 | Monitoring-Stack | 2-3 Tage | 🔲 Offen |
 | 8 | TEST & PROD Rollout | 2-3 Tage | 🔲 Offen |
