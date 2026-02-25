@@ -1,6 +1,6 @@
 # GitOps Kubernetes-Infrastruktur auf VMware vSphere
 
-## Projektplanung - Version 2.0
+## Projektplanung - Version 2.1
 
 **Erstellt:** 04.02.2026  
 **Letzte Aktualisierung:** 25.02.2026  
@@ -243,7 +243,8 @@ Wildcard-Eintraege sind fuer TEST und PROD geplant.
 | VMs | `k8s-{env}-{nr}` | k8s-dev-21, k8s-prod-23 |
 | Kubernetes Namespaces | `{app}` | n8n, odoo, monitoring |
 | Helm Releases | `{app}` | n8n, traefik |
-| Secrets | `{app}-credentials` | odoo-credentials |
+| Secrets (DB, databases NS) | `{app}-db-credentials` | n8n-db-credentials |
+| Secrets (App, app NS) | `{app}-secrets` | n8n-secrets |
 | ConfigMaps | `{app}-config` | n8n-config |
 | PVCs | `{app}-data` | odoo-data |
 | Services | `{app}` | n8n, traefik |
@@ -671,7 +672,7 @@ extraArgs:
 | 3 | GitOps-Fundament (ArgoCD, SOPS, GitHub) | 2-3 Tage | ✅ Abgeschlossen (10.02.2026) |
 | 4 | Kubernetes-Basis (MetalLB, Traefik, Cert-Manager, Longhorn) | 2-3 Tage | ✅ Abgeschlossen (18.02.2026) |
 | 5 | Datenbank-Cluster (CloudNativePG, MariaDB Galera) | 2-3 Tage | ✅ Abgeschlossen (25.02.2026) |
-| 6 | Pilot-Apps (n8n, OpenProject, Odoo) | 3-5 Tage | 🔲 Offen |
+| 6 | Pilot-Apps (n8n, OpenProject, Odoo) | 3-5 Tage | 🔄 In Bearbeitung |
 | 7 | Monitoring-Stack | 2-3 Tage | 🔲 Offen |
 | 8 | TEST & PROD Rollout | 2-3 Tage | 🔲 Offen |
 | 9 | Security & Haertung | 3-5 Tage | 🔲 Offen |
@@ -861,6 +862,7 @@ docs/
 | 09.02.2026 | 1.2 | Phase 2 abgeschlossen (K3s) |
 | 10.02.2026 | 1.3 | Phase 3 abgeschlossen (ArgoCD + SOPS) |
 | 18.02.2026 | 2.0 | Phase 4 abgeschlossen (MetalLB, Traefik, Cert-Manager, Longhorn), Template-Bugfix, komplette Neuformatierung (Encoding-Bereinigung) |
+| 25.02.2026 | 2.1 | Phase 5 abgeschlossen, Phase 6 gestartet, Naming Convention um Zwei-Secret-Pattern erweitert |
 
 ---
 
