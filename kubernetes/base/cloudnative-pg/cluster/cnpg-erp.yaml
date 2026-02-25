@@ -1,0 +1,76 @@
+---
+# CloudNativePG Cluster: cnpg-erp
+# PostgreSQL 17.8 HA-Cluster fuer schwergewichtige ERP-Apps
+# Apps: Odoo, OpenProject (Datenbanken werden in Phase 6 angelegt)
+apiVersion: postgresql.cnpg.io/v1
+kind: Cluster
+metadata:
+  name: cnpg-erp
+  namespace: databases
+  labels:
+    app.kubernetes.io/part-of: cloudnative-pg
+    app.kubernetes.io/managed-by: argocd
+spec:
+  description: "ERP PostgreSQL Cluster fuer Odoo und OpenProject"
+  imageName: ghcr.io/cloudnative-pg/postgresql:17.8-system-bookworm
+  instances: 3
+  primaryUpdateStrategy: unsupervised
+
+  # PostgreSQL Konfiguration (DEV - hoeher dimensioniert als shared)
+  postgresql:
+    parameters:
+      # Memory (hoeher als shared fuer ERP-Workloads)
+      shared_buffers: "512MB"
+      effective_cache_size: "1536MB"
+      work_mem: "8MB"
+      maintenance_work_mem: "128MB"
+      # Connections (weniger, aber intensivere Queries)
+      max_connections: "100"
+      # WAL
+      wal_buffers: "16MB"
+      min_wal_size: "512MB"
+      max_wal_size: "2GB"
+      # Checkpoints
+      checkpoint_completion_target: "0.9"
+      # Logging
+      log_statement: "ddl"
+      log_min_duration_statement: "1000"
+      # Locale
+      lc_messages: "C"
+
+  # Storage
+  storage:
+    size: 20Gi
+    storageClass: longhorn-db
+
+  # WAL Storage (separates Volume)
+  walStorage:
+    size: 5Gi
+    storageClass: longhorn-db
+
+  # Resources (DEV - hoeher als shared)
+  resources:
+    requests:
+      memory: "1Gi"
+      cpu: "500m"
+    limits:
+      memory: "2Gi"
+      cpu: "2000m"
+
+  # Backup auf S3 (WAL-Archivierung)
+  backup:
+    barmanObjectStore:
+      destinationPath: s3://k8s-dev-postgres-wal/cnpg-erp/
+      endpointURL: http://nas10.eneg.de:8010
+      s3Credentials:
+        accessKeyId:
+          name: cnpg-s3-credentials
+          key: ACCESS_KEY_ID
+        secretAccessKey:
+          name: cnpg-s3-credentials
+          key: SECRET_ACCESS_KEY
+    retentionPolicy: "7d"
+
+  # Monitoring (vorbereitet fuer Phase 7)
+  monitoring:
+    enablePodMonitor: false
