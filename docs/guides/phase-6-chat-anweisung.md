@@ -26,11 +26,13 @@ Nach erfolgreichem Abschluss einer Phase wirst Du die Dokumentation entsprechend
 
 ## Aktueller Projektstand
 
-Phasen 0-5 sind abgeschlossen. Lies zu Beginn folgende Dokumente:
+Phasen 0-5 sind abgeschlossen. Phase 6 (Pilot-Apps) ist in Arbeit.
+Lies zu Beginn folgende Dokumente:
 
-1. `docs/K8s-GitOps-Infrastruktur-Projektplanung_v2.0.md` — Gesamtplanung
+1. `docs/K8s-GitOps-Infrastruktur-Projektplanung_v2.0.md` — Gesamtplanung (v2.1)
 2. `docs/phases/README.md` — Phasen-Übersicht
 3. `docs/phases/phase-05-abschluss.md` — Phase 5 Details (Datenbank-Cluster)
+4. `docs/phases/phase-06-pilot-apps.md` — Phase 6 Fortschritt (n8n abgeschlossen)
 
 ## Abgeschlossene Infrastruktur
 
@@ -57,18 +59,57 @@ Phasen 0-5 sind abgeschlossen. Lies zu Beginn folgende Dokumente:
 - cnpg-erp-rw/ro/r.databases.svc.cluster.local:5432
 - mariadb-galera.databases.svc.cluster.local:3306
 
-**18 ArgoCD Apps** (alle Synced + Healthy)
+## Phase 6 — Pilot-Apps (In Bearbeitung)
 
-## Offener Punkt aus Phase 5
+### Abgeschlossen: n8n (Schritt 6.1) ✅
 
-- Schritt 5.11: PostgreSQL Minor-Upgrade 17.8 → 17.9 (wenn verfügbar)
+- **URL:** https://n8n-dev-v2.eneg.de
+- **Version:** n8nio/n8n:2.8.4 (Community Edition, Single User)
+- **Datenbank:** `n8n` auf cnpg-shared, Owner: managed role `n8n`
+- **Namespace:** n8n
+- **Ingress:** Certificate + IngressRoute im traefik NS (Standard-Pattern)
+- **Deployment:** Raw Kubernetes Manifests (kein Helm)
 
-## Nächster Schritt: Phase 6 — Pilot-Apps
+### Etablierte Patterns aus n8n-Deployment
 
-Wir beginnen mit Phase 6: Pilot-App Deployment. Dazu gehört:
-- Datenbanken per CNPG Database CRD und mariadb-operator Database CRD anlegen
-- App-spezifische DB-User und Grants konfigurieren
-- Erste Apps deployen (Vorschlag: OpenProject als Pilot, dann Odoo, dann N8n, dann i-doit)
-- Ingress + TLS für jede App
+**Zwei-Secret-Pattern (Naming Convention v2.1):**
+- `{app}-db-credentials` im `databases` Namespace → für CNPG managed.roles (passwordSecret)
+- `{app}-secrets` im App-Namespace → DB-Passwort (Kopie) + app-spezifische Keys
+- Grund: Kubernetes erlaubt keine Cross-Namespace Secret-Referenzen
 
-Bitte lies zuerst die Dokumentation und erstelle dann einen Implementierungsplan für Phase 6.
+**ArgoCD Sync-Wave Reihenfolge:**
+- Wave 4: cnpg-secrets (DB-Passwörter via KSOPS)
+- Wave 5: cnpg-cluster (PostgreSQL Cluster + managed.roles)
+- Wave 6: cnpg-databases (Database CRDs)
+- Wave 7: {app}-secrets (App-Secrets via KSOPS)
+- Wave 8: {app} (App-Deployment)
+
+**securityContext:** Apps die als Non-Root User laufen brauchen fsGroup/runAsUser/runAsGroup im Pod-Spec (Longhorn Volumes mounten als root).
+
+**Deployment-Strategie:** `Recreate` bei ReadWriteOnce PVCs.
+
+**SOPS-Verschlüsselung auf k8s-mgmt-10:**
+- Age-Key: `~/git/eneg-k8s-infrastructure-v2/.age/key.txt`
+- Symlink: `~/.config/sops/age/keys.txt` → Age-Key
+- Verschlüsseln: `sops --encrypt --age age1fdqtcha9jnzqafe5t6hed6v5sv858x2tt6nwuw00u3luyxuaqcxqh5mcrm --encrypted-regex '^(data|stringData)$' <datei>.yaml > <datei>.enc.yaml`
+
+### Nächster Schritt: OpenProject (Schritt 6.2)
+
+**Version:** openproject/openproject:17.1.1
+**URL:** https://openproject-dev-v2.eneg.de (DNS CNAME bereits angelegt)
+**Datenbank:** PostgreSQL auf **cnpg-erp** Cluster (nicht cnpg-shared!)
+
+Bitte deploye OpenProject nach dem gleichen Pattern wie n8n:
+1. Managed Role + DB-Credentials Secret auf cnpg-erp Cluster
+2. Database CRD für openproject
+3. App-Manifeste (Namespace, Deployment, Service, PVC, Secrets)
+4. Ingress (Certificate + IngressRoute im traefik NS)
+5. ArgoCD Applications
+
+**Wichtig:** Vor der Implementierung bitte recherchieren:
+- OpenProject 17.1.1 Container-Anforderungen (Ports, Volumes, Env-Vars)
+- Welcher User läuft im Container (für securityContext)
+- Benötigte Ressourcen (CPU/Memory für DEV)
+- Ob ein Memcached/Redis-Sidecar nötig ist
+
+Schritt für Schritt arbeiten, nach jedem Teilschritt testen.
