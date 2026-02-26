@@ -59,6 +59,9 @@ spec:
       containers:
         - name: garage
           image: dxflrs/garage:v2.2.0
+          env:
+            - name: GARAGE_CONFIG_FILE
+              value: "/etc/garage/garage.toml"
           ports:
             - name: s3-api
               containerPort: 3900
