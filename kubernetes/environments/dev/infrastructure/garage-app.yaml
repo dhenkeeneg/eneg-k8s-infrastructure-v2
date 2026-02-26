@@ -1,0 +1,34 @@
+---
+# ArgoCD Application: Garage S3 Object Storage
+# Deployed Namespace, ConfigMap, StatefulSet, Services, WebUI, Ingress
+# Resourcen liegen in garage + traefik Namespace (cross-namespace Ingress)
+# Sync-Wave 5: Nach Secrets (Wave 4), zusammen mit CNPG Clusters
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: garage
+  namespace: argocd
+  annotations:
+    argocd.argoproj.io/sync-wave: "5"
+  finalizers:
+    - resources-finalizer.argocd.argoproj.io
+spec:
+  project: default
+
+  source:
+    repoURL: git@github.com:dhenkeeneg/eneg-k8s-infrastructure-v2.git
+    targetRevision: main
+    path: kubernetes/base/garage
+    directory:
+      recurse: false
+
+  destination:
+    server: https://kubernetes.default.svc
+
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
+    syncOptions:
+      - CreateNamespace=true
+      - ServerSideApply=true

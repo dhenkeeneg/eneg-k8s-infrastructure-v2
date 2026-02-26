@@ -1,0 +1,42 @@
+---
+# Garage Konfiguration (garage.toml)
+# Platzhalter __RPC_SECRET__, __ADMIN_TOKEN__, __METRICS_TOKEN__, __HOSTNAME__
+# werden durch den Init-Container mit Werten aus dem Secret ersetzt
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: garage-config
+  namespace: garage
+  labels:
+    app.kubernetes.io/name: garage
+    app.kubernetes.io/part-of: infrastructure
+    app.kubernetes.io/managed-by: argocd
+data:
+  garage.toml: |
+    metadata_dir = "/var/lib/garage/meta"
+    data_dir = "/var/lib/garage/data"
+
+    db_engine = "lmdb"
+    metadata_auto_snapshot_interval = "6h"
+
+    replication_factor = 2
+    compression_level = 1
+
+    rpc_bind_addr = "[::]:3901"
+    rpc_public_addr = "__HOSTNAME__.garage-headless.garage.svc.cluster.local:3901"
+    rpc_secret = "__RPC_SECRET__"
+
+    bootstrap_peers = [
+      "garage-0.garage-headless.garage.svc.cluster.local:3901",
+      "garage-1.garage-headless.garage.svc.cluster.local:3901",
+      "garage-2.garage-headless.garage.svc.cluster.local:3901",
+    ]
+
+    [s3_api]
+    s3_region = "eu-central-1"
+    api_bind_addr = "[::]:3900"
+
+    [admin]
+    api_bind_addr = "[::]:3903"
+    admin_token = "__ADMIN_TOKEN__"
+    metrics_token = "__METRICS_TOKEN__"
