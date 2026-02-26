@@ -9,10 +9,13 @@
 ## Zusammenfassung
 
 Phase 6 baut auf der in Phase 5 erstellten Datenbank-Infrastruktur auf und
-deployt die ersten Pilot-Anwendungen in den DEV-Cluster. Jede App erhaelt
-eine eigene Datenbank, einen dedizierten DB-User mit eigenem Secret und
-eine vollstaendige Ingress-Konfiguration mit TLS-Zertifikat. Das Deployment
-erfolgt GitOps-konform ueber ArgoCD mit Raw Kubernetes Manifests.
+deployt die ersten Pilot-Anwendungen in den DEV-Cluster. Als Infrastruktur-
+Vorbereitung wurde zunaechst Garage S3 Object Storage im Cluster deployed,
+um spaetere Anwendungen (OpenProject, Odoo) mit S3-kompatiblem Speicher zu
+versorgen. Jede App erhaelt eine eigene Datenbank, einen dedizierten DB-User
+mit eigenem Secret und eine vollstaendige Ingress-Konfiguration mit TLS-
+Zertifikat. Das Deployment erfolgt GitOps-konform ueber ArgoCD mit Raw
+Kubernetes Manifests.
 
 ---
 
@@ -78,6 +81,7 @@ Secrets werden getrennt mit SOPS verschluesselt und via KSOPS deployed.
 | Schritt | Beschreibung | Status |
 |---|---|---|
 | 6.1 | n8n: DB-Rolle + Database + Secrets + Deployment + Ingress | ✅ Abgeschlossen |
+| 6.1b | Garage S3: In-Cluster Object Storage (3-Node, Replication 2) | ✅ Abgeschlossen |
 | 6.2 | OpenProject: DB-Rolle + Database + Deployment + Ingress | 🔲 Offen |
 | 6.3 | Odoo: DB-Rolle + Database + Deployment + Ingress | 🔲 Offen |
 | 6.4 | Keycloak: DB-Rolle + Database + Deployment + Ingress | 🔲 Offen |
@@ -122,7 +126,9 @@ Secrets werden getrennt mit SOPS verschluesselt und via KSOPS deployed.
 | Wave | Application | Beschreibung |
 |---|---|---|
 | 4 | cnpg-secrets | DB-Passwoerter + S3-Credentials (KSOPS) |
+| 4 | garage-secrets | RPC Secret, Admin Token, Metrics Token, WebUI Auth (KSOPS) |
 | 5 | cnpg-cluster | PostgreSQL Cluster + managed.roles |
+| 5 | garage | Garage S3 StatefulSet, Services, WebUI, Ingress |
 | 6 | cnpg-databases | Database CRDs (n8n, etc.) |
 | 7 | n8n-secrets | App-Secrets: Encryption Key + DB-Passwort (KSOPS) |
 | 8 | n8n | App-Deployment: Namespace, Deployment, Service, PVC, Ingress |
@@ -197,11 +203,145 @@ Secrets werden getrennt mit SOPS verschluesselt und via KSOPS deployed.
 
 ---
 
+### 6.1b — Garage S3 Object Storage ✅
+
+**Abgeschlossen am:** 26.02.2026
+**S3 API:** https://s3-dev-v2.eneg.de
+**WebUI:** https://s3-gui-dev-v2.eneg.de
+**Version:** dxflrs/garage:v2.2.0 (AGPL v3)
+**WebUI-Version:** khairul169/garage-webui:1.1.0
+
+#### Hintergrund und Entscheidung
+
+Garage wurde als In-Cluster S3-kompatibler Object Storage deployed, um
+spaetere Anwendungen (OpenProject, Odoo, Nextcloud) mit S3-Speicher zu
+versorgen. Im Gegensatz zum externen NAS (nas10.eneg.de/QuObject) laeuft
+Garage direkt im Cluster und ist damit Teil der GitOps-verwalteten
+Infrastruktur.
+
+**Warum Garage statt MinIO:**
+- Leichtgewichtig: Weniger Ressourcen, ideal fuer DEV/TEST
+- Einfache Konfiguration ueber TOML
+- Multi-Node Replication ohne komplexe Erasure-Coding-Konfiguration
+- AGPL v3 Lizenz, aktiv gepflegt
+
+#### Cluster-Konfiguration
+
+| Parameter | DEV/TEST | PROD |
+|---|---|---|
+| Replicas | 3 | 3 |
+| Replication Factor | 2 | 3 |
+| Storage (Data/Pod) | 20Gi | 100Gi |
+| Storage (Meta/Pod) | 1Gi | 5Gi |
+| Region | eu-central-1 | eu-central-1 |
+| Addressing | Path-Style | Path-Style |
+| Effective Capacity | ~30 GB | ~300 GB |
+
+#### Installierte Komponenten
+
+| Ressource | Namespace | Name | Status |
+|---|---|---|---|
+| Namespace | garage | garage | ✅ Erstellt |
+| ConfigMap | garage | garage-config | ✅ garage.toml |
+| StatefulSet | garage | garage (3 Replicas) | ✅ Running |
+| Service (Headless) | garage | garage-headless | ✅ Active |
+| Service (S3 API) | garage | garage-s3 (Port 3900) | ✅ Active |
+| Service (Admin API) | garage | garage-admin (Port 3903) | ✅ Active |
+| Secret | garage | garage-secrets | ✅ SOPS/KSOPS |
+| Deployment | garage | garage-webui (1 Replica) | ✅ Running |
+| Service | garage | garage-webui (Port 3909) | ✅ Active |
+| Certificate | traefik | garage-s3-tls | ✅ Ready |
+| Certificate | traefik | garage-webui-tls | ✅ Ready |
+| IngressRoute | traefik | garage-s3 | ✅ Active |
+| IngressRoute | traefik | garage-webui | ✅ Active |
+| PVC (x3) | garage | garage-data-garage-{0,1,2} (20Gi) | ✅ Bound |
+| PVC (x3) | garage | garage-meta-garage-{0,1,2} (1Gi) | ✅ Bound |
+
+#### ArgoCD Applications
+
+| Application | Sync | Health | Wave |
+|---|---|---|---|
+| garage-secrets | Synced | Healthy | 4 |
+| garage | Synced | Healthy | 5 |
+
+#### Secrets (SOPS-verschluesselt)
+
+| Key | Beschreibung | Generierung |
+|---|---|---|
+| RPC_SECRET | Inter-Node Kommunikation | `openssl rand -hex 32` |
+| ADMIN_TOKEN | Admin API / CLI | `openssl rand -hex 32` |
+| METRICS_TOKEN | Prometheus Metrics | `openssl rand -hex 32` |
+| WEBUI_ADMIN_PASSWORD | WebUI Basic Auth | htpasswd bcrypt |
+
+#### Architektur: StatefulSet mit Init-Container
+
+Das Garage-Image (`dxflrs/garage:v2.2.0`) ist minimal und enthaelt keine
+DNS-Resolution-Libraries. Daher wird ein Init-Container (busybox:1.37)
+verwendet, der:
+
+1. Die ConfigMap-Vorlage kopiert und Platzhalter ersetzt
+2. DNS-Lookups fuer alle Peer-Hostnamen durchfuehrt und zu IPs aufloest
+3. Die Pod-IP via Downward API in `rpc_public_addr` einsetzt
+
+```
+Pod-Startup:
+  init-config (busybox:1.37)
+    -> Kopiert garage.toml von ConfigMap
+    -> Loest DNS: garage-{0,1,2}.garage-headless -> IP
+    -> Ersetzt Platzhalter (__POD_IP__, Hostnames -> IPs)
+    -> Schreibt finale Config nach /etc/garage/garage.toml
+  garage (dxflrs/garage:v2.2.0)
+    -> Liest /etc/garage/garage.toml
+    -> Verbindet sich zu Peers ueber bootstrap_peers (IPs)
+```
+
+#### Resources (DEV)
+
+| Parameter | Request | Limit |
+|---|---|---|
+| CPU | 100m | 1 |
+| Memory | 128Mi | 512Mi |
+| PVC Data | 20Gi (Longhorn) | - |
+| PVC Meta | 1Gi (Longhorn) | - |
+
+#### Einmaliges Cluster-Setup (nach erstem Deployment)
+
+Nach dem ersten Start muessen die Nodes manuell verbunden und das Layout
+zugewiesen werden:
+
+```bash
+# Node IDs abfragen
+kubectl exec -n garage garage-{0,1,2} -- /garage node id
+
+# Nodes verbinden (von garage-0 aus)
+kubectl exec -n garage garage-0 -- /garage node connect <NODE_ID>@<IP>:3901
+
+# Layout zuweisen
+kubectl exec -n garage garage-0 -- /garage layout assign <SHORT_ID> -z dc1 -c 20GB
+kubectl exec -n garage garage-0 -- /garage layout apply --version 1
+```
+
+#### Key Learnings Garage
+
+1. **Minimal Container Images:** Statisch kompilierte Rust-Binaries haben oft
+   keine DNS-Resolution-Libraries. Init-Container mit busybox fuer DNS-Lookups.
+2. **publishNotReadyAddresses:** Essentiell fuer StatefulSet Peer-Discovery
+   bei Headless Services, da DNS-Eintraege sonst erst nach Readiness verfuegbar.
+3. **Downward API fuer Pod-IP:** `rpc_public_addr` muss die Pod-IP enthalten,
+   nicht den Hostnamen, da Garage selbst keine DNS-Aufloesung kann.
+4. **ArgoCD VolumeClaimTemplate Drift:** Kubernetes ergaenzt automatisch
+   `apiVersion` und `kind` in VCTs. Loesung: `ignoreDifferences` in der
+   ArgoCD Application fuer StatefulSet VolumeClaimTemplates.
+
+---
+
 ## DNS-Eintraege
 
 | Hostname | Typ | Ziel | App | Status |
 |---|---|---|---|---|
 | n8n-dev-v2.eneg.de | CNAME | traefik-dev.eneg.de | n8n | ✅ Aktiv |
+| s3-dev-v2.eneg.de | CNAME | traefik-dev.eneg.de | Garage S3 API | ✅ Aktiv |
+| s3-gui-dev-v2.eneg.de | CNAME | traefik-dev.eneg.de | Garage WebUI | ✅ Aktiv |
 | openproject-dev-v2.eneg.de | CNAME | traefik-dev.eneg.de | OpenProject | 🔲 Vorbereitet |
 | odoo-dev-v2.eneg.de | CNAME | traefik-dev.eneg.de | Odoo | 🔲 Vorbereitet |
 | idoit-dev-v2.eneg.de | CNAME | traefik-dev.eneg.de | i-doit | 🔲 Vorbereitet |
@@ -281,6 +421,32 @@ kubectl -n argocd patch application <app-name> --type merge \
   -p '{"metadata":{"annotations":{"argocd.argoproj.io/refresh":"hard"}}}'
 ```
 
+### 7. Minimal Container Images und DNS-Resolution
+
+Statisch kompilierte Binaries (z.B. Rust/Garage) bringen keine System-DNS-
+Libraries mit. Hostnamen in Konfigurationsdateien werden nicht aufgeloest.
+**Loesung:** Init-Container mit busybox fuer DNS-Lookups, Ergebnisse (IPs)
+werden in die Konfigurationsdatei eingesetzt.
+
+### 8. StatefulSet Headless Service: publishNotReadyAddresses
+
+Headless Services veroeffentlichen DNS-Eintraege erst wenn Pods Ready sind.
+Fuer Peer-Discovery bei StatefulSets (Henne-Ei-Problem) muss
+`publishNotReadyAddresses: true` gesetzt werden.
+
+### 9. ArgoCD ignoreDifferences fuer StatefulSet VolumeClaimTemplates
+
+Kubernetes ergaenzt automatisch `apiVersion` und `kind` in VolumeClaimTemplates.
+Das fuehrt zu permanentem OutOfSync in ArgoCD. **Loesung:**
+
+```yaml
+ignoreDifferences:
+  - group: apps
+    kind: StatefulSet
+    jsonPointers:
+      - /spec/volumeClaimTemplates
+```
+
 ---
 
 ## Dateistruktur (aktuell)
@@ -300,6 +466,18 @@ kubernetes/
 │   │       ├── s3-credentials.enc.yaml
 │   │       ├── n8n-db-credentials.enc.yaml
 │   │       └── *.yaml.template            # Vorlagen (nicht committet)
+│   ├── garage/
+│   │   ├── namespace.yaml
+│   │   ├── configmap.yaml                 # garage.toml mit Platzhaltern
+│   │   ├── statefulset.yaml               # 3 Replicas, Init-Container
+│   │   ├── services.yaml                  # Headless + ClusterIP (S3, Admin)
+│   │   ├── webui-deployment.yaml          # WebUI + Service
+│   │   ├── ingress.yaml                   # Certificates + IngressRoutes
+│   │   └── secrets/
+│   │       ├── kustomization.yaml
+│   │       ├── secret-generator.yaml      # KSOPS
+│   │       ├── garage-secrets.enc.yaml
+│   │       └── garage-secrets.yaml.template
 │   └── apps/
 │       └── n8n/
 │           ├── namespace.yaml
@@ -314,6 +492,8 @@ kubernetes/
 └── environments/
     └── dev/
         └── infrastructure/
+            ├── garage-secrets-app.yaml    # ArgoCD App (Wave 4)
+            ├── garage-app.yaml            # ArgoCD App (Wave 5)
             ├── cnpg-databases-app.yaml    # ArgoCD App (Wave 6)
             ├── n8n-secrets-app.yaml       # ArgoCD App (Wave 7)
             ├── n8n-app.yaml               # ArgoCD App (Wave 8)
@@ -348,3 +528,4 @@ kubernetes/
 |---|---|
 | 25.02.2026 | Initiale Version (Planungsdokument) |
 | 25.02.2026 | n8n erfolgreich deployed (Schritt 6.1 abgeschlossen) |
+| 26.02.2026 | Garage S3 v2.2.0 deployed (Schritt 6.1b abgeschlossen) |
