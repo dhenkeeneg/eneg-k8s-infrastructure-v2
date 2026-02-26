@@ -1,0 +1,18 @@
+---
+# CloudNativePG Database: openproject
+# Erstellt die openproject-Datenbank deklarativ auf dem cnpg-erp Cluster
+# Owner ist die managed role "openproject" (definiert in cnpg-erp.yaml)
+apiVersion: postgresql.cnpg.io/v1
+kind: Database
+metadata:
+  name: openproject
+  namespace: databases
+  labels:
+    app.kubernetes.io/part-of: cloudnative-pg
+    app.kubernetes.io/managed-by: argocd
+    app.kubernetes.io/component: database
+spec:
+  name: openproject
+  owner: openproject
+  cluster:
+    name: cnpg-erp

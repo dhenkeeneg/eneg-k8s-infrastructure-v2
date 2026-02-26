@@ -19,6 +19,16 @@ spec:
   # Superuser-Zugang fuer pg_dumpall Backups
   enableSuperuserAccess: true
 
+  # Managed Roles (Passwort aus Secret, Login erlaubt)
+  managed:
+    roles:
+      - name: openproject
+        ensure: present
+        login: true
+        createdb: false
+        passwordSecret:
+          name: openproject-db-credentials
+
   # PostgreSQL Konfiguration (DEV - hoeher dimensioniert als shared)
   postgresql:
     parameters:
