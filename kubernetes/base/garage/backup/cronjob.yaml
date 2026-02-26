@@ -28,7 +28,7 @@ data:
     type = s3
     provider = Other
     env_auth = true
-    endpoint = https://nas10.eneg.de:8010
+    endpoint = http://nas10.eneg.de:8010
     region = us-east-1
     force_path_style = true
     no_check_bucket = true
