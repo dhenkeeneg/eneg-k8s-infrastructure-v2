@@ -13,6 +13,7 @@ metadata:
     app.kubernetes.io/managed-by: argocd
 spec:
   clusterIP: None
+  publishNotReadyAddresses: true
   selector:
     app.kubernetes.io/name: garage
   ports:
