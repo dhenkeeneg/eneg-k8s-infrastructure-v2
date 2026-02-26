@@ -26,6 +26,14 @@ spec:
   entryPoints:
     - websecure
   routes:
+    # Hocuspocus WebSocket Route (muss vor der allgemeinen Route stehen)
+    - match: Host(`openproject-dev-v2.eneg.de`) && PathPrefix(`/hocuspocus`)
+      kind: Rule
+      services:
+        - name: openproject-hocuspocus
+          namespace: openproject
+          port: 1234
+    # OpenProject Web
     - match: Host(`openproject-dev-v2.eneg.de`)
       kind: Rule
       services:

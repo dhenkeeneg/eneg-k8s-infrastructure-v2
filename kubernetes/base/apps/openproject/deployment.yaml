@@ -245,7 +245,7 @@ spec:
               value: "true"
             # Hocuspocus (Collaborative Editing)
             - name: OPENPROJECT_COLLABORATIVE__EDITING__HOCUSPOCUS__URL
-              value: "ws://openproject-hocuspocus.openproject.svc.cluster.local:1234"
+              value: "wss://openproject-dev-v2.eneg.de/hocuspocus"
             - name: OPENPROJECT_COLLABORATIVE__EDITING__HOCUSPOCUS__SECRET
               valueFrom:
                 secretKeyRef:
