@@ -1,0 +1,34 @@
+---
+# ArgoCD Application: Garage Backup CronJob
+# Taegliche Sicherung aller Garage S3 Buckets auf NAS10 QuObject
+# ConfigMap (rclone.conf + backup.sh) + CronJob
+# Sync-Wave 6: Nach Garage (Wave 5) und Secrets (Wave 4)
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: garage-backup
+  namespace: argocd
+  annotations:
+    argocd.argoproj.io/sync-wave: "6"
+  finalizers:
+    - resources-finalizer.argocd.argoproj.io
+spec:
+  project: default
+
+  source:
+    repoURL: git@github.com:dhenkeeneg/eneg-k8s-infrastructure-v2.git
+    targetRevision: main
+    path: kubernetes/base/garage/backup
+    directory:
+      recurse: false
+
+  destination:
+    server: https://kubernetes.default.svc
+
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
+    syncOptions:
+      - CreateNamespace=true
+      - ServerSideApply=true
