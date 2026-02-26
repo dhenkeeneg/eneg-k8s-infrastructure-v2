@@ -88,8 +88,9 @@ spec:
   selector:
     app.kubernetes.io/name: openproject-memcached
 ---
-# Hocuspocus Deployment (Collaborative Editing Server)
-# Nutzt dasselbe OpenProject Slim-Image mit anderem Entrypoint
+# Hocuspocus Deployment (Collaborative Editing / Real-Time Server)
+# Separates Image: openproject/hocuspocus (BlockNote-basiert)
+# Port 1234, kommuniziert mit OpenProject via SECRET
 apiVersion: apps/v1
 kind: Deployment
 metadata:
@@ -109,34 +110,22 @@ spec:
       labels:
         app.kubernetes.io/name: openproject-hocuspocus
     spec:
-      securityContext:
-        fsGroup: 1000
-        runAsUser: 1000
-        runAsGroup: 1000
       containers:
         - name: hocuspocus
-          image: openproject/openproject:17.1.1-slim
-          command:
-            - bash
-            - /app/docker/prod/hocuspocus
+          image: openproject/hocuspocus:latest
           env:
-            - name: OPENPROJECT_HOST__NAME
-              value: "openproject-dev-v2.eneg.de"
-            - name: OPENPROJECT_HTTPS
-              value: "true"
-            - name: OPENPROJECT_COLLABORATIVE__EDITING__HOCUSPOCUS__SECRET
+            - name: SECRET
               valueFrom:
                 secretKeyRef:
                   name: openproject-secrets
                   key: hocuspocus-secret
-            - name: DATABASE_URL
-              valueFrom:
-                secretKeyRef:
-                  name: openproject-secrets
-                  key: database-url
+            - name: OPENPROJECT_URL
+              value: "http://openproject-web.openproject.svc.cluster.local:8080"
+            - name: OPENPROJECT_HTTPS
+              value: "true"
           ports:
             - name: hocuspocus
-              containerPort: 4000
+              containerPort: 1234
               protocol: TCP
           resources:
             requests:
@@ -148,12 +137,12 @@ spec:
           livenessProbe:
             tcpSocket:
               port: hocuspocus
-            initialDelaySeconds: 30
+            initialDelaySeconds: 15
             periodSeconds: 15
           readinessProbe:
             tcpSocket:
               port: hocuspocus
-            initialDelaySeconds: 15
+            initialDelaySeconds: 10
             periodSeconds: 10
 ---
 # Hocuspocus Service
@@ -169,7 +158,7 @@ metadata:
 spec:
   type: ClusterIP
   ports:
-    - port: 4000
+    - port: 1234
       targetPort: hocuspocus
       protocol: TCP
       name: hocuspocus
@@ -256,7 +245,7 @@ spec:
               value: "true"
             # Hocuspocus (Collaborative Editing)
             - name: OPENPROJECT_COLLABORATIVE__EDITING__HOCUSPOCUS__URL
-              value: "ws://openproject-hocuspocus.openproject.svc.cluster.local:4000"
+              value: "ws://openproject-hocuspocus.openproject.svc.cluster.local:1234"
             - name: OPENPROJECT_COLLABORATIVE__EDITING__HOCUSPOCUS__SECRET
               valueFrom:
                 secretKeyRef:
