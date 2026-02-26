@@ -1,0 +1,36 @@
+---
+# TLS Zertifikat fuer OpenProject
+# Liegt im traefik Namespace (Standard-Pattern fuer alle Apps)
+apiVersion: cert-manager.io/v1
+kind: Certificate
+metadata:
+  name: openproject-tls
+  namespace: traefik
+spec:
+  secretName: openproject-tls
+  issuerRef:
+    name: letsencrypt-prod
+    kind: ClusterIssuer
+  dnsNames:
+    - openproject-dev-v2.eneg.de
+---
+# IngressRoute fuer OpenProject Web
+# Pattern: IngressRoute + Certificate im traefik Namespace,
+# Service-Referenz cross-namespace zum Backend (openproject)
+apiVersion: traefik.io/v1alpha1
+kind: IngressRoute
+metadata:
+  name: openproject
+  namespace: traefik
+spec:
+  entryPoints:
+    - websecure
+  routes:
+    - match: Host(`openproject-dev-v2.eneg.de`)
+      kind: Rule
+      services:
+        - name: openproject-web
+          namespace: openproject
+          port: 8080
+  tls:
+    secretName: openproject-tls

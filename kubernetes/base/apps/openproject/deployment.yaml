@@ -1,0 +1,479 @@
+---
+# PersistentVolumeClaim fuer OpenProject tmp-Daten
+# Wird fuer temporaere Dateien (Wiki-Rendering, Attachment-Upload) benoetigt
+# S3/Fog schreibt Attachments erst nach /tmp bevor sie hochgeladen werden
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: openproject-tmp
+  namespace: openproject
+  labels:
+    app.kubernetes.io/name: openproject
+    app.kubernetes.io/managed-by: argocd
+spec:
+  accessModes:
+    - ReadWriteOnce
+  storageClassName: longhorn
+  resources:
+    requests:
+      storage: 5Gi
+---
+# Memcached Deployment (eigener Pod fuer Stabilitaet und Skalierung)
+# OpenProject nutzt Memcached als Rails Cache Store
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: openproject-memcached
+  namespace: openproject
+  labels:
+    app.kubernetes.io/name: openproject-memcached
+    app.kubernetes.io/part-of: openproject
+    app.kubernetes.io/managed-by: argocd
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: openproject-memcached
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: openproject-memcached
+    spec:
+      containers:
+        - name: memcached
+          image: memcached:1.6.40-alpine
+          args:
+            - --memory-limit=128
+            - --conn-limit=1024
+            - --threads=2
+          ports:
+            - name: memcached
+              containerPort: 11211
+              protocol: TCP
+          resources:
+            requests:
+              cpu: 50m
+              memory: 64Mi
+            limits:
+              cpu: 250m
+              memory: 192Mi
+          livenessProbe:
+            tcpSocket:
+              port: memcached
+            initialDelaySeconds: 10
+            periodSeconds: 15
+          readinessProbe:
+            tcpSocket:
+              port: memcached
+            initialDelaySeconds: 5
+            periodSeconds: 10
+---
+# Memcached Service
+apiVersion: v1
+kind: Service
+metadata:
+  name: openproject-memcached
+  namespace: openproject
+  labels:
+    app.kubernetes.io/name: openproject-memcached
+    app.kubernetes.io/part-of: openproject
+    app.kubernetes.io/managed-by: argocd
+spec:
+  type: ClusterIP
+  ports:
+    - port: 11211
+      targetPort: memcached
+      protocol: TCP
+      name: memcached
+  selector:
+    app.kubernetes.io/name: openproject-memcached
+---
+# Hocuspocus Deployment (Collaborative Editing Server)
+# Nutzt dasselbe OpenProject Slim-Image mit anderem Entrypoint
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: openproject-hocuspocus
+  namespace: openproject
+  labels:
+    app.kubernetes.io/name: openproject-hocuspocus
+    app.kubernetes.io/part-of: openproject
+    app.kubernetes.io/managed-by: argocd
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: openproject-hocuspocus
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: openproject-hocuspocus
+    spec:
+      securityContext:
+        fsGroup: 1000
+        runAsUser: 1000
+        runAsGroup: 1000
+      containers:
+        - name: hocuspocus
+          image: openproject/openproject:17.1.1-slim
+          command:
+            - bash
+            - /app/docker/prod/hocuspocus
+          env:
+            - name: OPENPROJECT_HOST__NAME
+              value: "openproject-dev-v2.eneg.de"
+            - name: OPENPROJECT_HTTPS
+              value: "true"
+            - name: OPENPROJECT_COLLABORATIVE__EDITING__HOCUSPOCUS__SECRET
+              valueFrom:
+                secretKeyRef:
+                  name: openproject-secrets
+                  key: hocuspocus-secret
+            - name: DATABASE_URL
+              valueFrom:
+                secretKeyRef:
+                  name: openproject-secrets
+                  key: database-url
+          ports:
+            - name: hocuspocus
+              containerPort: 4000
+              protocol: TCP
+          resources:
+            requests:
+              cpu: 100m
+              memory: 128Mi
+            limits:
+              cpu: 500m
+              memory: 256Mi
+          livenessProbe:
+            tcpSocket:
+              port: hocuspocus
+            initialDelaySeconds: 30
+            periodSeconds: 15
+          readinessProbe:
+            tcpSocket:
+              port: hocuspocus
+            initialDelaySeconds: 15
+            periodSeconds: 10
+---
+# Hocuspocus Service
+apiVersion: v1
+kind: Service
+metadata:
+  name: openproject-hocuspocus
+  namespace: openproject
+  labels:
+    app.kubernetes.io/name: openproject-hocuspocus
+    app.kubernetes.io/part-of: openproject
+    app.kubernetes.io/managed-by: argocd
+spec:
+  type: ClusterIP
+  ports:
+    - port: 4000
+      targetPort: hocuspocus
+      protocol: TCP
+      name: hocuspocus
+  selector:
+    app.kubernetes.io/name: openproject-hocuspocus
+---
+# OpenProject Web Deployment
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: openproject-web
+  namespace: openproject
+  labels:
+    app.kubernetes.io/name: openproject
+    app.kubernetes.io/version: "17.1.1"
+    app.kubernetes.io/part-of: pilot-apps
+    app.kubernetes.io/managed-by: argocd
+spec:
+  replicas: 1
+  strategy:
+    type: Recreate
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: openproject
+      app.kubernetes.io/component: web
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: openproject
+        app.kubernetes.io/component: web
+    spec:
+      securityContext:
+        fsGroup: 1000
+        runAsUser: 1000
+        runAsGroup: 1000
+      initContainers:
+        # TMPDIR Workaround: OpenProject braucht ein beschreibbares /tmp
+        - name: init-tmp
+          image: busybox:1.37
+          command:
+            - sh
+            - -c
+            - mkdir -p /tmp/openproject && chown 1000:1000 /tmp/openproject
+          volumeMounts:
+            - name: tmp
+              mountPath: /tmp
+      containers:
+        - name: openproject
+          image: openproject/openproject:17.1.1-slim
+          command:
+            - bash
+            - /app/docker/prod/web
+          ports:
+            - name: http
+              containerPort: 8080
+              protocol: TCP
+          env:
+            # Datenbank (Connection-String aus Secret)
+            - name: DATABASE_URL
+              valueFrom:
+                secretKeyRef:
+                  name: openproject-secrets
+                  key: database-url
+            # Rails
+            - name: SECRET_KEY_BASE
+              valueFrom:
+                secretKeyRef:
+                  name: openproject-secrets
+                  key: secret-key-base
+            - name: RAILS_CACHE_STORE
+              value: "memcache"
+            - name: OPENPROJECT_CACHE__MEMCACHE__SERVER
+              value: "openproject-memcached.openproject.svc.cluster.local:11211"
+            - name: RAILS_MIN_THREADS
+              value: "4"
+            - name: RAILS_MAX_THREADS
+              value: "16"
+            # Host und SSL
+            - name: OPENPROJECT_HOST__NAME
+              value: "openproject-dev-v2.eneg.de"
+            - name: OPENPROJECT_HTTPS
+              value: "true"
+            - name: OPENPROJECT_HSTS
+              value: "true"
+            # Hocuspocus (Collaborative Editing)
+            - name: OPENPROJECT_COLLABORATIVE__EDITING__HOCUSPOCUS__URL
+              value: "ws://openproject-hocuspocus.openproject.svc.cluster.local:4000"
+            - name: OPENPROJECT_COLLABORATIVE__EDITING__HOCUSPOCUS__SECRET
+              valueFrom:
+                secretKeyRef:
+                  name: openproject-secrets
+                  key: hocuspocus-secret
+            # Zusaetzliche Host-Namen (fuer Hocuspocus intern)
+            - name: OPENPROJECT_ADDITIONAL__HOST__NAMES
+              value: "openproject-web.openproject.svc.cluster.local"
+            # S3 Attachment Storage (Garage)
+            - name: OPENPROJECT_ATTACHMENTS__STORAGE
+              value: "fog"
+            - name: OPENPROJECT_FOG_DIRECTORY
+              value: "openproject-assets"
+            - name: OPENPROJECT_FOG_CREDENTIALS_PROVIDER
+              value: "aws"
+            - name: OPENPROJECT_FOG_CREDENTIALS_ENDPOINT
+              value: "http://garage-s3.garage.svc.cluster.local:3900"
+            - name: OPENPROJECT_FOG_CREDENTIALS_AWS__ACCESS__KEY__ID
+              valueFrom:
+                secretKeyRef:
+                  name: openproject-secrets
+                  key: s3-access-key-id
+            - name: OPENPROJECT_FOG_CREDENTIALS_AWS__SECRET__ACCESS__KEY
+              valueFrom:
+                secretKeyRef:
+                  name: openproject-secrets
+                  key: s3-secret-access-key
+            - name: OPENPROJECT_FOG_CREDENTIALS_REGION
+              value: "eu-central-1"
+            - name: OPENPROJECT_FOG_CREDENTIALS_PATH__STYLE
+              value: "true"
+            # TMPDIR
+            - name: TMPDIR
+              value: "/tmp/openproject"
+            # Locale und Zeitzone
+            - name: OPENPROJECT_DEFAULT__LANGUAGE
+              value: "de"
+            - name: OPENPROJECT_SEED__LOCALE
+              value: "de"
+            - name: TZ
+              value: "Europe/Berlin"
+          volumeMounts:
+            - name: tmp
+              mountPath: /tmp
+          resources:
+            requests:
+              cpu: 500m
+              memory: 1Gi
+            limits:
+              cpu: "2"
+              memory: 2Gi
+          livenessProbe:
+            httpGet:
+              path: /health_checks/default
+              port: http
+            initialDelaySeconds: 120
+            periodSeconds: 30
+            timeoutSeconds: 10
+            failureThreshold: 6
+          readinessProbe:
+            httpGet:
+              path: /health_checks/default
+              port: http
+            initialDelaySeconds: 60
+            periodSeconds: 15
+            timeoutSeconds: 10
+      volumes:
+        - name: tmp
+          persistentVolumeClaim:
+            claimName: openproject-tmp
+---
+# OpenProject Worker Deployment (Background Jobs)
+# Verarbeitet E-Mails, Benachrichtigungen, Exports etc.
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: openproject-worker
+  namespace: openproject
+  labels:
+    app.kubernetes.io/name: openproject
+    app.kubernetes.io/component: worker
+    app.kubernetes.io/version: "17.1.1"
+    app.kubernetes.io/part-of: pilot-apps
+    app.kubernetes.io/managed-by: argocd
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: openproject
+      app.kubernetes.io/component: worker
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: openproject
+        app.kubernetes.io/component: worker
+    spec:
+      securityContext:
+        fsGroup: 1000
+        runAsUser: 1000
+        runAsGroup: 1000
+      containers:
+        - name: worker
+          image: openproject/openproject:17.1.1-slim
+          command:
+            - bash
+            - /app/docker/prod/worker
+          env:
+            - name: DATABASE_URL
+              valueFrom:
+                secretKeyRef:
+                  name: openproject-secrets
+                  key: database-url
+            - name: SECRET_KEY_BASE
+              valueFrom:
+                secretKeyRef:
+                  name: openproject-secrets
+                  key: secret-key-base
+            - name: RAILS_CACHE_STORE
+              value: "memcache"
+            - name: OPENPROJECT_CACHE__MEMCACHE__SERVER
+              value: "openproject-memcached.openproject.svc.cluster.local:11211"
+            - name: OPENPROJECT_HOST__NAME
+              value: "openproject-dev-v2.eneg.de"
+            - name: OPENPROJECT_HTTPS
+              value: "true"
+            # S3 Attachment Storage (gleich wie Web)
+            - name: OPENPROJECT_ATTACHMENTS__STORAGE
+              value: "fog"
+            - name: OPENPROJECT_FOG_DIRECTORY
+              value: "openproject-assets"
+            - name: OPENPROJECT_FOG_CREDENTIALS_PROVIDER
+              value: "aws"
+            - name: OPENPROJECT_FOG_CREDENTIALS_ENDPOINT
+              value: "http://garage-s3.garage.svc.cluster.local:3900"
+            - name: OPENPROJECT_FOG_CREDENTIALS_AWS__ACCESS__KEY__ID
+              valueFrom:
+                secretKeyRef:
+                  name: openproject-secrets
+                  key: s3-access-key-id
+            - name: OPENPROJECT_FOG_CREDENTIALS_AWS__SECRET__ACCESS__KEY
+              valueFrom:
+                secretKeyRef:
+                  name: openproject-secrets
+                  key: s3-secret-access-key
+            - name: OPENPROJECT_FOG_CREDENTIALS_REGION
+              value: "eu-central-1"
+            - name: OPENPROJECT_FOG_CREDENTIALS_PATH__STYLE
+              value: "true"
+            - name: TZ
+              value: "Europe/Berlin"
+          resources:
+            requests:
+              cpu: 250m
+              memory: 512Mi
+            limits:
+              cpu: "1"
+              memory: 1Gi
+---
+# OpenProject Seeder Job (einmalig beim ersten Start)
+# Erstellt Datenbankschema, Seed-Daten und Admin-User
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: openproject-seeder
+  namespace: openproject
+  labels:
+    app.kubernetes.io/name: openproject
+    app.kubernetes.io/component: seeder
+    app.kubernetes.io/managed-by: argocd
+  annotations:
+    argocd.argoproj.io/hook: PostSync
+    argocd.argoproj.io/hook-delete-policy: BeforeHookCreation
+spec:
+  backoffLimit: 3
+  activeDeadlineSeconds: 600
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: openproject
+        app.kubernetes.io/component: seeder
+    spec:
+      restartPolicy: OnFailure
+      securityContext:
+        fsGroup: 1000
+        runAsUser: 1000
+        runAsGroup: 1000
+      containers:
+        - name: seeder
+          image: openproject/openproject:17.1.1-slim
+          command:
+            - bash
+            - /app/docker/prod/seeder
+          env:
+            - name: DATABASE_URL
+              valueFrom:
+                secretKeyRef:
+                  name: openproject-secrets
+                  key: database-url
+            - name: SECRET_KEY_BASE
+              valueFrom:
+                secretKeyRef:
+                  name: openproject-secrets
+                  key: secret-key-base
+            - name: OPENPROJECT_HOST__NAME
+              value: "openproject-dev-v2.eneg.de"
+            - name: OPENPROJECT_HTTPS
+              value: "true"
+            - name: OPENPROJECT_DEFAULT__LANGUAGE
+              value: "de"
+            - name: OPENPROJECT_SEED__LOCALE
+              value: "de"
+            - name: TZ
+              value: "Europe/Berlin"
+          resources:
+            requests:
+              cpu: 250m
+              memory: 512Mi
+            limits:
+              cpu: "1"
+              memory: 1Gi
