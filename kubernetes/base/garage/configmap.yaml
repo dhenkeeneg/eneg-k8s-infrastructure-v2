@@ -1,7 +1,8 @@
 ---
 # Garage Konfiguration (garage.toml)
-# Platzhalter __RPC_SECRET__, __ADMIN_TOKEN__, __METRICS_TOKEN__, __HOSTNAME__
-# werden durch den Init-Container mit Werten aus dem Secret ersetzt
+# Platzhalter __RPC_SECRET__, __ADMIN_TOKEN__, __METRICS_TOKEN__, __POD_IP__
+# werden durch den Init-Container mit Werten aus dem Secret/Downward API ersetzt
+# Bootstrap-Peer-Hostnamen werden vom Init-Container zu IPs aufgeloest
 apiVersion: v1
 kind: ConfigMap
 metadata:
@@ -23,7 +24,7 @@ data:
     compression_level = 1
 
     rpc_bind_addr = "[::]:3901"
-    rpc_public_addr = "__HOSTNAME__.garage-headless.garage.svc.cluster.local:3901"
+    rpc_public_addr = "__POD_IP__:3901"
     rpc_secret = "__RPC_SECRET__"
 
     bootstrap_peers = [

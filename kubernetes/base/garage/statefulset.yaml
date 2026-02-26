@@ -38,7 +38,26 @@ spec:
               sed -i "s|__RPC_SECRET__|$(cat /etc/garage-secrets/rpc-secret)|g" /etc/garage/garage.toml
               sed -i "s|__ADMIN_TOKEN__|$(cat /etc/garage-secrets/admin-token)|g" /etc/garage/garage.toml
               sed -i "s|__METRICS_TOKEN__|$(cat /etc/garage-secrets/metrics-token)|g" /etc/garage/garage.toml
-              sed -i "s|__HOSTNAME__|${POD_NAME}|g" /etc/garage/garage.toml
+              sed -i "s|__POD_IP__|${POD_IP}|g" /etc/garage/garage.toml
+
+              # DNS-Aufloesung der Peer-Hostnamen zu IPs
+              # Garage-Binary im Minimal-Image kann kein DNS aufloesen
+              echo "Waiting for DNS resolution of peers..."
+              for peer in garage-0 garage-1 garage-2; do
+                FQDN="${peer}.garage-headless.garage.svc.cluster.local"
+                echo "Resolving ${FQDN}..."
+                for i in $(seq 1 30); do
+                  IP=$(nslookup "${FQDN}" 2>/dev/null | grep -A1 "Name:" | grep "Address:" | awk '{print $2}')
+                  if [ -n "$IP" ]; then
+                    echo "  ${FQDN} -> ${IP}"
+                    sed -i "s|${FQDN}:3901|${IP}:3901|g" /etc/garage/garage.toml
+                    break
+                  fi
+                  echo "  Retry $i..."
+                  sleep 2
+                done
+              done
+
               echo "Config generated for ${POD_NAME}"
               cat /etc/garage/garage.toml | grep -v secret | grep -v token
           env:
@@ -46,6 +65,10 @@ spec:
               valueFrom:
                 fieldRef:
                   fieldPath: metadata.name
+            - name: POD_IP
+              valueFrom:
+                fieldRef:
+                  fieldPath: status.podIP
           volumeMounts:
             - name: garage-config-template
               mountPath: /etc/garage-template
