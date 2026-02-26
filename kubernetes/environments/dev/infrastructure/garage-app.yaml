@@ -15,6 +15,13 @@ metadata:
 spec:
   project: default
 
+  # StatefulSet VCTs bekommen automatisch apiVersion/kind von K8s
+  ignoreDifferences:
+    - group: apps
+      kind: StatefulSet
+      jsonPointers:
+        - /spec/volumeClaimTemplates
+
   source:
     repoURL: git@github.com:dhenkeeneg/eneg-k8s-infrastructure-v2.git
     targetRevision: main
