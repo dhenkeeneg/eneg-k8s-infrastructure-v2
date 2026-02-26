@@ -82,7 +82,7 @@ data:
     # Alte Backup-Dirs aufraemen (aelter als 32 Tage)
     echo ""
     echo "--- Alte Backups aufraemen (>32 Tage) ---"
-    CUTOFF_DATE=$(date -d "-32 days" +%Y-%m-%d 2>/dev/null || date -v-32d +%Y-%m-%d 2>/dev/null || echo "")
+    CUTOFF_DATE=$(date -d "@$(($(date +%s) - 32*86400))" +%Y-%m-%d)
 
     if [ -n "$CUTOFF_DATE" ]; then
       # Alle Backup-Dirs auflisten
