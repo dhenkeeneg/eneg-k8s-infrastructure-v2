@@ -75,8 +75,7 @@ data:
         --checkers 8 \
         --stats 30s \
         --stats-one-line \
-        --log-level INFO \
-        -v
+        --log-level INFO
       echo "--- Bucket ${BUCKET} gesichert ---"
     done
 
@@ -91,8 +90,7 @@ data:
         if [ "$DIR" \< "$CUTOFF_DATE" ] || [ "$DIR" = "$CUTOFF_DATE" ]; then
           echo "Loesche altes Backup: _backups/${DIR}"
           rclone purge "nas10:k8s-dev-garage-backup/_backups/${DIR}" \
-            --config /config/rclone.conf \
-            -v
+            --config /config/rclone.conf
         fi
       done
     else
