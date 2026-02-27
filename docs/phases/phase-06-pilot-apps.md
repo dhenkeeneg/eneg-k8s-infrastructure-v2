@@ -82,7 +82,8 @@ Secrets werden getrennt mit SOPS verschluesselt und via KSOPS deployed.
 |---|---|---|
 | 6.1 | n8n: DB-Rolle + Database + Secrets + Deployment + Ingress | ✅ Abgeschlossen |
 | 6.1b | Garage S3: In-Cluster Object Storage (3-Node, Replication 2) | ✅ Abgeschlossen |
-| 6.2 | OpenProject: DB-Rolle + Database + Deployment + Ingress | 🔲 Offen |
+| 6.1c | Garage S3 Backup: Taegliches Backup auf NAS10 via rclone | ✅ Abgeschlossen |
+| 6.2 | OpenProject: DB-Rolle + Database + Deployment + Ingress + S3 + Hocuspocus | ✅ Abgeschlossen |
 | 6.3 | Odoo: DB-Rolle + Database + Deployment + Ingress | 🔲 Offen |
 | 6.4 | Keycloak: DB-Rolle + Database + Deployment + Ingress | 🔲 Offen |
 | 6.5 | Weitere Apps nach Bedarf | 🔲 Offen |
@@ -131,7 +132,11 @@ Secrets werden getrennt mit SOPS verschluesselt und via KSOPS deployed.
 | 5 | garage | Garage S3 StatefulSet, Services, WebUI, Ingress |
 | 6 | cnpg-databases | Database CRDs (n8n, etc.) |
 | 7 | n8n-secrets | App-Secrets: Encryption Key + DB-Passwort (KSOPS) |
+| 7 | openproject-secrets | App-Secrets: SECRET_KEY_BASE, Hocuspocus, DB-URL, S3-Keys (KSOPS) |
+| 7 | garage-backup-secrets | Backup-Credentials: Garage + NAS10 S3-Keys (KSOPS) |
 | 8 | n8n | App-Deployment: Namespace, Deployment, Service, PVC, Ingress |
+| 8 | openproject | App-Deployment: Namespace, Web, Worker, Memcached, Hocuspocus, PVC, Ingress |
+| 8 | garage-backup | CronJob: Taegliches rclone Backup Garage -> NAS10 |
 
 ---
 
@@ -342,7 +347,7 @@ kubectl exec -n garage garage-0 -- /garage layout apply --version 1
 | n8n-dev-v2.eneg.de | CNAME | traefik-dev.eneg.de | n8n | ✅ Aktiv |
 | s3-dev-v2.eneg.de | CNAME | traefik-dev.eneg.de | Garage S3 API | ✅ Aktiv |
 | s3-gui-dev-v2.eneg.de | CNAME | traefik-dev.eneg.de | Garage WebUI | ✅ Aktiv |
-| openproject-dev-v2.eneg.de | CNAME | traefik-dev.eneg.de | OpenProject | 🔲 Vorbereitet |
+| openproject-dev-v2.eneg.de | CNAME | traefik-dev.eneg.de | OpenProject | ✅ Aktiv |
 | odoo-dev-v2.eneg.de | CNAME | traefik-dev.eneg.de | Odoo | 🔲 Vorbereitet |
 | idoit-dev-v2.eneg.de | CNAME | traefik-dev.eneg.de | i-doit | 🔲 Vorbereitet |
 
@@ -473,30 +478,51 @@ kubernetes/
 │   │   ├── services.yaml                  # Headless + ClusterIP (S3, Admin)
 │   │   ├── webui-deployment.yaml          # WebUI + Service
 │   │   ├── ingress.yaml                   # Certificates + IngressRoutes
+│   │   ├── backup/
+│   │   │   ├── cronjob.yaml               # rclone CronJob + ConfigMap
+│   │   │   └── secrets/
+│   │   │       ├── kustomization.yaml
+│   │   │       ├── secret-generator.yaml
+│   │   │       ├── garage-backup-credentials.enc.yaml
+│   │   │       └── garage-backup-credentials.yaml.template
 │   │   └── secrets/
 │   │       ├── kustomization.yaml
 │   │       ├── secret-generator.yaml      # KSOPS
 │   │       ├── garage-secrets.enc.yaml
 │   │       └── garage-secrets.yaml.template
 │   └── apps/
-│       └── n8n/
+│       ├── n8n/
+│       │   ├── namespace.yaml
+│       │   ├── deployment.yaml
+│       │   ├── service.yaml
+│       │   ├── ingress.yaml               # Certificate + IngressRoute
+│       │   └── secrets/
+│       │       ├── kustomization.yaml
+│       │       ├── secret-generator.yaml
+│       │       ├── n8n-secrets.enc.yaml
+│       │       └── n8n-secrets.yaml.template
+│       └── openproject/
 │           ├── namespace.yaml
-│           ├── deployment.yaml
+│           ├── deployment.yaml            # PVC, Memcached, Hocuspocus, Web, Worker, Seeder
 │           ├── service.yaml
-│           ├── ingress.yaml               # Certificate + IngressRoute
+│           ├── ingress.yaml               # Certificate + IngressRoute (inkl. WebSocket)
 │           └── secrets/
 │               ├── kustomization.yaml
 │               ├── secret-generator.yaml
-│               ├── n8n-secrets.enc.yaml
-│               └── n8n-secrets.yaml.template
+│               ├── openproject-secrets.enc.yaml
+│               └── openproject-secrets.yaml.template
 └── environments/
     └── dev/
         └── infrastructure/
             ├── garage-secrets-app.yaml    # ArgoCD App (Wave 4)
+            ├── garage-backup-secrets-app.yaml # ArgoCD App (Wave 4)
             ├── garage-app.yaml            # ArgoCD App (Wave 5)
+            ├── garage-backup-app.yaml     # ArgoCD App (Wave 6)
             ├── cnpg-databases-app.yaml    # ArgoCD App (Wave 6)
             ├── n8n-secrets-app.yaml       # ArgoCD App (Wave 7)
+            ├── openproject-secrets-app.yaml # ArgoCD App (Wave 7)
             ├── n8n-app.yaml               # ArgoCD App (Wave 8)
+            ├── openproject-app.yaml       # ArgoCD App (Wave 8)
             └── ... (bestehende Apps)
 ```
 
@@ -513,11 +539,183 @@ kubernetes/
 
 ---
 
+### 6.1c — Garage S3 Backup auf NAS10 ✅
+
+**Abgeschlossen am:** 26.02.2026
+**Backup-Frequenz:** Taeglich um 04:00 Uhr (Europe/Berlin)
+**Backup-Ziel:** NAS10 QuObject S3 (http://nas10.eneg.de:8010)
+**Ziel-Bucket:** k8s-dev-garage-backup
+**Tool:** rclone/rclone:1.73.1
+
+#### Architektur-Entscheidung
+
+Garage hat kein natives Cross-S3-Backup. Stattdessen wird ein Kubernetes
+CronJob mit rclone verwendet, der alle Garage-Buckets taeglich auf NAS10
+QuObject S3 synchronisiert.
+
+**Backup-Strategie:** `rclone sync` mit `--backup-dir` Pattern:
+- Aktuelle Dateien: `nas10:k8s-dev-garage-backup/<bucket>/`
+- Geaenderte/geloeschte Dateien: `nas10:k8s-dev-garage-backup/_backups/YYYY-MM-DD/<bucket>/`
+- Retention: 32 Tage (aeltere Backup-Dirs werden automatisch geloescht)
+- Checksum-basierter Vergleich (`--checksum`)
+
+#### Installierte Komponenten
+
+| Ressource | Namespace | Name | Status |
+|---|---|---|---|
+| ConfigMap | garage | garage-backup-config | ✅ rclone.conf + backup.sh |
+| CronJob | garage | garage-backup | ✅ 0 4 * * * |
+| Secret | garage | garage-backup-credentials | ✅ SOPS/KSOPS |
+
+#### ArgoCD Applications
+
+| Application | Sync | Health | Wave |
+|---|---|---|---|
+| garage-backup-secrets | Synced | Healthy | 4 |
+| garage-backup | Synced | Healthy | 6 |
+
+#### Garage Keys fuer Backup
+
+| Key Name | Key ID | Berechtigungen | Verwendung |
+|---|---|---|---|
+| garage-backup-readonly | GK809336104c0cff5a11f5e59c | Read | Backup liest alle Buckets |
+
+#### Key Learnings Garage Backup
+
+1. **rclone -v und --log-level sind inkompatibel:** Fuehrt zu sofortigem Crash.
+   Nur eines von beiden verwenden.
+2. **NAS10 S3 Endpoint:** Verwendet HTTP auf Port 8010 (nicht HTTPS:9000).
+3. **BusyBox date:** Alpine/rclone Image nutzt BusyBox, das weder GNU
+   `date -d "-32 days"` noch BSD `date -v-32d` unterstuetzt. Loesung:
+   `date -d "@$(($(date +%s) - 32*86400))" +%Y-%m-%d`
+
+---
+
+### 6.2 — OpenProject Projektmanagement ✅
+
+**Abgeschlossen am:** 26.02.2026
+**URL:** https://openproject-dev-v2.eneg.de
+**Version:** openproject/openproject:17.1.1-slim
+**Hocuspocus:** openproject/hocuspocus:latest (Collaborative Editing)
+**Default-Login:** admin / admin (Passwortaenderung beim ersten Login)
+
+#### Architektur
+
+OpenProject wird als Multi-Container-Deployment betrieben:
+
+```
+Browser (wss://openproject-dev-v2.eneg.de/hocuspocus)
+    |
+    v
+Traefik (TLS-Terminierung)
+    |
+    ├── /hocuspocus/* → openproject-hocuspocus:1234 (WebSocket)
+    └── /* → openproject-web:8080 (HTTP)
+                  |
+                  ├── Memcached (localhost:11211) — Rails Cache
+                  ├── PostgreSQL (cnpg-erp-rw:5432) — Datenbank
+                  └── Garage S3 (garage-s3:3900) — Attachments
+```
+
+**Komponenten:**
+- **Web:** Rails Application Server (Puma), Port 8080
+- **Worker:** Background Jobs (E-Mails, Benachrichtigungen, Exports)
+- **Memcached:** Rails Cache Store (eigenes Deployment)
+- **Hocuspocus:** Real-Time Collaboration Server (separates Image), Port 1234
+- **Seeder:** Einmaliger ArgoCD PostSync Hook (DB-Migration + Seed-Daten)
+
+#### Installierte Komponenten
+
+| Ressource | Namespace | Name | Status |
+|---|---|---|---|
+| Database CRD | databases | openproject | ✅ Erstellt |
+| Managed Role | databases | openproject (auf cnpg-erp) | ✅ Login aktiv |
+| Secret (DB) | databases | openproject-db-credentials | ✅ SOPS/KSOPS |
+| Namespace | openproject | openproject | ✅ Erstellt |
+| Secret (App) | openproject | openproject-secrets | ✅ SOPS/KSOPS |
+| PVC | openproject | openproject-tmp (5Gi Longhorn) | ✅ Bound |
+| Deployment | openproject | openproject-web (1 Replica) | ✅ Running |
+| Deployment | openproject | openproject-worker (1 Replica) | ✅ Running |
+| Deployment | openproject | openproject-memcached (1 Replica) | ✅ Running |
+| Deployment | openproject | openproject-hocuspocus (1 Replica) | ✅ Running |
+| Service | openproject | openproject-web (ClusterIP:8080) | ✅ Active |
+| Service | openproject | openproject-memcached (ClusterIP:11211) | ✅ Active |
+| Service | openproject | openproject-hocuspocus (ClusterIP:1234) | ✅ Active |
+| Certificate | traefik | openproject-tls | ✅ Ready (Let's Encrypt) |
+| IngressRoute | traefik | openproject | ✅ Active (inkl. WebSocket) |
+| Job (PostSync) | openproject | openproject-seeder | ✅ Completed |
+
+#### ArgoCD Applications
+
+| Application | Sync | Health | Wave |
+|---|---|---|---|
+| cnpg-databases | Synced | Healthy | 6 |
+| openproject-secrets | Synced | Healthy | 7 |
+| openproject | Synced | Healthy | 8 |
+
+#### S3 Storage (Garage)
+
+| Parameter | Wert |
+|---|---|
+| Bucket | openproject-assets |
+| Key Name | openproject-app |
+| Key ID | GK50841c65af761abbb7f9126c |
+| Berechtigungen | Read + Write + Owner |
+| Endpoint (intern) | http://garage-s3.garage.svc.cluster.local:3900 |
+| Region | eu-central-1 |
+| Path-Style | true |
+
+#### OpenProject Secrets (SOPS-verschluesselt)
+
+| Key | Beschreibung | Generierung |
+|---|---|---|
+| secret-key-base | Rails Secret Key | `openssl rand -hex 64` |
+| hocuspocus-secret | Shared Secret Web ↔ Hocuspocus | `openssl rand -hex 32` |
+| database-url | PostgreSQL Connection String | Manuell zusammengesetzt |
+| s3-access-key-id | Garage Key ID | Garage CLI |
+| s3-secret-access-key | Garage Secret Key | Garage CLI |
+
+#### Resources (DEV)
+
+| Komponente | CPU Request | CPU Limit | Memory Request | Memory Limit |
+|---|---|---|---|---|
+| Web | 500m | 2 | 1Gi | 2Gi |
+| Worker | 250m | 1 | 512Mi | 1Gi |
+| Memcached | 50m | 250m | 64Mi | 192Mi |
+| Hocuspocus | 100m | 500m | 128Mi | 256Mi |
+
+#### Key Learnings OpenProject
+
+1. **Slim-Image hat kein Hocuspocus:** Das `-slim` Tag enthaelt nur die Rails-App.
+   Hocuspocus muss als separates Image (`openproject/hocuspocus:latest`) deployed
+   werden, nicht mit dem OpenProject-Image und `/app/docker/prod/hocuspocus`.
+
+2. **Hocuspocus Port:** Das separate Hocuspocus-Image lauscht auf Port 1234
+   (nicht 4000 wie in aelteren Versionen).
+
+3. **WebSocket-Route noetig:** Die Hocuspocus-URL muss vom Browser erreichbar sein.
+   Interne Cluster-URLs (`ws://...svc.cluster.local`) funktionieren nicht.
+   Loesung: Dedizierte IngressRoute mit PathPrefix `/hocuspocus` in Traefik.
+
+4. **DATABASE_URL Sonderzeichen:** Passwoerter mit `+`, `/`, `=` etc. muessen
+   URL-encoded werden oder (einfacher) nur alphanumerische Passwoerter verwenden
+   (`openssl rand -hex 24`).
+
+5. **DB-Migration vor erstem Start:** OpenProject startet nicht ohne Datenbankschema.
+   Der Seeder-Job (PostSync Hook) kann blockiert sein wenn die App nie healthy wird.
+   Loesung: Einmalige manuelle Migration via `kubectl run`.
+
+6. **CNPG Managed Role Passwort-Update:** Nach Passwortaenderung muss der
+   CNPG-Cluster die neue Role uebernehmen. Status pruefbar ueber
+   `kubectl get cluster cnpg-erp -n databases -o jsonpath='{.status.managedRolesStatus}'`
+
+---
+
 ## Naechste Schritte
 
-- OpenProject deployen (cnpg-erp Cluster)
 - Odoo deployen (MariaDB Galera)
 - Keycloak deployen (cnpg-shared)
+- OpenProject Update auf neuere Version pruefen
 - Weitere Apps nach Bedarf
 
 ---
@@ -529,3 +727,5 @@ kubernetes/
 | 25.02.2026 | Initiale Version (Planungsdokument) |
 | 25.02.2026 | n8n erfolgreich deployed (Schritt 6.1 abgeschlossen) |
 | 26.02.2026 | Garage S3 v2.2.0 deployed (Schritt 6.1b abgeschlossen) |
+| 26.02.2026 | Garage S3 Backup auf NAS10 via rclone (Schritt 6.1c abgeschlossen) |
+| 26.02.2026 | OpenProject 17.1.1 deployed mit Hocuspocus (Schritt 6.2 abgeschlossen) |
