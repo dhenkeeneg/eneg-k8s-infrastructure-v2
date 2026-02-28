@@ -66,9 +66,13 @@ spec:
           args:
             - "--config=/config/odoo.conf"
           env:
-            # Das offizielle Odoo-Entrypoint-Script nutzt diese ENV-Variablen
-            # und ueberschreibt damit die odoo.conf Werte fuer DB-Verbindung.
-            # Ohne diese Variablen faellt Odoo auf den Default-Host "db" zurueck.
+            # ODOO_RC zeigt das Entrypoint-Script auf unsere Config-Datei.
+            # Das Script liest db_host/db_port/db_user/db_password aus dieser
+            # Datei und uebergibt sie als CLI-Argumente an Odoo.
+            # Ohne ODOO_RC sucht es in /etc/odoo/odoo.conf (Default, leer).
+            - name: ODOO_RC
+              value: "/config/odoo.conf"
+            # HOST/PASSWORD als Fallback falls check_config fehlschlaegt
             - name: HOST
               value: "cnpg-erp-rw.databases.svc.cluster.local"
             - name: PORT
