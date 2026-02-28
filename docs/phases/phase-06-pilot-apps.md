@@ -84,7 +84,7 @@ Secrets werden getrennt mit SOPS verschluesselt und via KSOPS deployed.
 | 6.1b | Garage S3: In-Cluster Object Storage (3-Node, Replication 2) | ✅ Abgeschlossen |
 | 6.1c | Garage S3 Backup: Taegliches Backup auf NAS10 via rclone | ✅ Abgeschlossen |
 | 6.2 | OpenProject: DB-Rolle + Database + Deployment + Ingress + S3 + Hocuspocus | ✅ Abgeschlossen |
-| 6.3 | Odoo 18 CE: DB-Rolle + Database + Deployment + Ingress + Filestore-Backup | 🔄 In Vorbereitung |
+| 6.3 | Odoo 18 CE: DB-Rolle + Database + Deployment + Ingress + Filestore-Backup | ✅ Abgeschlossen |
 | 6.4 | Keycloak: DB-Rolle + Database + Deployment + Ingress | 🔲 Offen |
 | 6.5 | Weitere Apps nach Bedarf | 🔲 Offen |
 | 6.6 | Validierung + Dokumentation | 🔲 Offen |
@@ -134,11 +134,13 @@ Secrets werden getrennt mit SOPS verschluesselt und via KSOPS deployed.
 | 7 | n8n-secrets | App-Secrets: Encryption Key + DB-Passwort (KSOPS) |
 | 7 | openproject-secrets | App-Secrets: SECRET_KEY_BASE, Hocuspocus, DB-URL, S3-Keys (KSOPS) |
 | 7 | odoo-secrets | App-Secrets: Admin-Passwort + DB-Passwort (KSOPS) |
+| 7 | odoo-backup-secrets | Backup-Credentials: NAS10 S3-Keys (KSOPS) |
 | 7 | garage-backup-secrets | Backup-Credentials: Garage + NAS10 S3-Keys (KSOPS) |
 | 8 | n8n | App-Deployment: Namespace, Deployment, Service, PVC, Ingress |
 | 8 | openproject | App-Deployment: Namespace, Web, Worker, Memcached, Hocuspocus, PVC, Ingress |
 | 8 | odoo | App-Deployment: Namespace, Deployment, Service, PVC, ConfigMap, Ingress |
 | 8 | garage-backup | CronJob: Taegliches rclone Backup Garage -> NAS10 |
+| 9 | odoo-backup | CronJob: Taegliches rclone Backup Odoo Filestore -> NAS10 |
 
 ---
 
@@ -350,7 +352,7 @@ kubectl exec -n garage garage-0 -- /garage layout apply --version 1
 | s3-dev-v2.eneg.de | CNAME | traefik-dev.eneg.de | Garage S3 API | ✅ Aktiv |
 | s3-gui-dev-v2.eneg.de | CNAME | traefik-dev.eneg.de | Garage WebUI | ✅ Aktiv |
 | openproject-dev-v2.eneg.de | CNAME | traefik-dev.eneg.de | OpenProject | ✅ Aktiv |
-| odoo-dev-v2.eneg.de | CNAME | traefik-dev.eneg.de | Odoo 18 CE | 🔲 Vorbereitet |
+| odoo-dev-v2.eneg.de | CNAME | traefik-dev.eneg.de | Odoo 18 CE | ✅ Aktiv |
 | idoit-dev-v2.eneg.de | CNAME | traefik-dev.eneg.de | i-doit | 🔲 Vorbereitet |
 
 ---
@@ -503,16 +505,34 @@ kubernetes/
 │       │       ├── secret-generator.yaml
 │       │       ├── n8n-secrets.enc.yaml
 │       │       └── n8n-secrets.yaml.template
-│       └── openproject/
+│       ├── openproject/
+│       │   ├── namespace.yaml
+│       │   ├── deployment.yaml            # PVC, Memcached, Hocuspocus, Web, Worker, Seeder
+│       │   ├── service.yaml
+│       │   ├── ingress.yaml               # Certificate + IngressRoute (inkl. WebSocket)
+│       │   └── secrets/
+│       │       ├── kustomization.yaml
+│       │       ├── secret-generator.yaml
+│       │       ├── openproject-secrets.enc.yaml
+│       │       └── openproject-secrets.yaml.template
+│       └── odoo/
 │           ├── namespace.yaml
-│           ├── deployment.yaml            # PVC, Memcached, Hocuspocus, Web, Worker, Seeder
-│           ├── service.yaml
+│           ├── configmap.yaml             # odoo.conf (Multi-Process)
+│           ├── deployment.yaml            # 1 Replica, Init-Container, PVC
+│           ├── service.yaml               # Port 8069 + 8072
 │           ├── ingress.yaml               # Certificate + IngressRoute (inkl. WebSocket)
+│           ├── backup/
+│           │   ├── cronjob.yaml           # rclone CronJob + ConfigMap, podAffinity
+│           │   └── secrets/
+│           │       ├── kustomization.yaml
+│           │       ├── secret-generator.yaml
+│           │       ├── odoo-backup-credentials.enc.yaml
+│           │       └── odoo-backup-credentials.yaml.template
 │           └── secrets/
 │               ├── kustomization.yaml
 │               ├── secret-generator.yaml
-│               ├── openproject-secrets.enc.yaml
-│               └── openproject-secrets.yaml.template
+│               ├── odoo-secrets.enc.yaml
+│               └── odoo-secrets.yaml.template
 └── environments/
     └── dev/
         └── infrastructure/
@@ -523,8 +543,12 @@ kubernetes/
             ├── cnpg-databases-app.yaml    # ArgoCD App (Wave 6)
             ├── n8n-secrets-app.yaml       # ArgoCD App (Wave 7)
             ├── openproject-secrets-app.yaml # ArgoCD App (Wave 7)
+            ├── odoo-secrets-app.yaml      # ArgoCD App (Wave 7)
+            ├── odoo-backup-secrets-app.yaml # ArgoCD App (Wave 7)
             ├── n8n-app.yaml               # ArgoCD App (Wave 8)
             ├── openproject-app.yaml       # ArgoCD App (Wave 8)
+            ├── odoo-app.yaml              # ArgoCD App (Wave 8)
+            ├── odoo-backup-app.yaml       # ArgoCD App (Wave 9)
             └── ... (bestehende Apps)
 ```
 
@@ -713,9 +737,181 @@ Traefik (TLS-Terminierung)
 
 ---
 
+### 6.3 — Odoo 18 CE ERP-System ✅
+
+**Abgeschlossen am:** 28.02.2026
+**URL:** https://odoo-dev-v2.eneg.de
+**Version:** odoo:18 (Community Edition, 18.0-20260217)
+**Default-Login:** admin / admin (Passwortaenderung beim ersten Login)
+
+#### Architektur
+
+Odoo wird als Single-Replica Multi-Process Deployment betrieben:
+
+```
+Browser (https://odoo-dev-v2.eneg.de)
+    |
+Traefik (TLS-Terminierung)
+    |
+    ├── /websocket → odoo:8072 (Gevent/WebSocket)
+    └── /* → odoo:8069 (HTTP-Worker)
+                  |
+                  ├── PostgreSQL (cnpg-erp-rw:5432) — Datenbank
+                  └── PVC /var/lib/odoo — Filestore (Attachments)
+                                |
+                          rclone CronJob (taeglich 05:00)
+                                |
+                          NAS10 S3 (k8s-dev-odoo-backup)
+```
+
+**Multi-Process Modus (workers=2):**
+- 2 HTTP-Worker (Port 8069)
+- 1 Gevent-Worker fuer WebSocket/Live-Chat (Port 8072)
+- 1 Cron-Worker (max_cron_threads=1)
+
+**Warum nur 1 Replica:**
+Odoo ist nicht horizontal skalierbar (In-Memory Sessions, Cron-Locks,
+ORM-Cache, Filestore RWO). Skalierung erfolgt vertikal ueber mehr
+Worker-Prozesse und CPU/Memory.
+
+#### Installierte Komponenten
+
+| Ressource | Namespace | Name | Status |
+|---|---|---|---|
+| Database CRD | databases | odoo | ✅ Erstellt |
+| Managed Role | databases | odoo (auf cnpg-erp) | ✅ Login aktiv |
+| Secret (DB) | databases | odoo-db-credentials | ✅ SOPS/KSOPS |
+| Namespace | odoo | odoo | ✅ Erstellt |
+| Secret (App) | odoo | odoo-secrets | ✅ SOPS/KSOPS |
+| Secret (Backup) | odoo | odoo-backup-credentials | ✅ SOPS/KSOPS |
+| ConfigMap | odoo | odoo-config | ✅ odoo.conf |
+| ConfigMap | odoo | odoo-backup-config | ✅ rclone.conf + backup.sh |
+| PVC | odoo | odoo-filestore (10Gi Longhorn) | ✅ Bound |
+| Deployment | odoo | odoo (1 Replica, Multi-Process) | ✅ Running |
+| Service | odoo | odoo (ClusterIP:8069 + 8072) | ✅ Active |
+| CronJob | odoo | odoo-backup | ✅ 0 5 * * * (Europe/Berlin) |
+| Certificate | traefik | odoo-tls | ✅ Ready (Let's Encrypt) |
+| IngressRoute | traefik | odoo | ✅ Active (inkl. WebSocket) |
+
+#### ArgoCD Applications
+
+| Application | Sync | Health | Wave |
+|---|---|---|---|
+| odoo-secrets | Synced | Healthy | 7 |
+| odoo-backup-secrets | Synced | Healthy | 7 |
+| odoo | Synced | Healthy | 8 |
+| odoo-backup | Synced | Healthy | 9 |
+
+#### Odoo Konfiguration (odoo.conf)
+
+| Parameter | Wert |
+|---|---|
+| db_host | cnpg-erp-rw.databases.svc.cluster.local |
+| db_port | 5432 |
+| db_user | odoo |
+| db_name | odoo |
+| dbfilter | ^odoo$ |
+| list_db | False |
+| proxy_mode | True |
+| workers | 2 |
+| max_cron_threads | 1 |
+| gevent_port | 8072 |
+| data_dir | /var/lib/odoo |
+
+#### Filestore-Backup
+
+| Parameter | Wert |
+|---|---|
+| Tool | rclone/rclone:1.73.1 |
+| Frequenz | Taeglich 05:00 Europe/Berlin |
+| Quelle | PVC odoo-filestore (/var/lib/odoo) |
+| Ziel | NAS10 S3 (k8s-dev-odoo-backup) |
+| Retention | 32 Tage (--backup-dir Pattern) |
+| podAffinity | Erzwingt gleichen Node wie Odoo-Pod (RWO-PVC) |
+
+#### Resources (DEV)
+
+| Parameter | Request | Limit |
+|---|---|---|
+| CPU | 500m | 2 |
+| Memory | 512Mi | 2Gi |
+| PVC Filestore | 10Gi (Longhorn) | - |
+
+#### Secrets (SOPS-verschluesselt)
+
+| Secret | Namespace | Keys |
+|---|---|---|
+| odoo-db-credentials | databases | username, password |
+| odoo-secrets | odoo | db-password, admin-password |
+| odoo-backup-credentials | odoo | NAS10_ACCESS_KEY_ID, NAS10_SECRET_ACCESS_KEY |
+
+#### DB-Initialisierung (einmalig)
+
+Odoo benoetigt eine einmalige DB-Initialisierung bevor `/web/health`
+funktioniert. Das wird als separater Pod ohne HTTP-Server ausgefuehrt:
+
+```bash
+kubectl run odoo-init -n odoo --rm -it --restart=Never \
+  --image=odoo:18 \
+  --overrides='{
+    "spec": {
+      "securityContext": {"fsGroup": 101, "runAsUser": 101, "runAsGroup": 101},
+      "containers": [{
+        "name": "odoo-init",
+        "image": "odoo:18",
+        "args": ["-i", "base", "--stop-after-init", "--no-http"],
+        "volumeMounts": [
+          {"name": "config", "mountPath": "/config", "readOnly": true},
+          {"name": "filestore", "mountPath": "/var/lib/odoo"}
+        ],
+        "env": [
+          {"name": "ODOO_RC", "value": "/config/odoo.conf"},
+          {"name": "HOST", "value": "cnpg-erp-rw.databases.svc.cluster.local"},
+          {"name": "PORT", "value": "5432"},
+          {"name": "USER", "value": "odoo"},
+          {"name": "PASSWORD", "valueFrom": {"secretKeyRef": {"name": "odoo-secrets", "key": "db-password"}}}
+        ]
+      }],
+      "volumes": [
+        {"name": "config", "configMap": {"name": "odoo-config"}},
+        {"name": "filestore", "persistentVolumeClaim": {"claimName": "odoo-filestore"}}
+      ]
+    }
+  }'
+```
+
+#### Key Learnings Odoo
+
+1. **ODOO_RC Environment-Variable:** Das offizielle Odoo Docker-Entrypoint-Script
+   liest die Config aus `ODOO_RC` (Default: `/etc/odoo/odoo.conf`). Wenn die
+   Config an einem anderen Pfad liegt, muss ODOO_RC explizit gesetzt werden.
+   Ohne ODOO_RC findet das Script die DB-Werte nicht und faellt auf den
+   Default-Host `db` zurueck.
+
+2. **Entrypoint-Script und check_config:** Das Entrypoint liest `db_host`,
+   `db_port`, `db_user`, `db_password` aus der Config (via grep) und uebergibt
+   sie als CLI-Argumente. ENV-Variablen `HOST`, `PORT`, `USER`, `PASSWORD`
+   dienen als Fallback wenn die Config-Werte fehlen.
+
+3. **DB-Init vor erstem Start:** Odoo startet nicht ohne Datenbankschema.
+   `/web/health` gibt 500 mit `KeyError: 'ir.http'` zurueck. Loesung:
+   Einmaliger Init-Pod mit `-i base --stop-after-init --no-http`.
+
+4. **Init-Pod: args statt command:** Bei `kubectl run --overrides` muss `args`
+   (nicht `command`) verwendet werden, damit das Entrypoint-Script ausgefuehrt
+   wird. Mit `command` wird das Entrypoint umgangen und ENV-Variablen wie
+   `HOST`/`PASSWORD` werden nicht in CLI-Argumente umgewandelt.
+
+5. **Longhorn RWO und Backup-CronJob:** Der Backup-Pod muss auf demselben Node
+   wie der Odoo-Pod laufen, da Longhorn PVCs ReadWriteOnce sind und nicht
+   cross-node gemountet werden koennen. Loesung: `podAffinity` mit
+   `requiredDuringSchedulingIgnoredDuringExecution` auf Label
+   `app.kubernetes.io/name: odoo`.
+
+---
+
 ## Naechste Schritte
 
-- Odoo 18 CE deployen (cnpg-erp, Multi-Process, PVC-Filestore mit Backup)
 - Keycloak deployen (cnpg-shared)
 - Weitere Apps nach Bedarf
 
@@ -732,3 +928,4 @@ Traefik (TLS-Terminierung)
 | 26.02.2026 | OpenProject 17.1.1 deployed mit Hocuspocus (Schritt 6.2 abgeschlossen) |
 | 27.02.2026 | OpenProject Update 17.1.1 -> 17.1.2-slim (Security-Fixes CVE-2026-27718 ff.) |
 | 28.02.2026 | Odoo 18 CE Deployment vorbereitet (Phase 6.3, Chat-Anweisung erstellt) |
+| 28.02.2026 | Odoo 18 CE erfolgreich deployed (Schritt 6.3 abgeschlossen) |
