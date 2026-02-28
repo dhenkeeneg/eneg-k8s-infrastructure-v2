@@ -99,6 +99,15 @@ spec:
             app.kubernetes.io/name: odoo-backup
         spec:
           restartPolicy: OnFailure
+          # Backup-Pod muss auf demselben Node wie der Odoo-Pod laufen,
+          # weil das PVC (Longhorn RWO) nur von einem Node gemountet werden kann.
+          affinity:
+            podAffinity:
+              requiredDuringSchedulingIgnoredDuringExecution:
+                - labelSelector:
+                    matchLabels:
+                      app.kubernetes.io/name: odoo
+                  topologyKey: kubernetes.io/hostname
           containers:
             - name: rclone
               image: rclone/rclone:1.73.1
