@@ -57,7 +57,7 @@ AUFGABE 1: OpenProject Update
 
 AUFGABE 2: Odoo Deployment (Phase 6.3) — falls Zeit
 - Odoo Community Edition deployen
-- Datenbank: MariaDB Galera Cluster (bereits vorhanden)
+- Datenbank: Noch abstimmen ob MariaDB Galera Cluster oder postgres-erp (beide bereits vorhanden)
 - DNS: odoo-dev-v2.eneg.de (CNAME auf traefik-dev.eneg.de)
 - Deployment-Pattern: Raw Kubernetes Manifests (wie OpenProject)
 - Secrets: SOPS-verschluesselt
@@ -85,7 +85,7 @@ AUFGABE 2: Odoo Deployment (Phase 6.3) — falls Zeit
 | Garage S3 | v2.2.0 | garage | 3 Nodes, ~30GB eff. |
 | Garage WebUI | 1.1.0 | garage | Running |
 | n8n | 2.8.4 | n8n | Running |
-| OpenProject | 17.1.1-slim | openproject | Running |
+| OpenProject | 17.1.2-slim | openproject | Running |
 | Hocuspocus | latest | openproject | Running |
 | Memcached | 1.6.40-alpine | openproject | Running |
 
@@ -106,7 +106,7 @@ AUFGABE 2: Odoo Deployment (Phase 6.3) — falls Zeit
 ### OpenProject Architektur (aktuell)
 
 **Images:**
-- Web/Worker/Seeder: `openproject/openproject:17.1.1-slim`
+- Web/Worker/Seeder: `openproject/openproject:17.1.2-slim`
 - Hocuspocus: `openproject/hocuspocus:latest`
 - Memcached: `memcached:1.6.40-alpine`
 

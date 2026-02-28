@@ -1,0 +1,18 @@
+---
+# CloudNativePG Database: odoo
+# Erstellt die odoo-Datenbank deklarativ auf dem cnpg-erp Cluster
+# Owner ist die managed role "odoo" (definiert in cnpg-erp.yaml)
+apiVersion: postgresql.cnpg.io/v1
+kind: Database
+metadata:
+  name: odoo
+  namespace: databases
+  labels:
+    app.kubernetes.io/part-of: cloudnative-pg
+    app.kubernetes.io/managed-by: argocd
+    app.kubernetes.io/component: database
+spec:
+  name: odoo
+  owner: odoo
+  cluster:
+    name: cnpg-erp

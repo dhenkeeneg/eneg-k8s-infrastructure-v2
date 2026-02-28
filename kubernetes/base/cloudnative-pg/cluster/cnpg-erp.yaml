@@ -26,8 +26,18 @@ spec:
         ensure: present
         login: true
         createdb: false
+        connectionLimit: -1
+        inherit: true
         passwordSecret:
           name: openproject-db-credentials
+      - name: odoo
+        ensure: present
+        login: true
+        createdb: false
+        connectionLimit: -1
+        inherit: true
+        passwordSecret:
+          name: odoo-db-credentials
 
   # PostgreSQL Konfiguration (DEV - hoeher dimensioniert als shared)
   postgresql:
