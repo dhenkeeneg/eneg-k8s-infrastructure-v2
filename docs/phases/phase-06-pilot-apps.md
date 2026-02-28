@@ -84,7 +84,7 @@ Secrets werden getrennt mit SOPS verschluesselt und via KSOPS deployed.
 | 6.1b | Garage S3: In-Cluster Object Storage (3-Node, Replication 2) | ✅ Abgeschlossen |
 | 6.1c | Garage S3 Backup: Taegliches Backup auf NAS10 via rclone | ✅ Abgeschlossen |
 | 6.2 | OpenProject: DB-Rolle + Database + Deployment + Ingress + S3 + Hocuspocus | ✅ Abgeschlossen |
-| 6.3 | Odoo: DB-Rolle + Database + Deployment + Ingress | 🔲 Offen |
+| 6.3 | Odoo 18 CE: DB-Rolle + Database + Deployment + Ingress + Filestore-Backup | 🔄 In Vorbereitung |
 | 6.4 | Keycloak: DB-Rolle + Database + Deployment + Ingress | 🔲 Offen |
 | 6.5 | Weitere Apps nach Bedarf | 🔲 Offen |
 | 6.6 | Validierung + Dokumentation | 🔲 Offen |
@@ -133,9 +133,11 @@ Secrets werden getrennt mit SOPS verschluesselt und via KSOPS deployed.
 | 6 | cnpg-databases | Database CRDs (n8n, etc.) |
 | 7 | n8n-secrets | App-Secrets: Encryption Key + DB-Passwort (KSOPS) |
 | 7 | openproject-secrets | App-Secrets: SECRET_KEY_BASE, Hocuspocus, DB-URL, S3-Keys (KSOPS) |
+| 7 | odoo-secrets | App-Secrets: Admin-Passwort + DB-Passwort (KSOPS) |
 | 7 | garage-backup-secrets | Backup-Credentials: Garage + NAS10 S3-Keys (KSOPS) |
 | 8 | n8n | App-Deployment: Namespace, Deployment, Service, PVC, Ingress |
 | 8 | openproject | App-Deployment: Namespace, Web, Worker, Memcached, Hocuspocus, PVC, Ingress |
+| 8 | odoo | App-Deployment: Namespace, Deployment, Service, PVC, ConfigMap, Ingress |
 | 8 | garage-backup | CronJob: Taegliches rclone Backup Garage -> NAS10 |
 
 ---
@@ -348,7 +350,7 @@ kubectl exec -n garage garage-0 -- /garage layout apply --version 1
 | s3-dev-v2.eneg.de | CNAME | traefik-dev.eneg.de | Garage S3 API | ✅ Aktiv |
 | s3-gui-dev-v2.eneg.de | CNAME | traefik-dev.eneg.de | Garage WebUI | ✅ Aktiv |
 | openproject-dev-v2.eneg.de | CNAME | traefik-dev.eneg.de | OpenProject | ✅ Aktiv |
-| odoo-dev-v2.eneg.de | CNAME | traefik-dev.eneg.de | Odoo | 🔲 Vorbereitet |
+| odoo-dev-v2.eneg.de | CNAME | traefik-dev.eneg.de | Odoo 18 CE | 🔲 Vorbereitet |
 | idoit-dev-v2.eneg.de | CNAME | traefik-dev.eneg.de | i-doit | 🔲 Vorbereitet |
 
 ---
@@ -595,7 +597,7 @@ QuObject S3 synchronisiert.
 
 **Abgeschlossen am:** 26.02.2026
 **URL:** https://openproject-dev-v2.eneg.de
-**Version:** openproject/openproject:17.1.1-slim
+**Version:** openproject/openproject:17.1.2-slim (Update 27.02.2026, vorher 17.1.1)
 **Hocuspocus:** openproject/hocuspocus:latest (Collaborative Editing)
 **Default-Login:** admin / admin (Passwortaenderung beim ersten Login)
 
@@ -713,9 +715,8 @@ Traefik (TLS-Terminierung)
 
 ## Naechste Schritte
 
-- Odoo deployen (MariaDB Galera)
+- Odoo 18 CE deployen (cnpg-erp, Multi-Process, PVC-Filestore mit Backup)
 - Keycloak deployen (cnpg-shared)
-- OpenProject Update auf neuere Version pruefen
 - Weitere Apps nach Bedarf
 
 ---
@@ -729,3 +730,5 @@ Traefik (TLS-Terminierung)
 | 26.02.2026 | Garage S3 v2.2.0 deployed (Schritt 6.1b abgeschlossen) |
 | 26.02.2026 | Garage S3 Backup auf NAS10 via rclone (Schritt 6.1c abgeschlossen) |
 | 26.02.2026 | OpenProject 17.1.1 deployed mit Hocuspocus (Schritt 6.2 abgeschlossen) |
+| 27.02.2026 | OpenProject Update 17.1.1 -> 17.1.2-slim (Security-Fixes CVE-2026-27718 ff.) |
+| 28.02.2026 | Odoo 18 CE Deployment vorbereitet (Phase 6.3, Chat-Anweisung erstellt) |
