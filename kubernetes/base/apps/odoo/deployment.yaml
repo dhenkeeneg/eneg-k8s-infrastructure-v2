@@ -65,7 +65,21 @@ spec:
           # Odoo liest Config aus -c Parameter
           args:
             - "--config=/config/odoo.conf"
-          envFrom: []
+          env:
+            # Das offizielle Odoo-Entrypoint-Script nutzt diese ENV-Variablen
+            # und ueberschreibt damit die odoo.conf Werte fuer DB-Verbindung.
+            # Ohne diese Variablen faellt Odoo auf den Default-Host "db" zurueck.
+            - name: HOST
+              value: "cnpg-erp-rw.databases.svc.cluster.local"
+            - name: PORT
+              value: "5432"
+            - name: USER
+              value: "odoo"
+            - name: PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: odoo-secrets
+                  key: db-password
           volumeMounts:
             - name: config
               mountPath: /config
