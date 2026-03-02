@@ -81,7 +81,7 @@ variable "gateway" {
 
 variable "dns_servers" {
   type        = list(string)
-  default     = ["192.168.161.101", "192.168.161.102", "192.168.161.103"]
+  default     = ["192.168.161.104", "192.168.161.105", "192.168.161.106"]
   description = "DNS Server Liste"
 }
 

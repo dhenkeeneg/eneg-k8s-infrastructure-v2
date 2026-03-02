@@ -31,7 +31,7 @@ module "my_vm" {
   # Netzwerk
   ip_address  = "192.168.180.100"
   gateway     = "192.168.180.247"
-  dns_servers = ["192.168.161.101", "192.168.161.102"]
+  dns_servers = ["192.168.161.104", "192.168.161.105"]
 }
 ```
 
@@ -54,7 +54,7 @@ module "my_vm" {
 | `ip_address` | string | Statische IP | - |
 | `netmask` | number | Netzmaske (Prefix) | 24 |
 | `gateway` | string | Gateway IP | - |
-| `dns_servers` | list(string) | DNS Server | 192.168.161.101-103 |
+| `dns_servers` | list(string) | DNS Server | 192.168.161.104-106 |
 
 ## Outputs
 
