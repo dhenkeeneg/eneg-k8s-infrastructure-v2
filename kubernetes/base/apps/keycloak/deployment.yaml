@@ -33,6 +33,9 @@ spec:
             - name: http
               containerPort: 8080
               protocol: TCP
+            - name: management
+              containerPort: 9000
+              protocol: TCP
           env:
             # Datenbank
             - name: KC_DB
@@ -82,7 +85,7 @@ spec:
           startupProbe:
             httpGet:
               path: /health/started
-              port: http
+              port: management
             initialDelaySeconds: 15
             periodSeconds: 10
             timeoutSeconds: 5
@@ -90,14 +93,14 @@ spec:
           livenessProbe:
             httpGet:
               path: /health/live
-              port: http
+              port: management
             periodSeconds: 15
             timeoutSeconds: 5
             failureThreshold: 3
           readinessProbe:
             httpGet:
               path: /health/ready
-              port: http
+              port: management
             periodSeconds: 10
             timeoutSeconds: 5
             failureThreshold: 3
