@@ -1,0 +1,17 @@
+---
+# ArgoCD Cmd Params ConfigMap
+# Konfiguriert ArgoCD Server-Parameter wie Polling-Intervall
+# Dokumentation: https://argo-cd.readthedocs.io/en/stable/operator-manual/argocd-cmd-params-cm/
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: argocd-cmd-params-cm
+  namespace: argocd
+  labels:
+    app.kubernetes.io/name: argocd-cmd-params-cm
+    app.kubernetes.io/part-of: argocd
+data:
+  # Git-Polling-Intervall: Wie oft ArgoCD das Git-Repository auf Aenderungen prueft
+  # Default: 180 (3 Minuten), hier auf 60 Sekunden (1 Minute) reduziert
+  reposerver.repo.cache.expiration: "60s"
+  timeout.reconciliation: "60s"

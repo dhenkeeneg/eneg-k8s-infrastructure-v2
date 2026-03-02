@@ -5,6 +5,7 @@ namespace: argocd
 
 resources:
   - argocd-cm.yaml
+  - argocd-cmd-params-cm.yaml
 
 # HINWEIS: argocd-repo-server-ksops-patch.yaml wird NICHT hier eingebunden.
 # ArgoCD kann sich nicht selbst patchen (Deployment ist nicht Teil dieser Kustomization).
