@@ -86,6 +86,24 @@ spec:
         ensure: present
         passwordSecret:
           name: n8n-db-credentials
+      - name: keycloak
+        login: true
+        createdb: false
+        superuser: false
+        inherit: true
+        connectionLimit: -1
+        ensure: present
+        passwordSecret:
+          name: keycloak-db-credentials
+      - name: keycloak
+        login: true
+        createdb: false
+        superuser: false
+        inherit: true
+        connectionLimit: -1
+        ensure: present
+        passwordSecret:
+          name: keycloak-db-credentials
 
   # Monitoring (vorbereitet fuer Phase 7)
   monitoring:
