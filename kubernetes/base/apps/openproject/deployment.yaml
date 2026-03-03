@@ -280,6 +280,40 @@ spec:
             # TMPDIR
             - name: TMPDIR
               value: "/tmp/openproject"
+            # Keycloak OIDC SSO
+            - name: OPENPROJECT_OPENID__CONNECT_KEYCLOAK_DISPLAY__NAME
+              value: "Keycloak"
+            - name: OPENPROJECT_OPENID__CONNECT_KEYCLOAK_HOST
+              value: "keycloak-dev-v2.eneg.de"
+            - name: OPENPROJECT_OPENID__CONNECT_KEYCLOAK_IDENTIFIER
+              value: "openproject"
+            - name: OPENPROJECT_OPENID__CONNECT_KEYCLOAK_SECRET
+              valueFrom:
+                secretKeyRef:
+                  name: openproject-secrets
+                  key: oidc-client-secret
+            - name: OPENPROJECT_OPENID__CONNECT_KEYCLOAK_ISSUER
+              value: "https://keycloak-dev-v2.eneg.de/realms/eneg"
+            - name: OPENPROJECT_OPENID__CONNECT_KEYCLOAK_AUTHORIZATION__ENDPOINT
+              value: "https://keycloak-dev-v2.eneg.de/realms/eneg/protocol/openid-connect/auth"
+            - name: OPENPROJECT_OPENID__CONNECT_KEYCLOAK_TOKEN__ENDPOINT
+              value: "https://keycloak-dev-v2.eneg.de/realms/eneg/protocol/openid-connect/token"
+            - name: OPENPROJECT_OPENID__CONNECT_KEYCLOAK_USERINFO__ENDPOINT
+              value: "https://keycloak-dev-v2.eneg.de/realms/eneg/protocol/openid-connect/userinfo"
+            - name: OPENPROJECT_OPENID__CONNECT_KEYCLOAK_END__SESSION__ENDPOINT
+              value: "https://keycloak-dev-v2.eneg.de/realms/eneg/protocol/openid-connect/logout"
+            - name: OPENPROJECT_OPENID__CONNECT_KEYCLOAK_JWKS__URI
+              value: "https://keycloak-dev-v2.eneg.de/realms/eneg/protocol/openid-connect/certs"
+            - name: OPENPROJECT_OPENID__CONNECT_KEYCLOAK_SCOPE
+              value: "[openid,profile,email]"
+            - name: OPENPROJECT_OPENID__CONNECT_KEYCLOAK_ATTRIBUTE__MAP_LOGIN
+              value: "preferred_username"
+            - name: OPENPROJECT_OPENID__CONNECT_KEYCLOAK_ATTRIBUTE__MAP_EMAIL
+              value: "email"
+            - name: OPENPROJECT_OPENID__CONNECT_KEYCLOAK_ATTRIBUTE__MAP_FIRST__NAME
+              value: "given_name"
+            - name: OPENPROJECT_OPENID__CONNECT_KEYCLOAK_ATTRIBUTE__MAP_LAST__NAME
+              value: "family_name"
             # Locale und Zeitzone
             - name: OPENPROJECT_DEFAULT__LANGUAGE
               value: "de"
