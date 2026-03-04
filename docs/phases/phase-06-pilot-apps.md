@@ -85,7 +85,9 @@ Secrets werden getrennt mit SOPS verschluesselt und via KSOPS deployed.
 | 6.1c | Garage S3 Backup: Taegliches Backup auf NAS10 via rclone | ✅ Abgeschlossen |
 | 6.2 | OpenProject: DB-Rolle + Database + Deployment + Ingress + S3 + Hocuspocus | ✅ Abgeschlossen |
 | 6.3 | Odoo 18 CE: DB-Rolle + Database + Deployment + Ingress + Filestore-Backup | ✅ Abgeschlossen |
-| 6.4 | Keycloak: DB-Rolle + Database + Deployment + Ingress | 🔲 Offen |
+| 6.4 | Keycloak: DB-Rolle + Database + Deployment + Ingress | ✅ Abgeschlossen |
+| 6.4b | Keycloak: Realm, AD-Anbindung, SSO-Clients | ✅ Abgeschlossen |
+| 6.4c | App-Authentifizierung: OpenProject LDAP, Odoo/n8n SSO-Vorbereitung | 🔄 In Bearbeitung |
 | 6.5 | Weitere Apps nach Bedarf | 🔲 Offen |
 | 6.6 | Validierung + Dokumentation | 🔲 Offen |
 
@@ -136,9 +138,11 @@ Secrets werden getrennt mit SOPS verschluesselt und via KSOPS deployed.
 | 7 | odoo-secrets | App-Secrets: Admin-Passwort + DB-Passwort (KSOPS) |
 | 7 | odoo-backup-secrets | Backup-Credentials: NAS10 S3-Keys (KSOPS) |
 | 7 | garage-backup-secrets | Backup-Credentials: Garage + NAS10 S3-Keys (KSOPS) |
+| 7 | keycloak-secrets | App-Secrets: DB-Passwort + Admin-Passwort (KSOPS) |
 | 8 | n8n | App-Deployment: Namespace, Deployment, Service, PVC, Ingress |
 | 8 | openproject | App-Deployment: Namespace, Web, Worker, Memcached, Hocuspocus, PVC, Ingress |
 | 8 | odoo | App-Deployment: Namespace, Deployment, Service, PVC, ConfigMap, Ingress |
+| 8 | keycloak | App-Deployment: Namespace, Deployment, Service, Ingress |
 | 8 | garage-backup | CronJob: Taegliches rclone Backup Garage -> NAS10 |
 | 9 | odoo-backup | CronJob: Taegliches rclone Backup Odoo Filestore -> NAS10 |
 
@@ -353,6 +357,7 @@ kubectl exec -n garage garage-0 -- /garage layout apply --version 1
 | s3-gui-dev-v2.eneg.de | CNAME | traefik-dev.eneg.de | Garage WebUI | ✅ Aktiv |
 | openproject-dev-v2.eneg.de | CNAME | traefik-dev.eneg.de | OpenProject | ✅ Aktiv |
 | odoo-dev-v2.eneg.de | CNAME | traefik-dev.eneg.de | Odoo 18 CE | ✅ Aktiv |
+| keycloak-dev-v2.eneg.de | CNAME | traefik-dev.eneg.de | Keycloak | ✅ Aktiv |
 | idoit-dev-v2.eneg.de | CNAME | traefik-dev.eneg.de | i-doit | 🔲 Vorbereitet |
 
 ---
@@ -533,6 +538,16 @@ kubernetes/
 │               ├── secret-generator.yaml
 │               ├── odoo-secrets.enc.yaml
 │               └── odoo-secrets.yaml.template
+│       └── keycloak/
+│           ├── namespace.yaml
+│           ├── deployment.yaml            # Production-Mode, ENV-Konfiguration
+│           ├── service.yaml               # Port 8080
+│           ├── ingress.yaml               # Certificate + IngressRoute
+│           └── secrets/
+│               ├── kustomization.yaml
+│               ├── secret-generator.yaml
+│               ├── keycloak-secrets.enc.yaml
+│               └── keycloak-secrets.yaml.template
 └── environments/
     └── dev/
         └── infrastructure/
@@ -545,9 +560,11 @@ kubernetes/
             ├── openproject-secrets-app.yaml # ArgoCD App (Wave 7)
             ├── odoo-secrets-app.yaml      # ArgoCD App (Wave 7)
             ├── odoo-backup-secrets-app.yaml # ArgoCD App (Wave 7)
+            ├── keycloak-secrets-app.yaml   # ArgoCD App (Wave 7)
             ├── n8n-app.yaml               # ArgoCD App (Wave 8)
             ├── openproject-app.yaml       # ArgoCD App (Wave 8)
             ├── odoo-app.yaml              # ArgoCD App (Wave 8)
+            ├── keycloak-app.yaml          # ArgoCD App (Wave 8)
             ├── odoo-backup-app.yaml       # ArgoCD App (Wave 9)
             └── ... (bestehende Apps)
 ```
@@ -910,9 +927,218 @@ kubectl run odoo-init -n odoo --rm -it --restart=Never \
 
 ---
 
+### 6.4 — Keycloak Identity Management ✅
+
+**Abgeschlossen am:** 04.03.2026
+**URL:** https://keycloak-dev-v2.eneg.de
+**Version:** quay.io/keycloak/keycloak:26.5.4
+**Modus:** Production (`start`, nicht `start-dev`)
+**Default-Login:** admin / (SOPS-verschluesseltes Passwort)
+
+#### Architektur
+
+```
+Browser (https://keycloak-dev-v2.eneg.de)
+    |
+Traefik (TLS-Terminierung)
+    |
+    └── /* → keycloak:8080 (HTTP)
+                  |
+                  ├── PostgreSQL (cnpg-shared-rw:5432) — Datenbank
+                  └── Active Directory (ldap://dc01/dc02/dc03:389)
+```
+
+**Proxy-Konfiguration:**
+- Keycloak laeuft im Edge-Modus hinter Traefik
+- TLS wird von Traefik terminiert, intern HTTP auf Port 8080
+- Management-Port 9000 fuer Health/Metrics Endpoints (Keycloak 26+)
+
+#### Installierte Komponenten
+
+| Ressource | Namespace | Name | Status |
+|---|---|---|---|
+| Database CRD | databases | keycloak | ✅ Erstellt |
+| Managed Role | databases | keycloak (auf cnpg-shared) | ✅ Reconciled |
+| Secret (DB) | databases | keycloak-db-credentials | ✅ SOPS/KSOPS |
+| Namespace | keycloak | keycloak | ✅ Erstellt |
+| Secret (App) | keycloak | keycloak-secrets | ✅ SOPS/KSOPS |
+| Deployment | keycloak | keycloak (1 Replica) | ✅ Running |
+| Service | keycloak | keycloak (ClusterIP:8080) | ✅ Active |
+| Certificate | traefik | keycloak-tls | ✅ Ready (Let's Encrypt) |
+| IngressRoute | traefik | keycloak | ✅ Active |
+
+#### ArgoCD Applications
+
+| Application | Sync | Health | Wave |
+|---|---|---|---|
+| keycloak-secrets | Synced | Healthy | 7 |
+| keycloak | Synced | Healthy | 8 |
+
+#### Keycloak Umgebungsvariablen
+
+| Variable | Wert | Quelle |
+|---|---|---|
+| KC_DB | postgres | Env |
+| KC_DB_URL_HOST | cnpg-shared-rw.databases.svc.cluster.local | Env |
+| KC_DB_URL_PORT | 5432 | Env |
+| KC_DB_URL_DATABASE | keycloak | Env |
+| KC_DB_USERNAME | keycloak | Env |
+| KC_DB_PASSWORD | (verschluesselt) | Secret: keycloak-secrets/db-password |
+| KC_PROXY_HEADERS | xforwarded | Env |
+| KC_HTTP_ENABLED | true | Env |
+| KC_HOSTNAME | keycloak-dev-v2.eneg.de | Env |
+| KC_HEALTH_ENABLED | true | Env |
+| KC_METRICS_ENABLED | true | Env |
+| KC_BOOTSTRAP_ADMIN_USERNAME | admin | Env |
+| KC_BOOTSTRAP_ADMIN_PASSWORD | (verschluesselt) | Secret: keycloak-secrets/admin-password |
+
+#### Secrets (SOPS-verschluesselt)
+
+| Secret | Namespace | Keys |
+|---|---|---|
+| keycloak-db-credentials | databases | username, password |
+| keycloak-secrets | keycloak | db-password, admin-password |
+
+#### Resources (DEV)
+
+| Parameter | Request | Limit |
+|---|---|---|
+| CPU | 500m | 2 |
+| Memory | 512Mi | 1Gi |
+
+#### Key Learnings Keycloak
+
+1. **Health-Probes auf Management-Port 9000:** Keycloak 26+ verschiebt die
+   Health/Metrics-Endpoints (`/health/started`, `/health/live`, `/health/ready`)
+   auf einen separaten Management-Port (9000) statt Port 8080. Probes muessen
+   auf den named port `management` (9000) zeigen, nicht auf `http` (8080).
+
+2. **Production-Mode Command als args:** `start` muss als `args` (nicht `command`)
+   im Container-Spec uebergeben werden, damit der Keycloak-Entrypoint erhalten
+   bleibt. Beim ersten Start fuehrt Keycloak automatisch eine DB-Schema-Migration
+   und Quarkus-Augmentation durch (dauert ca. 18 Sekunden).
+
+3. **Startup-Probe grosszuegig:** failureThreshold=30, periodSeconds=10 gibt
+   Keycloak 300 Sekunden fuer den ersten Start (DB-Migration + Augmentation).
+
+4. **CNPG managed.roles Duplikat-Fehler:** Beim Hinzufuegen neuer Rollen
+   sorgfaeltig pruefen, dass keine doppelten Eintraege entstehen. CNPG
+   Webhook lehnt Duplikate mit "Role name is duplicate of another" ab.
+
+---
+
+### 6.4b — Keycloak Realm und AD-Anbindung ✅
+
+**Abgeschlossen am:** 04.03.2026
+**Realm:** eneg
+**AD-Anbindung:** LDAP (Port 389) gegen DC01/DC02/DC03
+
+#### Realm-Konfiguration
+
+| Parameter | Wert |
+|---|---|
+| Realm Name | eneg |
+| AD Connection | ldap://dc01.eneg.de ldap://dc02.eneg.de ldap://dc03.eneg.de |
+| Bind DN | CN=svc-k8s-keycloak,OU=K8s,OU=Sys-Accounts,OU=eNeG Benutzer,DC=eneg,DC=de |
+| Users DN | OU=eNeG Benutzer,DC=eneg,DC=de |
+| Search Scope | Subtree |
+| Edit Mode | READ_ONLY |
+| User Sync | Full sync taeglich, Changed users alle 5 Minuten |
+| Group Mapping | Flat (Preserve Group Inheritance: Off) |
+| Groups DN | OU=eNeG Gruppen,DC=eneg,DC=de |
+
+#### SSO-Clients (Keycloak)
+
+| Client ID | App | Typ | Status |
+|---|---|---|---|
+| openproject | OpenProject | OpenID Connect | ✅ Erstellt (nicht nutzbar, CE-Limitation) |
+| n8n | n8n | OpenID Connect | ✅ Erstellt (nicht nutzbar, CE-Limitation) |
+| odoo | Odoo 18 | OpenID Connect | ✅ Erstellt (Integration ausstehend) |
+
+#### Key Learnings AD-Anbindung
+
+1. **AD-Gruppen mit verschachtelten Parents:** Keycloak kann keine Gruppen mit
+   mehreren uebergeordneten Gruppen abbilden (Fehler: `GroupsMultipleParents`).
+   Loesung: `Preserve Group Inheritance: Off` im Group-LDAP-Mapper setzen,
+   damit Gruppen flach importiert werden.
+
+2. **User Groups Retrieve Strategy:** `LOAD_GROUPS_BY_MEMBER_ATTRIBUTE` fuer
+   Active Directory verwenden, da AD das `member`-Attribut auf Gruppen nutzt.
+
+---
+
+### 6.4c — App-Authentifizierung ✅
+
+**Abgeschlossen am:** 04.03.2026
+
+#### Authentifizierungs-Matrix
+
+| App | Methode | Status | Bemerkung |
+|---|---|---|---|
+| OpenProject CE | LDAP direkt gegen AD | ✅ Funktioniert | OIDC nur Enterprise |
+| Odoo 18 CE | Keycloak OIDC (geplant) | 🔲 Offen | Community-Modul erforderlich |
+| n8n CE | Keine SSO-Option | ❌ Nicht moeglich | OIDC/SAML nur Enterprise |
+| Keycloak | AD/LDAP Federation | ✅ Funktioniert | Realm "eneg" |
+
+#### OpenProject LDAP-Konfiguration
+
+OpenProject Community Edition unterstuetzt kein OIDC/SSO (Enterprise-only).
+Stattdessen wird LDAP direkt gegen Active Directory konfiguriert:
+
+| Parameter | Wert |
+|---|---|
+| Name | Active Directory |
+| Host | dc01.eneg.de |
+| Port | 389 |
+| LDAPS | Nein |
+| Account (Bind DN) | CN=svc-k8s-keycloak,OU=K8s,OU=Sys-Accounts,OU=eNeG Benutzer,DC=eneg,DC=de |
+| Base DN | OU=eNeG Benutzer,DC=eneg,DC=de |
+| Login-Attribut | mail |
+| Vorname-Attribut | givenName |
+| Nachname-Attribut | sn |
+| E-Mail-Attribut | mail |
+| On-the-fly-Erstellung | Nein (User werden manuell angelegt) |
+
+**Login:** User melden sich mit ihrer **E-Mail-Adresse** (z.B. `D.Henke@eneg.de`)
+und dem AD-Passwort an. Der Login-Wert in OpenProject muss exakt mit dem
+`mail`-Attribut im AD uebereinstimmen.
+
+**OIDC ENV-Variablen:** Im Deployment sind vorbereitend OIDC-Umgebungsvariablen
+fuer Keycloak enthalten (`OPENPROJECT_OPENID__CONNECT_KEYCLOAK_*`). Diese sind
+aktuell wirkungslos (Enterprise-Gate im Code), bleiben aber fuer eine spaetere
+Enterprise-Aktivierung erhalten.
+
+#### Key Learnings App-Authentifizierung
+
+1. **OpenProject OIDC ist Enterprise-only:** Der Seeder erstellt den Provider
+   in der Datenbank und markiert ihn als `available: true`, aber die OmniAuth-
+   Middleware registriert die Route `/auth/keycloak` nicht. Die Login-Seite
+   zeigt keinen SSO-Button. Log-Meldung: "OmniAuth SSO strategy
+   OpenProject::Plugins::AuthPlugin is only available for Enterprise Editions."
+
+2. **OpenProject LDAP Base DN erforderlich:** Ohne Base DN in der LDAP-
+   Konfiguration kann OpenProject keine User im AD finden. Anmeldung schlaegt
+   mit "invalid credentials" fehl.
+
+3. **sAMAccountName vs. mail als Login:** Der `sAMAccountName` im AD (z.B.
+   `dhenke`) entspricht nicht unbedingt dem gewuenschten Login-Format.
+   Durch Umstellung des Login-Attributs auf `mail` koennen User sich mit
+   ihrer E-Mail-Adresse anmelden. Der Login-Wert im OpenProject-User muss
+   exakt dem AD-`mail`-Attribut entsprechen.
+
+4. **n8n CE hat kein SSO:** OIDC/SAML ist nur in der n8n Enterprise Edition
+   verfuegbar. Die Community Edition unterstuetzt nur lokale Authentifizierung.
+
+5. **Odoo CE hat kein natives OIDC:** Fuer SSO wird ein Community-Modul
+   benoetigt (z.B. `auth_oauth`). Integration ist vorbereitet aber noch
+   nicht implementiert.
+
+---
+
 ## Naechste Schritte
 
-- Keycloak deployen (cnpg-shared)
+- Odoo SSO/OIDC ueber Keycloak (Community-Modul erforderlich)
+- n8n SSO (nur Enterprise Edition, CE nicht unterstuetzt)
 - Weitere Apps nach Bedarf
 
 ---
@@ -929,3 +1155,7 @@ kubectl run odoo-init -n odoo --rm -it --restart=Never \
 | 27.02.2026 | OpenProject Update 17.1.1 -> 17.1.2-slim (Security-Fixes CVE-2026-27718 ff.) |
 | 28.02.2026 | Odoo 18 CE Deployment vorbereitet (Phase 6.3, Chat-Anweisung erstellt) |
 | 28.02.2026 | Odoo 18 CE erfolgreich deployed (Schritt 6.3 abgeschlossen) |
+| 04.03.2026 | Keycloak 26.5.4 deployed (Schritt 6.4 abgeschlossen) |
+| 04.03.2026 | Keycloak Realm "eneg", AD-Anbindung, SSO-Clients (Schritt 6.4b abgeschlossen) |
+| 04.03.2026 | OpenProject LDAP-Authentifizierung gegen AD (Schritt 6.4c) |
+| 04.03.2026 | Erkenntnis: OpenProject OIDC und n8n SSO sind Enterprise-only |

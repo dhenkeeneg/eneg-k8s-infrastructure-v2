@@ -340,7 +340,7 @@ namespaces:
 
 | Komponente | Version | Status |
 |------------|---------|--------|
-| Keycloak | - | Phase 6+ |
+| Keycloak | 26.5.4 | Phase 6 ✅ |
 | Velero | - | Phase 10 |
 | Vaultwarden | - | Phase 6+ |
 
@@ -862,9 +862,9 @@ k8s-dev-23   Ready   control-plane,etcd   v1.35.1+k3s1
 
 | Schritt | App | Datenbank | Status |
 |---|---|---|---|
-| 6.2 | OpenProject | cnpg-erp (PostgreSQL) | 🔲 Naechster Schritt |
-| 6.3 | Odoo | cnpg-erp (PostgreSQL) | 🔲 Offen |
-| 6.4 | Keycloak | cnpg-shared (PostgreSQL) | 🔲 Offen |
+| 6.2 | OpenProject | cnpg-erp (PostgreSQL) | ✅ Abgeschlossen |
+| 6.3 | Odoo | cnpg-erp (PostgreSQL) | ✅ Abgeschlossen |
+| 6.4 | Keycloak | cnpg-shared (PostgreSQL) | ✅ Abgeschlossen |
 
 **Kritische Learnings Phase 6:**
 - Minimal Container Images (Rust/Garage): Keine DNS-Resolution-Libraries,
@@ -874,6 +874,9 @@ k8s-dev-23   Ready   control-plane,etcd   v1.35.1+k3s1
 - ArgoCD VolumeClaimTemplate Drift: `ignoreDifferences` als Standard-Pattern
 - Longhorn Volumes: securityContext (fsGroup) fuer Non-Root Container
 - ArgoCD Cache: Hard Refresh bei neuen KSOPS-Secrets erforderlich
+- Keycloak 26+: Health-Probes auf Management-Port 9000 (nicht 8080)
+- OpenProject OIDC und n8n SSO: Nur in Enterprise Editions verfuegbar
+- OpenProject LDAP: Base DN ist Pflichtfeld, Login-Attribut `mail` fuer E-Mail-Anmeldung
 
 ---
 
@@ -940,6 +943,7 @@ docs/
 | 25.02.2026 | 2.1 | Phase 5 abgeschlossen, Phase 6 gestartet, Naming Convention um Zwei-Secret-Pattern erweitert |
 | 25.02.2026 | 2.2 | n8n deployed (Phase 6.1), Garage S3 in Tech-Stack und Backup-Strategie ergaenzt |
 | 26.02.2026 | 2.3 | Garage S3 v2.2.0 deployed (Phase 6.1b), Phase 5+6 Fortschritte im Implementierungsplan ergaenzt |
+| 04.03.2026 | 2.4 | Keycloak 26.5.4 deployed (Phase 6.4), AD-Anbindung, OpenProject LDAP, SSO-Erkenntnisse dokumentiert |
 
 ---
 
