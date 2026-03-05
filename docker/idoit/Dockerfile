@@ -23,9 +23,7 @@ LABEL maintainer="d.henke@eneg.de"
 LABEL org.opencontainers.image.source="https://github.com/dhenkeeneg/eneg-k8s-infrastructure-v2"
 LABEL org.opencontainers.image.description="i-doit Open 37 on PHP 8.3 + Apache 2.4"
 
-# Systemabhaengigkeiten + PHP-Extensions installieren
-# i-doit 37 benoetigt: bcmath, ctype, curl, fileinfo, gd, imagick, json,
-# ldap, mbstring, memcached, mysqli, mysqlnd, pgsql, session, soap, xml, xmlwriter, zip
+# Build-Abhaengigkeiten und Runtime-Libraries installieren
 RUN apt-get update && apt-get install -y --no-install-recommends \
     libfreetype6-dev \
     libjpeg62-turbo-dev \
@@ -38,7 +36,12 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     libmemcached-dev \
     zlib1g-dev \
     libpq-dev \
-    && docker-php-ext-configure gd --with-freetype --with-jpeg --with-webp \
+    curl \
+    && rm -rf /var/lib/apt/lists/*
+
+# PHP-Extensions konfigurieren und bauen
+RUN docker-php-ext-configure gd \
+        --with-freetype --with-jpeg --with-webp \
     && docker-php-ext-install -j$(nproc) \
         bcmath \
         gd \
@@ -49,33 +52,11 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
         pgsql \
         soap \
         xml \
-        zip \
-    && pecl install imagick memcached \
-    && docker-php-ext-enable imagick memcached \
-    && apt-get purge -y --auto-remove \
-        libfreetype6-dev \
-        libjpeg62-turbo-dev \
-        libpng-dev \
-        libwebp-dev \
-        libldap2-dev \
-        libzip-dev \
-        libxml2-dev \
-        libmagickwand-dev \
-        libmemcached-dev \
-        zlib1g-dev \
-        libpq-dev \
-    && apt-get install -y --no-install-recommends \
-        libfreetype6 \
-        libjpeg62-turbo \
-        libpng16-16 \
-        libwebp7 \
-        libldap-2.5-0 \
-        libzip4 \
-        libxml2 \
-        libmagickwand-6.q16-7 \
-        libmemcached11 \
-        libpq5 \
-    && rm -rf /var/lib/apt/lists/*
+        zip
+
+# PECL-Extensions (imagick + memcached)
+RUN pecl install imagick memcached \
+    && docker-php-ext-enable imagick memcached
 
 # Apache Module aktivieren
 RUN a2enmod rewrite headers
@@ -114,17 +95,12 @@ RUN { \
 # i-doit Dateien aus Builder-Stage kopieren
 COPY --from=builder /tmp/idoit/ /var/www/html/i-doit/
 
-# Berechtigungen setzen (www-data = UID 33)
-RUN chown -R www-data:www-data /var/www/html/i-doit \
-    && chmod -R 775 /var/www/html/i-doit
-
-# Datenverzeichnis fuer PVC (Uploads, Cache, Logs)
+# Verzeichnisse erstellen und Berechtigungen setzen (www-data = UID 33)
 RUN mkdir -p /var/www/html/i-doit/temp \
              /var/www/html/i-doit/log \
              /var/www/html/i-doit/upload \
-    && chown -R www-data:www-data /var/www/html/i-doit/temp \
-                                  /var/www/html/i-doit/log \
-                                  /var/www/html/i-doit/upload
+    && chown -R www-data:www-data /var/www/html/i-doit \
+    && chmod -R 775 /var/www/html/i-doit
 
 WORKDIR /var/www/html/i-doit
 
