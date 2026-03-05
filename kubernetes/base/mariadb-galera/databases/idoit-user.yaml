@@ -17,5 +17,4 @@ spec:
   passwordSecretKeyRef:
     name: idoit-db-credentials
     key: password
-  maxConnections: 50
   host: "%"
