@@ -51,6 +51,7 @@ RUN docker-php-ext-configure gd \
         pdo_mysql \
         pgsql \
         soap \
+        sockets \
         xml \
         zip
 
