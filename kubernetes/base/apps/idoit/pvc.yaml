@@ -1,0 +1,18 @@
+---
+# Longhorn PVC fuer i-doit Daten (Uploads, Cache, Logs)
+# ReadWriteOnce reicht bei 1 Replica
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: idoit-data
+  namespace: idoit
+  labels:
+    app.kubernetes.io/name: idoit
+    app.kubernetes.io/managed-by: argocd
+spec:
+  accessModes:
+    - ReadWriteOnce
+  storageClassName: longhorn
+  resources:
+    requests:
+      storage: 10Gi

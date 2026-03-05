@@ -35,6 +35,9 @@ secrets.yml
 **/secrets/mariadb-credentials.yaml
 **/secrets/n8n-db-credentials.yaml
 **/secrets/n8n-secrets.yaml
+**/secrets/idoit-secrets.yaml
+**/secrets/idoit-db-credentials.yaml
+**/secrets/ghcr-pull-secret.yaml
 
 # Age/SOPS Keys
 .age/

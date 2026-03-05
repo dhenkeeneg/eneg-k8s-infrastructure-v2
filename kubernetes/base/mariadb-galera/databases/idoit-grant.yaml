@@ -1,0 +1,40 @@
+---
+# MariaDB Grants fuer i-doit
+# ALL PRIVILEGES auf idoit_system und idoit_data
+apiVersion: k8s.mariadb.com/v1alpha1
+kind: Grant
+metadata:
+  name: idoit-grant-system
+  namespace: databases
+  labels:
+    app.kubernetes.io/name: idoit
+    app.kubernetes.io/managed-by: argocd
+spec:
+  mariaDbRef:
+    name: mariadb-galera
+  privileges:
+    - ALL PRIVILEGES
+  database: "idoit_system"
+  table: "*"
+  username: idoit
+  host: "%"
+  grantOption: false
+---
+apiVersion: k8s.mariadb.com/v1alpha1
+kind: Grant
+metadata:
+  name: idoit-grant-data
+  namespace: databases
+  labels:
+    app.kubernetes.io/name: idoit
+    app.kubernetes.io/managed-by: argocd
+spec:
+  mariaDbRef:
+    name: mariadb-galera
+  privileges:
+    - ALL PRIVILEGES
+  database: "idoit_data"
+  table: "*"
+  username: idoit
+  host: "%"
+  grantOption: false

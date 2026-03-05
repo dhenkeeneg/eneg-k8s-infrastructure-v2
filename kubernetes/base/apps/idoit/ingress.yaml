@@ -1,0 +1,36 @@
+---
+# TLS Zertifikat fuer i-doit
+# Liegt im traefik Namespace (Standard-Pattern)
+apiVersion: cert-manager.io/v1
+kind: Certificate
+metadata:
+  name: idoit-tls
+  namespace: traefik
+spec:
+  secretName: idoit-tls
+  issuerRef:
+    name: letsencrypt-prod
+    kind: ClusterIssuer
+  dnsNames:
+    - idoit-dev-v2.eneg.de
+---
+# IngressRoute fuer i-doit
+# Pattern: IngressRoute + Certificate im traefik Namespace,
+# Service-Referenz cross-namespace zum Backend (idoit)
+apiVersion: traefik.io/v1alpha1
+kind: IngressRoute
+metadata:
+  name: idoit
+  namespace: traefik
+spec:
+  entryPoints:
+    - websecure
+  routes:
+    - match: Host(`idoit-dev-v2.eneg.de`)
+      kind: Rule
+      services:
+        - name: idoit
+          namespace: idoit
+          port: 80
+  tls:
+    secretName: idoit-tls

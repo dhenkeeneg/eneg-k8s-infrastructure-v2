@@ -1,0 +1,21 @@
+---
+# MariaDB User fuer i-doit
+# Passwort kommt aus dem idoit-secrets Secret (idoit Namespace)
+# Da MariaDB Operator das Secret im selben Namespace braucht,
+# referenzieren wir das idoit-db-credentials Secret im databases Namespace
+apiVersion: k8s.mariadb.com/v1alpha1
+kind: User
+metadata:
+  name: idoit
+  namespace: databases
+  labels:
+    app.kubernetes.io/name: idoit
+    app.kubernetes.io/managed-by: argocd
+spec:
+  mariaDbRef:
+    name: mariadb-galera
+  passwordSecretKeyRef:
+    name: idoit-db-credentials
+    key: password
+  maxConnections: 50
+  host: "%"
