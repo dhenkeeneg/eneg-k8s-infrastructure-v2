@@ -33,6 +33,7 @@ spec:
       containers:
         - name: idoit
           image: ghcr.io/dhenkeeneg/idoit-open:37
+          imagePullPolicy: Always
           ports:
             - name: http
               containerPort: 80
