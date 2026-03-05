@@ -2,6 +2,7 @@
 # MariaDB Databases fuer i-doit Open 37
 # i-doit benoetigt zwei Datenbanken: idoit_system + idoit_data
 # Erstellt via MariaDB Operator Database CRD
+# WICHTIG: spec.name ueberschreibt den DB-Namen (metadata.name erlaubt keine Unterstriche)
 apiVersion: k8s.mariadb.com/v1alpha1
 kind: Database
 metadata:
@@ -13,6 +14,7 @@ metadata:
 spec:
   mariaDbRef:
     name: mariadb-galera
+  name: idoit_system
   characterSet: utf8mb4
   collate: utf8mb4_unicode_ci
 ---
@@ -27,5 +29,6 @@ metadata:
 spec:
   mariaDbRef:
     name: mariadb-galera
+  name: idoit_data
   characterSet: utf8mb4
   collate: utf8mb4_unicode_ci
