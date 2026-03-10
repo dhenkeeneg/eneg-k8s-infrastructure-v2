@@ -30,6 +30,29 @@ spec:
       # Apache startet als root und wechselt dann zu www-data
       securityContext:
         fsGroup: 33
+      # Init-Container: src-Dateien aus dem Image in den PVC kopieren
+      # Nur wenn der src-Ordner auf dem PVC noch leer ist (erster Start)
+      # Damit bleibt config.inc.php nach Pod-Restarts erhalten
+      initContainers:
+        - name: init-src
+          image: ghcr.io/dhenkeeneg/idoit-open:37
+          imagePullPolicy: Always
+          command:
+            - sh
+            - -c
+            - |
+              if [ ! -f /mnt/data/src/config.inc.php ] && [ -z "$(ls -A /mnt/data/src/ 2>/dev/null)" ]; then
+                echo "PVC src-Ordner ist leer, kopiere Dateien aus dem Image..."
+                cp -a /var/www/html/i-doit/src/. /mnt/data/src/
+                chown -R 33:33 /mnt/data/src/
+                echo "Fertig."
+              else
+                echo "PVC src-Ordner hat bereits Inhalt, ueberspringe."
+              fi
+          volumeMounts:
+            - name: idoit-data
+              mountPath: /mnt/data/src
+              subPath: src
       containers:
         - name: idoit
           image: ghcr.io/dhenkeeneg/idoit-open:37
@@ -65,6 +88,9 @@ spec:
                   name: idoit-secrets
                   key: admin-password
           volumeMounts:
+            - name: idoit-data
+              mountPath: /var/www/html/i-doit/src
+              subPath: src
             - name: idoit-data
               mountPath: /var/www/html/i-doit/upload
               subPath: upload
