@@ -3,7 +3,7 @@
 ## Projektplanung - Version 2.3
 
 **Erstellt:** 04.02.2026  
-**Letzte Aktualisierung:** 26.02.2026  
+**Letzte Aktualisierung:** 10.03.2026  
 **Standort:** Essen  
 **Projekt:** eNeG K8s Infrastructure v2
 
@@ -340,7 +340,7 @@ namespaces:
 
 | Komponente | Version | Status |
 |------------|---------|--------|
-| Keycloak | 26.5.4 | Phase 6 ✅ |
+| Keycloak | - | Phase 6+ |
 | Velero | - | Phase 10 |
 | Vaultwarden | - | Phase 6+ |
 
@@ -679,7 +679,7 @@ extraArgs:
 | 3 | GitOps-Fundament (ArgoCD, SOPS, GitHub) | 2-3 Tage | ✅ Abgeschlossen (10.02.2026) |
 | 4 | Kubernetes-Basis (MetalLB, Traefik, Cert-Manager, Longhorn) | 2-3 Tage | ✅ Abgeschlossen (18.02.2026) |
 | 5 | Datenbank-Cluster (CloudNativePG, MariaDB Galera) | 2-3 Tage | ✅ Abgeschlossen (25.02.2026) |
-| 6 | Pilot-Apps (Garage S3, n8n, OpenProject, Odoo) | 3-5 Tage | 🔄 In Bearbeitung (n8n ✅, Garage S3 ✅) |
+| 6 | Pilot-Apps (Garage S3, n8n, OpenProject, Odoo) | 3-5 Tage | 🔄 In Bearbeitung |
 | 7 | Monitoring-Stack | 2-3 Tage | 🔲 Offen |
 | 8 | TEST & PROD Rollout | 2-3 Tage | 🔲 Offen |
 | 9 | Security & Haertung | 3-5 Tage | 🔲 Offen |
@@ -812,74 +812,6 @@ k8s-dev-23   Ready   control-plane,etcd   v1.35.1+k3s1
 
 ---
 
-### Phase 5: Datenbank-Cluster ✅
-
-**Abgeschlossen am:** 25.02.2026
-
-**Ergebnisse:**
-
-| Komponente | Version | Cluster | Status |
-|---|---|---|---|
-| CloudNativePG Operator | 1.28.1 (Chart 0.27.1) | - | ✅ Installiert |
-| PostgreSQL (cnpg-shared) | 17 | 3 Instanzen | ✅ Running |
-| PostgreSQL (cnpg-erp) | 17 | 3 Instanzen | ✅ Running |
-| MariaDB Galera Operator | 25.10.4 | - | ✅ Installiert |
-| MariaDB Galera | 11.8.6 LTS | 3 Nodes | ✅ Running |
-
-**Backup-Konfiguration:**
-- WAL-Archivierung auf S3 (nas10.eneg.de/QuObject) — kontinuierlich
-- Barman Physical Backup — taeglich 02:00
-- Logical Backup (pg_dump) — taeglich 03:00
-
-**Kritische Learnings Phase 5:**
-- CNPG managed.roles Defaults explizit angeben (ServerSideApply Drift)
-- ServerSideApply und --force sind inkompatibel in ArgoCD
-- Cross-Namespace Secrets nicht moeglich — Zwei-Secret-Pattern noetig
-- SOPS Age-Key Symlink auf Management-Server beachten
-
----
-
-### Phase 6: Pilot-Apps 🔄
-
-**Gestartet am:** 25.02.2026
-
-**Abgeschlossene Deployments:**
-
-| Schritt | App | Version | URL | Status |
-|---|---|---|---|---|
-| 6.1 | n8n | 2.8.4 | https://n8n-dev-v2.eneg.de | ✅ 25.02.2026 |
-| 6.1b | Garage S3 | v2.2.0 | https://s3-dev-v2.eneg.de | ✅ 26.02.2026 |
-| 6.1b | Garage WebUI | 1.1.0 | https://s3-gui-dev-v2.eneg.de | ✅ 26.02.2026 |
-
-**Garage S3 Object Storage:**
-- 3-Node In-Cluster S3-kompatibler Storage (Replication Factor 2)
-- Effektive Kapazitaet: ~30 GB (DEV), skalierbar auf ~300 GB (PROD)
-- StatefulSet mit Init-Container fuer DNS-to-IP Resolution
-- Path-Style Addressing (s3-dev-v2.eneg.de/bucketname)
-- WebUI fuer Bucket-Management und Monitoring
-
-**Offene Deployments:**
-
-| Schritt | App | Datenbank | Status |
-|---|---|---|---|
-| 6.2 | OpenProject | cnpg-erp (PostgreSQL) | ✅ Abgeschlossen |
-| 6.3 | Odoo | cnpg-erp (PostgreSQL) | ✅ Abgeschlossen |
-| 6.4 | Keycloak | cnpg-shared (PostgreSQL) | ✅ Abgeschlossen |
-
-**Kritische Learnings Phase 6:**
-- Minimal Container Images (Rust/Garage): Keine DNS-Resolution-Libraries,
-  Init-Container mit busybox fuer DNS-Lookups verwenden
-- StatefulSet Headless Service: `publishNotReadyAddresses: true` fuer Peer-Discovery
-- Downward API: Pod-IP fuer rpc_public_addr statt Hostname
-- ArgoCD VolumeClaimTemplate Drift: `ignoreDifferences` als Standard-Pattern
-- Longhorn Volumes: securityContext (fsGroup) fuer Non-Root Container
-- ArgoCD Cache: Hard Refresh bei neuen KSOPS-Secrets erforderlich
-- Keycloak 26+: Health-Probes auf Management-Port 9000 (nicht 8080)
-- OpenProject OIDC und n8n SSO: Nur in Enterprise Editions verfuegbar
-- OpenProject LDAP: Base DN ist Pflichtfeld, Login-Attribut `mail` fuer E-Mail-Anmeldung
-
----
-
 ## 14. Dokumentation
 
 ### Speicherort
@@ -899,10 +831,7 @@ docs/
 │   ├── phase-02-abschluss.md
 │   ├── phase-03-abschluss.md
 │   ├── phase-03b-abschluss.md    # SOPS + KSOPS
-│   ├── phase-04-abschluss.md
-│   ├── phase-05-abschluss.md
-│   ├── phase-05-datenbanken.md
-│   └── phase-06-pilot-apps.md
+│   └── phase-04-abschluss.md
 ├── architecture/
 ├── runbooks/
 ├── decisions/
@@ -941,9 +870,6 @@ docs/
 | 10.02.2026 | 1.3 | Phase 3 abgeschlossen (ArgoCD + SOPS) |
 | 18.02.2026 | 2.0 | Phase 4 abgeschlossen (MetalLB, Traefik, Cert-Manager, Longhorn), Template-Bugfix, komplette Neuformatierung (Encoding-Bereinigung) |
 | 25.02.2026 | 2.1 | Phase 5 abgeschlossen, Phase 6 gestartet, Naming Convention um Zwei-Secret-Pattern erweitert |
-| 25.02.2026 | 2.2 | n8n deployed (Phase 6.1), Garage S3 in Tech-Stack und Backup-Strategie ergaenzt |
-| 26.02.2026 | 2.3 | Garage S3 v2.2.0 deployed (Phase 6.1b), Phase 5+6 Fortschritte im Implementierungsplan ergaenzt |
-| 04.03.2026 | 2.4 | Keycloak 26.5.4 deployed (Phase 6.4), AD-Anbindung, OpenProject LDAP, SSO-Erkenntnisse dokumentiert |
 
 ---
 

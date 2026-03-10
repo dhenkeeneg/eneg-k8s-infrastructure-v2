@@ -21,8 +21,9 @@ autoinstall:
             via: ${gateway}
         nameservers:
           addresses:
-            - 8.8.8.8
-            - 8.8.4.4
+            - 192.168.161.104
+            - 192.168.161.105
+            - 192.168.161.106
   
   # Storage: Gesamte Disk verwenden mit LVM
   storage:
