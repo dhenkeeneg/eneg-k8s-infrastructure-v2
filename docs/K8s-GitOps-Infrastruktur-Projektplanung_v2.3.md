@@ -533,6 +533,11 @@ Grafana (Dashboards) + Loki (Logs)
 | Disk-Space | 80% | 90% |
 | CPU-Auslastung | 85% (sustained >5min) | 95% (sustained) |
 | Backup-Space (NAS) | 85% | 95% |
+| CNPG WAL-Volume Fuellstand | 70% | 85% |
+| CNPG WAL-Archivierung fehlgeschlagen | >5 min ohne Archivierung | >15 min ohne Archivierung |
+| CNPG Cluster Ready-Status | - | Cluster Not Ready >5 min |
+| CronJob Backup fehlgeschlagen | 1x fehlgeschlagen | 2x hintereinander fehlgeschlagen |
+| S3 Endpoint (NAS10) nicht erreichbar | - | Nicht erreichbar >5 min |
 
 ### Alert-Routing
 
@@ -680,7 +685,7 @@ extraArgs:
 | 4 | Kubernetes-Basis (MetalLB, Traefik, Cert-Manager, Longhorn) | 2-3 Tage | ✅ Abgeschlossen (18.02.2026) |
 | 5 | Datenbank-Cluster (CloudNativePG, MariaDB Galera) | 2-3 Tage | ✅ Abgeschlossen (25.02.2026) |
 | 6 | Pilot-Apps (Garage S3, n8n, OpenProject, Odoo) | 3-5 Tage | 🔄 In Bearbeitung |
-| 7 | Monitoring-Stack | 2-3 Tage | 🔲 Offen |
+| 7 | Monitoring-Stack (inkl. Backup-Health, WAL-Volume, S3-Endpoint Alerting) | 2-3 Tage | 🔲 Offen |
 | 8 | TEST & PROD Rollout | 2-3 Tage | 🔲 Offen |
 | 9 | Security & Haertung | 3-5 Tage | 🔲 Offen |
 | 10 | Backup & Dokumentation | 2-3 Tage | 🔲 Offen |
@@ -809,6 +814,39 @@ k8s-dev-23   Ready   control-plane,etcd   v1.35.1+k3s1
 - Traefik Chart v39.0.0: Breaking Change bei `redirections` (http:-Verschachtelung)
 - Longhorn: preUpgradeChecker.jobEnabled=false fuer ArgoCD-Kompatibilitaet
 - Cert-Manager: externe Nameserver fuer DNS-01 in Split-DNS Umgebung
+
+---
+
+### Phase 7: Monitoring-Stack 🔲
+
+**Status:** Offen
+
+**Pflicht-Anforderungen (Lessons Learned aus Vorfall 10.03.2026):**
+
+Am 10.03.2026 fuehrte ein temporaerer NAS10-Ausfall dazu, dass:
+1. Alle Backup-CronJobs (CNPG, Garage, Odoo, MariaDB) ueber 3 Tage fehlschlugen
+2. CNPG WAL-Archivierung (Barman) stoppte → WAL-Segmente stauten sich auf den 5Gi WAL-Volumes
+3. CNPG-ERP Replicas (cnpg-erp-1, cnpg-erp-2) WAL-Volumes zu 100% voll → CrashLoopBackOff
+4. Designierter Primary (cnpg-erp-2) konnte nicht starten → Cluster ohne aktiven Primary
+5. Manuelles Failover auf cnpg-erp-3 und PVC-Rebuild der Replicas noetig
+
+**Daraus abgeleitete Monitoring-Anforderungen fuer Phase 7:**
+
+| Alert | Metrik/Quelle | Schwellwert Warning | Schwellwert Critical |
+|-------|---------------|---------------------|----------------------|
+| CNPG WAL-Volume voll | PVC disk usage (kubelet_volume_stats) | >=70% | >=85% |
+| CNPG WAL-Archivierung gestoppt | cnpg_pg_stat_archiver / ContinuousArchiving Condition | >5 min ohne Archivierung | >15 min ohne Archivierung |
+| CNPG Cluster Not Ready | Cluster Ready Condition = False | - | >5 min |
+| CNPG Replica CrashLoop | Pod RestartCount steigend | >3 Restarts in 10 min | >10 Restarts in 10 min |
+| CronJob Backup fehlgeschlagen | kube_job_status_failed | 1x fehlgeschlagen | 2x hintereinander fehlgeschlagen |
+| S3 Endpoint (NAS10) nicht erreichbar | Blackbox Exporter / Probe | - | Nicht erreichbar >5 min |
+| ArgoCD App Degraded | argocd_app_info health_status | - | Degraded >15 min |
+
+**Zusaetzliche Empfehlungen:**
+- CNPG enablePodMonitor auf true setzen (bereits in Cluster-Spec vorbereitet)
+- Prometheus ServiceMonitor fuer CronJob-Exporter
+- Grafana Dashboard fuer Backup-Uebersicht (letzte Laufzeit, Erfolg/Fehler, naechster Lauf)
+- Blackbox Exporter Probe fuer nas10.eneg.de:8010 (S3 Endpoint Health)
 
 ---
 
