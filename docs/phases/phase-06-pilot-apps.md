@@ -88,6 +88,7 @@ Secrets werden getrennt mit SOPS verschluesselt und via KSOPS deployed.
 | 6.4 | Keycloak: DB-Rolle + Database + Deployment + Ingress | ✅ Abgeschlossen |
 | 6.4b | Keycloak: Realm, AD-Anbindung, SSO-Clients | ✅ Abgeschlossen |
 | 6.4c | App-Authentifizierung: OpenProject LDAP, Odoo/n8n SSO-Vorbereitung | 🔄 In Bearbeitung |
+| 6.5 | i-doit Open 37: Eigenes Docker Image, MariaDB Galera, Deployment + Ingress | ✅ Abgeschlossen |
 | 6.5 | Weitere Apps nach Bedarf | 🔲 Offen |
 | 6.6 | Validierung + Dokumentation | 🔲 Offen |
 
@@ -133,16 +134,19 @@ Secrets werden getrennt mit SOPS verschluesselt und via KSOPS deployed.
 | 5 | cnpg-cluster | PostgreSQL Cluster + managed.roles |
 | 5 | garage | Garage S3 StatefulSet, Services, WebUI, Ingress |
 | 6 | cnpg-databases | Database CRDs (n8n, etc.) |
+| 6 | mariadb-idoit-databases | MariaDB User + Grant CRDs fuer i-doit |
 | 7 | n8n-secrets | App-Secrets: Encryption Key + DB-Passwort (KSOPS) |
 | 7 | openproject-secrets | App-Secrets: SECRET_KEY_BASE, Hocuspocus, DB-URL, S3-Keys (KSOPS) |
 | 7 | odoo-secrets | App-Secrets: Admin-Passwort + DB-Passwort (KSOPS) |
 | 7 | odoo-backup-secrets | Backup-Credentials: NAS10 S3-Keys (KSOPS) |
 | 7 | garage-backup-secrets | Backup-Credentials: Garage + NAS10 S3-Keys (KSOPS) |
 | 7 | keycloak-secrets | App-Secrets: DB-Passwort + Admin-Passwort (KSOPS) |
+| 7 | idoit-secrets | App-Secrets: DB-Passwort + Admin-Passwort + ghcr.io Pull Secret (KSOPS) |
 | 8 | n8n | App-Deployment: Namespace, Deployment, Service, PVC, Ingress |
 | 8 | openproject | App-Deployment: Namespace, Web, Worker, Memcached, Hocuspocus, PVC, Ingress |
 | 8 | odoo | App-Deployment: Namespace, Deployment, Service, PVC, ConfigMap, Ingress |
 | 8 | keycloak | App-Deployment: Namespace, Deployment, Service, Ingress |
+| 8 | idoit | App-Deployment: Namespace, Deployment (eigenes Image), Service, PVC, Ingress |
 | 8 | garage-backup | CronJob: Taegliches rclone Backup Garage -> NAS10 |
 | 9 | odoo-backup | CronJob: Taegliches rclone Backup Odoo Filestore -> NAS10 |
 
@@ -358,7 +362,7 @@ kubectl exec -n garage garage-0 -- /garage layout apply --version 1
 | openproject-dev-v2.eneg.de | CNAME | traefik-dev.eneg.de | OpenProject | ✅ Aktiv |
 | odoo-dev-v2.eneg.de | CNAME | traefik-dev.eneg.de | Odoo 18 CE | ✅ Aktiv |
 | keycloak-dev-v2.eneg.de | CNAME | traefik-dev.eneg.de | Keycloak | ✅ Aktiv |
-| idoit-dev-v2.eneg.de | CNAME | traefik-dev.eneg.de | i-doit | 🔲 Vorbereitet |
+| idoit-dev-v2.eneg.de | CNAME | traefik-dev.eneg.de | i-doit | ✅ Aktiv |
 
 ---
 
@@ -1135,6 +1139,140 @@ Enterprise-Aktivierung erhalten.
 
 ---
 
+### 6.5 — i-doit Open 37 IT-Dokumentation / CMDB ✅
+
+**Abgeschlossen am:** 05.03.2026
+**URL:** https://idoit-dev-v2.eneg.de
+**Version:** i-doit Open 37 (eigenes Docker Image: ghcr.io/dhenkeeneg/idoit-open:37)
+**Basis-Image:** php:8.3-apache (Debian Bookworm)
+**Default-Login:** admin / admin (Passwortaenderung empfohlen)
+
+#### Architektur
+
+i-doit ist die erste Anwendung auf der MariaDB Galera Datenbank.
+Im Gegensatz zu den PostgreSQL-basierten Apps (n8n, OpenProject, Odoo,
+Keycloak) werden hier MariaDB Operator CRDs (User, Grant) verwendet.
+
+```
+Browser (https://idoit-dev-v2.eneg.de)
+    |
+Traefik (TLS-Terminierung)
+    |
+    └── /* → idoit:80 (HTTP/Apache)
+                  |
+                  ├── MariaDB Galera (mariadb-galera-primary:3306)
+                  │   ├── idoit_system (System-DB)
+                  │   └── idoit_data (Mandant-DB)
+                  └── PVC /var/www/html/i-doit/upload (Longhorn)
+```
+
+**Besonderheit: Eigenes Docker Image**
+Es gibt kein offizielles oder gepflegtes Community-Docker-Image fuer
+i-doit Open 35+. Das Image wird selbst gebaut aus:
+- Basis: `php:8.3-apache` (Debian Bookworm)
+- i-doit Open 37 ZIP von SourceForge
+- PHP-Extensions: bcmath, gd, ldap, mysqli, pdo, pdo_mysql, pgsql,
+  soap, sockets, xml, zip, imagick, memcached
+- Registry: GitHub Container Registry (ghcr.io, privat)
+
+#### Installierte Komponenten
+
+| Ressource | Namespace | Name | Status |
+|---|---|---|---|
+| User CRD | databases | idoit (auf mariadb-galera) | ✅ Created |
+| Grant CRD | databases | idoit-grant-system (ALL on idoit_system) | ✅ Created |
+| Grant CRD | databases | idoit-grant-data (ALL on idoit_data) | ✅ Created |
+| Secret (DB) | databases | idoit-db-credentials | ✅ SOPS/KSOPS |
+| Namespace | idoit | idoit | ✅ Erstellt |
+| Secret (App) | idoit | idoit-secrets | ✅ SOPS/KSOPS |
+| Secret (Registry) | idoit | ghcr-pull-secret | ✅ SOPS/KSOPS |
+| PVC | idoit | idoit-data (10Gi Longhorn) | ✅ Bound |
+| Deployment | idoit | idoit (1 Replica) | ✅ Running |
+| Service | idoit | idoit (ClusterIP:80) | ✅ Active |
+| Certificate | traefik | idoit-tls | ✅ Ready (Let's Encrypt) |
+| IngressRoute | traefik | idoit | ✅ Active |
+
+#### ArgoCD Applications
+
+| Application | Sync | Health | Wave |
+|---|---|---|---|
+| mariadb-idoit-databases | Synced | Healthy | 6 |
+| idoit-secrets | Synced | Healthy | 7 |
+| idoit | Synced | Healthy | 8 |
+
+#### Resources (DEV)
+
+| Parameter | Request | Limit |
+|---|---|---|
+| CPU | 250m | 1 |
+| Memory | 256Mi | 1Gi |
+| PVC | 10Gi (Longhorn) | - |
+
+#### Secrets (SOPS-verschluesselt)
+
+| Secret | Namespace | Keys |
+|---|---|---|
+| idoit-db-credentials | databases | password |
+| idoit-secrets | idoit | db-password, admin-password |
+| ghcr-pull-secret | idoit | .dockerconfigjson (ghcr.io) |
+
+#### Docker Image Build
+
+```bash
+# Auf k8s-mgmt-10 (Docker Engine installiert):
+cd ~/git/eneg-k8s-infrastructure-v2/docker/idoit
+docker build -t ghcr.io/dhenkeeneg/idoit-open:37 .
+echo $GHCR_TOKEN | docker login ghcr.io -u dhenkeeneg --password-stdin
+docker push ghcr.io/dhenkeeneg/idoit-open:37
+```
+
+#### Key Learnings i-doit
+
+1. **Kein offizielles Docker Image:** Community-Images (migoller/idoit,
+   bheisig/idoit) sind veraltet (max. i-doit 1.19). Eigenes Dockerfile
+   mit php:8.3-apache Basis und SourceForge-ZIP ist die beste Loesung.
+
+2. **MariaDB Operator Database CRDs vs. i-doit Setup-Wizard:** i-doit
+   erwartet leere Datenbanknamen und erstellt das Schema selbst. Vorab
+   erstellte Datenbanken fuehren zu "EXISTS. PLEASE DROP IT". Loesung:
+   Keine Database CRDs verwenden, nur User + Grant CRDs. i-doit verwaltet
+   seine Datenbanken (idoit_system, idoit_data) eigenstaendig.
+
+3. **MariaDB Operator CRD metadata.name vs. DB-Name:** Kubernetes erlaubt
+   keine Unterstriche in metadata.name. Der MariaDB Operator nutzt
+   standardmaessig metadata.name als DB-Name. Fuer DB-Namen mit
+   Unterstrichen muss `spec.name` explizit gesetzt werden.
+
+4. **MariaDB Operator User CRD:** Das Feld `maxConnections` existiert
+   nicht in der aktuellen CRD-Version (Operator 25.10.4). Fuehrt zu
+   "field not declared in schema" bei ServerSideApply.
+
+5. **PHP sockets Extension:** i-doit 37 benoetigt die PHP sockets
+   Extension, die nicht standardmaessig im php:8.3-apache Image
+   enthalten ist. Muss explizit via docker-php-ext-install gebaut werden.
+
+6. **imagePullPolicy: Always:** Bei eigenem ghcr.io Image mit festem
+   Tag (z.B. :37) muss imagePullPolicy auf Always stehen, damit
+   Image-Updates nach einem Rebuild gezogen werden.
+
+7. **MariaDB 11.8.6 Kompatibilitaet:** i-doit 37 listet offiziell nur
+   MariaDB bis 11.4. MariaDB 11.8.6 Galera funktioniert problemlos,
+   der Setup-Wizard zeigt lediglich eine Warnung.
+
+8. **GitHub Container Registry (ghcr.io):** Privates Image erfordert
+   ein imagePullSecret (kubernetes.io/dockerconfigjson) mit GitHub PAT
+   (read:packages Berechtigung). Docker Engine auf k8s-mgmt-10 fuer
+   Image-Builds installiert.
+
+9. **config.inc.php Persistenz:** i-doit speichert die Konfiguration
+   (DB-Verbindung, Mandanten, Crypto-Keys) in `/var/www/html/i-doit/src/config.inc.php`.
+   Dieses Verzeichnis muss persistent sein, sonst geht die Konfiguration bei
+   Pod-Restarts verloren und der Setup-Wizard startet erneut. Loesung:
+   Init-Container kopiert den src-Ordner beim ersten Start aus dem Image
+   in den PVC (`subPath: src`). Bei weiteren Restarts bleibt die config erhalten.
+
+---
+
 ## Naechste Schritte
 
 - Odoo SSO/OIDC ueber Keycloak (Community-Modul erforderlich)
@@ -1159,3 +1297,4 @@ Enterprise-Aktivierung erhalten.
 | 04.03.2026 | Keycloak Realm "eneg", AD-Anbindung, SSO-Clients (Schritt 6.4b abgeschlossen) |
 | 04.03.2026 | OpenProject LDAP-Authentifizierung gegen AD (Schritt 6.4c) |
 | 04.03.2026 | Erkenntnis: OpenProject OIDC und n8n SSO sind Enterprise-only |
+| 10.03.2026 | i-doit Open 37 deployed (Schritt 6.5 abgeschlossen), eigenes Docker Image auf ghcr.io, MariaDB Operator CRDs |

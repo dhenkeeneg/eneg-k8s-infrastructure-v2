@@ -684,7 +684,7 @@ extraArgs:
 | 3 | GitOps-Fundament (ArgoCD, SOPS, GitHub) | 2-3 Tage | ✅ Abgeschlossen (10.02.2026) |
 | 4 | Kubernetes-Basis (MetalLB, Traefik, Cert-Manager, Longhorn) | 2-3 Tage | ✅ Abgeschlossen (18.02.2026) |
 | 5 | Datenbank-Cluster (CloudNativePG, MariaDB Galera) | 2-3 Tage | ✅ Abgeschlossen (25.02.2026) |
-| 6 | Pilot-Apps (Garage S3, n8n, OpenProject, Odoo) | 3-5 Tage | 🔄 In Bearbeitung |
+| 6 | Pilot-Apps (Garage S3, n8n, OpenProject, Odoo, Keycloak, i-doit) | 3-5 Tage | 🔄 In Bearbeitung |
 | 7 | Monitoring-Stack (inkl. Backup-Health, WAL-Volume, S3-Endpoint Alerting) | 2-3 Tage | 🔲 Offen |
 | 8 | TEST & PROD Rollout | 2-3 Tage | 🔲 Offen |
 | 9 | Security & Haertung | 3-5 Tage | 🔲 Offen |
@@ -908,6 +908,10 @@ docs/
 | 10.02.2026 | 1.3 | Phase 3 abgeschlossen (ArgoCD + SOPS) |
 | 18.02.2026 | 2.0 | Phase 4 abgeschlossen (MetalLB, Traefik, Cert-Manager, Longhorn), Template-Bugfix, komplette Neuformatierung (Encoding-Bereinigung) |
 | 25.02.2026 | 2.1 | Phase 5 abgeschlossen, Phase 6 gestartet, Naming Convention um Zwei-Secret-Pattern erweitert |
+| 25.02.2026 | 2.2 | n8n deployed (Phase 6.1), Garage S3 in Tech-Stack und Backup-Strategie ergaenzt |
+| 26.02.2026 | 2.3 | Garage S3 v2.2.0 deployed (Phase 6.1b), Phase 5+6 Fortschritte im Implementierungsplan ergaenzt |
+| 04.03.2026 | 2.4 | Keycloak 26.5.4 deployed (Phase 6.4), AD-Anbindung, OpenProject LDAP, SSO-Erkenntnisse dokumentiert |
+| 10.03.2026 | 2.5 | i-doit Open 37 deployed (Phase 6.5), eigenes Docker Image, MariaDB Operator CRDs, ghcr.io Registry |
 
 ---
 
