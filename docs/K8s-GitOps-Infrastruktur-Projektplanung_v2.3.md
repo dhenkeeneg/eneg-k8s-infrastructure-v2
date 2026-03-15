@@ -1,9 +1,9 @@
 # GitOps Kubernetes-Infrastruktur auf VMware vSphere
 
-## Projektplanung - Version 2.3
+## Projektplanung - Version 2.4
 
 **Erstellt:** 04.02.2026  
-**Letzte Aktualisierung:** 10.03.2026  
+**Letzte Aktualisierung:** 15.03.2026  
 **Standort:** Essen  
 **Projekt:** eNeG K8s Infrastructure v2
 
@@ -821,6 +821,17 @@ k8s-dev-23   Ready   control-plane,etcd   v1.35.1+k3s1
 
 **Status:** Offen
 
+**Vorbereitende Aufgabe: CNPG Barman Cloud Plugin Migration**
+
+Die native (in-tree) Unterstuetzung fuer Barman Cloud Backups ist seit CNPG 1.26.0 deprecated
+und wird in CNPG 1.30.0 entfernt. Vor dem naechsten CNPG Operator-Upgrade muss auf das
+externe Barman Cloud Plugin (`barman-cloud.cloudnative-pg.io`) migriert werden.
+
+- Anleitung: `docs/guides/cnpg-barman-cloud-plugin-migration.md`
+- Betroffene Cluster: cnpg-shared, cnpg-erp
+- Migration ist ohne Datenverlust moeglich (bestehende Backups bleiben kompatibel)
+- Gleichzeitig Image-Wechsel von `system` auf `standard` (leichteres Image ohne Barman)
+
 **Pflicht-Anforderungen (Lessons Learned aus Vorfall 10.03.2026):**
 
 Am 10.03.2026 fuehrte ein temporaerer NAS10-Ausfall dazu, dass:
@@ -847,6 +858,20 @@ Am 10.03.2026 fuehrte ein temporaerer NAS10-Ausfall dazu, dass:
 - Prometheus ServiceMonitor fuer CronJob-Exporter
 - Grafana Dashboard fuer Backup-Uebersicht (letzte Laufzeit, Erfolg/Fehler, naechster Lauf)
 - Blackbox Exporter Probe fuer nas10.eneg.de:8010 (S3 Endpoint Health)
+
+**Kritische Learnings (Stromabschaltung 15.03.2026):**
+
+- Garage S3 `bootstrap_peers` muessen im Format `node_id@ip:port` konfiguriert sein,
+  nicht nur `ip:port`. Ohne Node-ID kann Garage nach einem Neustart mit neuen Pod-IPs
+  die Peers nicht wiederfinden. Fix: Node-IDs aus `/var/lib/garage/meta/node_key.pub`
+  hardcoded in die ConfigMap eingetragen.
+- Cluster-Shutdown-Reihenfolge: Backups triggern → ArgoCD Auto-Sync deaktivieren →
+  Apps stoppen → CNPG Hibernation → MariaDB Operator stoppen → MariaDB Galera stoppen →
+  Worker-Nodes → Server-Node → Management-Server
+- Cluster-Startup-Reihenfolge: Management → Server-Node → Worker-Nodes → CNPG Hibernation
+  aufheben → ArgoCD Sync
+- ArgoCD CLI auf k8s-mgmt-10 installiert (Login ueber Port-Forward)
+- CNPG Hibernation per Annotation: `kubectl annotate cluster <name> -n databases cnpg.io/hibernation=on`
 
 ---
 
@@ -912,6 +937,7 @@ docs/
 | 26.02.2026 | 2.3 | Garage S3 v2.2.0 deployed (Phase 6.1b), Phase 5+6 Fortschritte im Implementierungsplan ergaenzt |
 | 04.03.2026 | 2.4 | Keycloak 26.5.4 deployed (Phase 6.4), AD-Anbindung, OpenProject LDAP, SSO-Erkenntnisse dokumentiert |
 | 10.03.2026 | 2.5 | i-doit Open 37 deployed (Phase 6.5), eigenes Docker Image, MariaDB Operator CRDs, ghcr.io Registry |
+| 15.03.2026 | 2.6 | Garage bootstrap_peers Fix (Node-IDs hinzugefuegt), Barman Cloud Plugin Migrations-Anleitung erstellt, ArgoCD CLI auf k8s-mgmt-10 installiert, Cluster Shutdown/Startup Prozedur durchgefuehrt und dokumentiert |
 
 ---
 
