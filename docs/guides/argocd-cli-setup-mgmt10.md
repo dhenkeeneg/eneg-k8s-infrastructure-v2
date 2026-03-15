@@ -33,44 +33,43 @@ sudo mv argocd /usr/local/bin/
 argocd version --client
 ```
 
-### Schritt 2: Login konfigurieren
+### Schritt 2: DNS-Aufloesung fuer ArgoCD einrichten
 
-Da `argocd.eneg.de` vom mgmt-10 nicht aufgeloest werden kann (DNS zeigt auf die
-Traefik LB-IP 192.168.180.100), gibt es zwei Optionen:
-
-**Option A: /etc/hosts Eintrag (empfohlen, dauerhaft)**
+Da `argocd-dev-v2.eneg.de` vom mgmt-10 nicht direkt aufgeloest werden kann
+(DNS zeigt auf die Traefik LB-IP), muss ein /etc/hosts Eintrag gesetzt werden:
 
 ```bash
-# Traefik LB-IP fuer ArgoCD-Hostname setzen
 echo "192.168.180.100 argocd-dev-v2.eneg.de" | sudo tee -a /etc/hosts
-
-# Login
-argocd login argocd-dev-v2.eneg.de --grpc-web --insecure
-```
-
-**Option B: Port-Forward (temporaer)**
-
-```bash
-# Terminal 1: Port-Forward starten
-kubectl port-forward svc/argocd-server -n argocd 8080:443 &
-
-# Terminal 2: Login
-argocd login localhost:8080 --insecure
 ```
 
 ### Schritt 3: Admin-Passwort ermitteln
 
 ```bash
-# Initial-Admin-Passwort auslesen
 kubectl get secret argocd-initial-admin-secret -n argocd -o jsonpath='{.data.password}' | base64 -d; echo
-
-# Login mit Username "admin" und dem ausgelesenen Passwort
-argocd login argocd-dev-v2.eneg.de --grpc-web --insecure
-# Username: admin
-# Password: <ausgelesenes Passwort>
 ```
 
-### Schritt 4: Login testen
+### Schritt 4: Login
+
+```bash
+argocd login argocd-dev-v2.eneg.de --grpc-web --insecure
+# Username: admin
+# Password: <ausgelesenes Passwort aus Schritt 3>
+```
+
+**Hinweis:** Falls `--grpc-web --insecure` nicht funktioniert, alternative Optionen:
+
+```bash
+# Option A: Ohne gRPC-Web (direkter gRPC)
+argocd login argocd-dev-v2.eneg.de --insecure
+
+# Option B: Per Port-Forward (falls DNS/Netzwerk Probleme)
+# Terminal 1:
+kubectl port-forward svc/argocd-server -n argocd 8080:443
+# Terminal 2:
+argocd login localhost:8080 --insecure --plaintext
+```
+
+### Schritt 5: Login testen
 
 ```bash
 # Alle Apps auflisten
@@ -90,7 +89,7 @@ argocd cluster list
 # Alle Apps auflisten
 argocd app list
 
-# Einzelne App syncen
+# Einzelne App syncen (mit Prune)
 argocd app sync garage --prune
 
 # Alle Apps syncen
@@ -101,9 +100,12 @@ argocd app get garage
 
 # Diff zwischen Git und Cluster anzeigen
 argocd app diff garage
+
+# Hard-Refresh (Cache invalidieren)
+argocd app get garage --hard-refresh
 ```
 
-### Shutdown/Maintenance
+### Shutdown/Maintenance Befehle
 
 ```bash
 # Auto-Sync fuer eine App deaktivieren
@@ -112,10 +114,13 @@ argocd app patch garage --patch '{"spec":{"syncPolicy":null}}' --type merge
 # Auto-Sync wieder aktivieren
 argocd app patch garage --patch '{"spec":{"syncPolicy":{"automated":{"prune":true,"selfHeal":true}}}}' --type merge
 
-# Auto-Sync fuer alle Apps deaktivieren (vor Shutdown)
+# Auto-Sync fuer ALLE Apps deaktivieren (vor geplantem Shutdown)
 for app in $(argocd app list -o name); do
   argocd app patch "$app" --patch '{"spec":{"syncPolicy":null}}' --type merge
 done
+
+# Auto-Sync fuer ALLE Apps wieder aktivieren (nach Startup)
+argocd app sync --all
 ```
 
 ### Troubleshooting
@@ -124,11 +129,12 @@ done
 # App-Logs anzeigen
 argocd app logs garage
 
-# Sync-Status und Health pruefen
+# Sync-Status und Health als JSON
 argocd app get garage -o json | jq '.status.health, .status.sync'
 
-# Hard-Refresh (Cache invalidieren)
-argocd app get garage --hard-refresh
+# Alle Apps mit Problemen anzeigen
+argocd app list --status OutOfSync
+argocd app list --health Degraded
 ```
 
 ---
@@ -136,9 +142,10 @@ argocd app get garage --hard-refresh
 ## Hinweise
 
 - Der Login-Token laeuft nach 24 Stunden ab — erneut `argocd login` ausfuehren
-- Bei Nutzung von Option A (/etc/hosts): Eintrag muss bei IP-Aenderung aktualisiert werden
+- Bei /etc/hosts Eintrag: Muss bei IP-Aenderung der Traefik LB aktualisiert werden
 - `--grpc-web` ist noetig wenn Traefik als Reverse Proxy vor ArgoCD steht
-- `--insecure` ist noetig da wir ein self-signed oder Let's Encrypt Staging Zertifikat haben koennen
+- `--insecure` ist noetig da das TLS-Zertifikat ggf. nicht vom CLI vertraut wird
+- Fuer TEST/PROD Umgebungen spaeter separate /etc/hosts Eintraege und Logins einrichten
 
 ---
 
