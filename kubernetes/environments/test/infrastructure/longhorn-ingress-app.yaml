@@ -1,0 +1,33 @@
+---
+# ArgoCD Application: Longhorn Ingress
+# Certificate + IngressRoute fuer das Longhorn Dashboard
+# DNS: longhorn-test.eneg.de -> Traefik -> longhorn-frontend
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: longhorn-ingress
+  namespace: argocd
+  annotations:
+    argocd.argoproj.io/sync-wave: "3"
+  finalizers:
+    - resources-finalizer.argocd.argoproj.io
+spec:
+  project: default
+
+  source:
+    repoURL: git@github.com:dhenkeeneg/eneg-k8s-infrastructure-v2.git
+    targetRevision: main
+    path: kubernetes/environments/test/longhorn
+    directory:
+      recurse: false
+      include: 'ingress.yaml'
+
+  destination:
+    server: https://kubernetes.default.svc
+
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
+    syncOptions:
+      - ServerSideApply=true

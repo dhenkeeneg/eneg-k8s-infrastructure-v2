@@ -1,0 +1,46 @@
+---
+# ArgoCD Application: Traefik Ingress Controller
+# Multi-Source: Helm Chart v39.0.0 + Base Values + TEST Override
+# Traefik v3.6.7 mit MetalLB LoadBalancer IP 192.168.179.100
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: traefik
+  namespace: argocd
+  finalizers:
+    - resources-finalizer.argocd.argoproj.io
+spec:
+  project: default
+
+  sources:
+    # Source 1: Helm Chart aus Traefik Repository
+    - repoURL: https://traefik.github.io/charts
+      chart: traefik
+      targetRevision: 39.0.0
+      helm:
+        releaseName: traefik
+        valueFiles:
+          - $values/kubernetes/base/traefik/values.yaml
+          - $values/kubernetes/environments/test/traefik/values-override.yaml
+
+    # Source 2: Git Repository Referenz fuer Values
+    - repoURL: git@github.com:dhenkeeneg/eneg-k8s-infrastructure-v2.git
+      targetRevision: main
+      ref: values
+
+    # Source 3: Traefik Dashboard Certificate (Kustomize)
+    - repoURL: git@github.com:dhenkeeneg/eneg-k8s-infrastructure-v2.git
+      targetRevision: main
+      path: kubernetes/environments/test/traefik
+
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: traefik
+
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
+    syncOptions:
+      - CreateNamespace=true
+      - ServerSideApply=true
