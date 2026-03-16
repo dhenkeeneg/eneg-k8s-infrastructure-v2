@@ -1,6 +1,6 @@
 ---
 # ArgoCD Application: Traefik Ingress Controller
-# Multi-Source: Helm Chart v39.0.0 + Values aus Git-Repo
+# Multi-Source: Helm Chart v39.0.0 + Base Values + DEV Override
 # Traefik v3.6.7 mit MetalLB LoadBalancer IP 192.168.180.100
 apiVersion: argoproj.io/v1alpha1
 kind: Application
@@ -21,11 +21,17 @@ spec:
         releaseName: traefik
         valueFiles:
           - $values/kubernetes/base/traefik/values.yaml
+          - $values/kubernetes/environments/dev/traefik/values-override.yaml
 
-    # Source 2: Values aus unserem Git Repository
+    # Source 2: Git Repository Referenz fuer Values
     - repoURL: git@github.com:dhenkeeneg/eneg-k8s-infrastructure-v2.git
       targetRevision: main
       ref: values
+
+    # Source 3: Traefik Dashboard Certificate (Kustomize)
+    - repoURL: git@github.com:dhenkeeneg/eneg-k8s-infrastructure-v2.git
+      targetRevision: main
+      path: kubernetes/environments/dev/traefik
 
   destination:
     server: https://kubernetes.default.svc
