@@ -6,6 +6,4 @@ namespace: metallb-system
 resources:
   # MetalLB v0.15.3 native (L2) Installation
   - github.com/metallb/metallb/config/native?ref=v0.15.3
-  # Eigene Konfiguration
-  - ipaddresspool.yaml
-  - l2advertisement.yaml
+  # IP-Pool und L2Advertisement werden per Environment-Overlay definiert

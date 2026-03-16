@@ -41,28 +41,30 @@ spec:
     size: 20Gi
     storageClassName: longhorn-db
 
-  # Resources (DEV-Dimensionierung)
+  # Resources (DEV-Dimensionierung, angepasst fuer i-doit)
   resources:
     requests:
-      memory: "512Mi"
+      memory: "1Gi"
       cpu: "250m"
     limits:
-      memory: "1Gi"
+      memory: "2Gi"
       cpu: "1000m"
 
-  # MariaDB Konfiguration (DEV)
+  # MariaDB Konfiguration (DEV, optimiert fuer i-doit)
   myCnf: |
     [mariadb]
     bind-address=*
     default_storage_engine=InnoDB
     binlog_format=ROW
     innodb_autoinc_lock_mode=2
-    innodb_buffer_pool_size=512M
+    innodb_buffer_pool_size=1024M
     innodb_log_file_size=256M
     innodb_flush_log_at_trx_commit=2
+    max_allowed_packet=64M
     max_connections=200
     character_set_server=utf8mb4
     collation_server=utf8mb4_unicode_ci
+    sql_mode=
     log_warnings=2
     slow_query_log=ON
     long_query_time=2

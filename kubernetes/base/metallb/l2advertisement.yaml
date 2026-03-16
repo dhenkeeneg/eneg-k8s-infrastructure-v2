@@ -1,11 +1,3 @@
----
-# MetalLB L2 Advertisement
-# Gibt die IPs aus dem Pool per ARP im lokalen Netzwerk bekannt
-apiVersion: metallb.io/v1beta1
-kind: L2Advertisement
-metadata:
-  name: dev-l2-advertisement
-  namespace: metallb-system
-spec:
-  ipAddressPools:
-    - dev-pool
+# Diese Datei wurde nach kubernetes/environments/dev/metallb/ verschoben.
+# L2Advertisements werden per Environment-Overlay definiert.
+# Siehe: kubernetes/environments/{dev,test,prod}/metallb/l2advertisement.yaml

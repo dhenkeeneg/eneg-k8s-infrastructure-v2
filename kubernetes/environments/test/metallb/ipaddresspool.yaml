@@ -1,0 +1,14 @@
+---
+# MetalLB IP Address Pool für TEST-Umgebung
+# Dedizierte IP für Traefik + Pool für weitere Services
+apiVersion: metallb.io/v1beta1
+kind: IPAddressPool
+metadata:
+  name: test-pool
+  namespace: metallb-system
+spec:
+  addresses:
+    # Dedizierte Traefik IP
+    - 192.168.179.100/32
+    # Allgemeiner Pool für weitere LoadBalancer Services
+    - 192.168.179.151-192.168.179.199

@@ -14,7 +14,7 @@ spec:
   source:
     repoURL: git@github.com:dhenkeeneg/eneg-k8s-infrastructure-v2.git
     targetRevision: main
-    path: kubernetes/base/metallb
+    path: kubernetes/environments/dev/metallb
 
   destination:
     server: https://kubernetes.default.svc
