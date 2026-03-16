@@ -1,36 +1,4 @@
----
-# TLS Zertifikat für ArgoCD UI
-# Liegt im traefik Namespace (Standard-Pattern für alle Apps)
-apiVersion: cert-manager.io/v1
-kind: Certificate
-metadata:
-  name: argocd-server-tls
-  namespace: traefik
-spec:
-  secretName: argocd-server-tls
-  issuerRef:
-    name: letsencrypt-prod
-    kind: ClusterIssuer
-  dnsNames:
-    - argocd-dev-v2.eneg.de
----
-# IngressRoute für ArgoCD UI
-# Pattern: IngressRoute + Certificate im traefik Namespace,
-# Service-Referenz cross-namespace zum Backend
-apiVersion: traefik.io/v1alpha1
-kind: IngressRoute
-metadata:
-  name: argocd-server
-  namespace: traefik
-spec:
-  entryPoints:
-    - websecure
-  routes:
-    - match: Host(`argocd-dev-v2.eneg.de`)
-      kind: Rule
-      services:
-        - name: argocd-server
-          namespace: argocd
-          port: 80
-  tls:
-    secretName: argocd-server-tls
+# Diese Datei wurde nach kubernetes/environments/{dev,test}/argocd/ verschoben.
+# Das ArgoCD Ingress (Certificate + IngressRoute) wird per Environment-Overlay
+# definiert, da der DNS-Name umgebungsspezifisch ist.
+# Siehe: kubernetes/environments/{dev,test,prod}/argocd/argocd-ingress.yaml

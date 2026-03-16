@@ -13,5 +13,4 @@ data:
   # Enable KSOPS Kustomize plugin for SOPS decryption
   kustomize.buildOptions: "--enable-alpha-plugins --enable-exec"
 
-  # Server URL (wird in Phase 4.2 mit Traefik/Ingress relevant)
-  url: https://argocd-dev.eneg.de
+  # Server URL wird per Environment-Overlay gesetzt

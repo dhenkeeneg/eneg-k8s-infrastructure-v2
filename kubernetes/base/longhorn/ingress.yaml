@@ -1,36 +1,4 @@
----
-# TLS Zertifikat für Longhorn Dashboard
-# Liegt im traefik Namespace (Standard-Pattern für alle Apps)
-apiVersion: cert-manager.io/v1
-kind: Certificate
-metadata:
-  name: longhorn-dashboard-tls
-  namespace: traefik
-spec:
-  secretName: longhorn-dashboard-tls
-  issuerRef:
-    name: letsencrypt-prod
-    kind: ClusterIssuer
-  dnsNames:
-    - longhorn-dev-v2.eneg.de
----
-# IngressRoute für Longhorn Dashboard
-# Pattern: IngressRoute + Certificate im traefik Namespace,
-# Service-Referenz cross-namespace zum Backend (longhorn-system)
-apiVersion: traefik.io/v1alpha1
-kind: IngressRoute
-metadata:
-  name: longhorn-dashboard
-  namespace: traefik
-spec:
-  entryPoints:
-    - websecure
-  routes:
-    - match: Host(`longhorn-dev-v2.eneg.de`)
-      kind: Rule
-      services:
-        - name: longhorn-frontend
-          namespace: longhorn-system
-          port: 80
-  tls:
-    secretName: longhorn-dashboard-tls
+# Diese Datei wurde nach kubernetes/environments/{dev,test}/longhorn/ verschoben.
+# Das Longhorn Dashboard Ingress (Certificate + IngressRoute) wird per
+# Environment-Overlay definiert, da der DNS-Name umgebungsspezifisch ist.
+# Siehe: kubernetes/environments/{dev,test,prod}/longhorn/ingress.yaml
