@@ -1,0 +1,18 @@
+---
+# CloudNativePG Database: it-info-versand
+# Erstellt die it_info_versand-Datenbank deklarativ auf dem cnpg-shared Cluster
+# Owner ist die managed role "it_info_versand" (definiert in cnpg-shared.yaml)
+apiVersion: postgresql.cnpg.io/v1
+kind: Database
+metadata:
+  name: it-info-versand
+  namespace: databases
+  labels:
+    app.kubernetes.io/part-of: cloudnative-pg
+    app.kubernetes.io/managed-by: argocd
+    app.kubernetes.io/component: database
+spec:
+  name: it_info_versand
+  owner: it_info_versand
+  cluster:
+    name: cnpg-shared
