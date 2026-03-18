@@ -32,7 +32,7 @@ spec:
       # --- Init-Container: Alembic DB-Migrationen ---
       initContainers:
         - name: alembic-migrate
-          image: ghcr.io/dhenkeeneg/eneg-it-info-versand:latest
+          image: ghcr.io/dhenkeeneg/eneg-it-info-versand:adcc70e
           command: ["alembic", "upgrade", "head"]
           workingDir: /project
           env:
@@ -53,7 +53,7 @@ spec:
       # --- App-Container ---
       containers:
         - name: it-info-versand
-          image: ghcr.io/dhenkeeneg/eneg-it-info-versand:latest
+          image: ghcr.io/dhenkeeneg/eneg-it-info-versand:adcc70e
           ports:
             - name: http
               containerPort: 8000
