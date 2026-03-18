@@ -27,6 +27,8 @@ spec:
         fsGroup: 1000
         runAsUser: 1000
         runAsGroup: 1000
+      imagePullSecrets:
+        - name: ghcr-pull-secret
       # --- Init-Container: Alembic DB-Migrationen ---
       initContainers:
         - name: alembic-migrate
