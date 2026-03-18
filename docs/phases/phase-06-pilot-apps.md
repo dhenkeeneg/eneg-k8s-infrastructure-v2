@@ -89,8 +89,9 @@ Secrets werden getrennt mit SOPS verschluesselt und via KSOPS deployed.
 | 6.4b | Keycloak: Realm, AD-Anbindung, SSO-Clients | ✅ Abgeschlossen |
 | 6.4c | App-Authentifizierung: OpenProject LDAP, Odoo/n8n SSO-Vorbereitung | 🔄 In Bearbeitung |
 | 6.5 | i-doit Open 37: Eigenes Docker Image, MariaDB Galera, Deployment + Ingress | ✅ Abgeschlossen |
-| 6.5 | Weitere Apps nach Bedarf | 🔲 Offen |
-| 6.6 | Validierung + Dokumentation | 🔲 Offen |
+| 6.6 | IT-Info-Versand: Eigene FastAPI-App, CNPG, CI/CD via GitHub Actions | ✅ Abgeschlossen |
+| 6.7 | Weitere Apps nach Bedarf | 🔲 Offen |
+| 6.8 | Validierung + Dokumentation | 🔲 Offen |
 
 ---
 
@@ -142,11 +143,13 @@ Secrets werden getrennt mit SOPS verschluesselt und via KSOPS deployed.
 | 7 | garage-backup-secrets | Backup-Credentials: Garage + NAS10 S3-Keys (KSOPS) |
 | 7 | keycloak-secrets | App-Secrets: DB-Passwort + Admin-Passwort (KSOPS) |
 | 7 | idoit-secrets | App-Secrets: DB-Passwort + Admin-Passwort + ghcr.io Pull Secret (KSOPS) |
+| 7 | it-info-versand-secrets | App-Secrets: DB-Passwort, Session, Encryption Key, SMTP, Keycloak (KSOPS) |
 | 8 | n8n | App-Deployment: Namespace, Deployment, Service, PVC, Ingress |
 | 8 | openproject | App-Deployment: Namespace, Web, Worker, Memcached, Hocuspocus, PVC, Ingress |
 | 8 | odoo | App-Deployment: Namespace, Deployment, Service, PVC, ConfigMap, Ingress |
 | 8 | keycloak | App-Deployment: Namespace, Deployment, Service, Ingress |
 | 8 | idoit | App-Deployment: Namespace, Deployment (eigenes Image), Service, PVC, Ingress |
+| 8 | it-info-versand | App-Deployment: Namespace, Deployment (eigenes Image, Init-Container), Service, Ingress |
 | 8 | garage-backup | CronJob: Taegliches rclone Backup Garage -> NAS10 |
 | 9 | odoo-backup | CronJob: Taegliches rclone Backup Odoo Filestore -> NAS10 |
 
@@ -363,6 +366,7 @@ kubectl exec -n garage garage-0 -- /garage layout apply --version 1
 | odoo-dev-v2.eneg.de | CNAME | traefik-dev.eneg.de | Odoo 18 CE | ✅ Aktiv |
 | keycloak-dev-v2.eneg.de | CNAME | traefik-dev.eneg.de | Keycloak | ✅ Aktiv |
 | idoit-dev-v2.eneg.de | CNAME | traefik-dev.eneg.de | i-doit | ✅ Aktiv |
+| it-info-versand-dev.eneg.de | CNAME | traefik-dev.eneg.de | IT-Info-Versand | ✅ Aktiv |
 
 ---
 
@@ -1273,6 +1277,119 @@ docker push ghcr.io/dhenkeeneg/idoit-open:37
 
 ---
 
+### 6.6 — IT-Info-Versand (eNeG Eigenentwicklung) ✅
+
+**Abgeschlossen am:** 18.03.2026
+**URL:** https://it-info-versand-dev.eneg.de
+**Image:** ghcr.io/dhenkeeneg/eneg-it-info-versand:latest (privat)
+**Repo:** github.com/dhenkeeneg/eneg-it-info-versand
+
+#### Beschreibung
+
+Eigenentwickelte interne Webapp zum strukturierten Versand von IT-Kommunikation
+(Informationen, Warnungen, Wartungen, Stoerungen) per E-Mail an Mitarbeiter:innen.
+Erste komplett selbst entwickelte App im Cluster mit eigener CI/CD-Pipeline.
+
+#### Tech-Stack
+
+- **Backend:** Python 3.12, FastAPI, SQLAlchemy (async), Alembic
+- **Frontend:** Jinja2 SSR + HTMX 2.0 + Bootstrap 5.3
+- **E-Mail-Editor:** TinyMCE 7.9.x (self-hosted/GPL)
+- **SMTP:** aiosmtplib (smtpout1.eneg.customers.hosting.zone:587/TLS)
+- **Verschluesselung:** cryptography 46.x (Fernet fuer sensitive DB-Settings)
+- **Auth:** Keycloak OIDC (vorbereitet, noch deaktiviert)
+
+#### CI/CD Pipeline
+
+```
+git push (main, Aenderungen in src/, alembic/, Dockerfile)
+  → GitHub Actions: Docker Build (Multi-Stage) + Push zu ghcr.io
+  → ArgoCD erkennt Aenderung → Auto-Sync → Deployment
+```
+
+- GitHub Actions Workflow: `.github/workflows/build.yaml`
+- Image Tags: Git SHA + `latest`
+- Trigger: Push auf main bei relevanten Pfaden
+
+#### Installierte Komponenten
+
+| Ressource | Namespace | Name | Status |
+|---|---|---|---|
+| Database CRD | databases | it-info-versand | ✅ Erstellt |
+| Managed Role | databases | it_info_versand (auf cnpg-shared) | ✅ Login aktiv |
+| Secret (DB) | databases | it-info-versand-db-credentials | ✅ SOPS/KSOPS |
+| Namespace | it-info-versand | it-info-versand | ✅ Erstellt |
+| Secret (App) | it-info-versand | it-info-versand-secrets | ✅ SOPS/KSOPS |
+| Secret (Pull) | it-info-versand | ghcr-pull-secret | ✅ Manuell erstellt |
+| Deployment | it-info-versand | it-info-versand (1 Replica + Init-Container) | ✅ Running |
+| Service | it-info-versand | it-info-versand (ClusterIP:8000) | ✅ Active |
+| Certificate | traefik | it-info-versand-tls | ✅ Ready (Let's Encrypt) |
+| IngressRoute | traefik | it-info-versand | ✅ Active |
+
+#### ArgoCD Applications
+
+| Application | Sync | Health | Wave |
+|---|---|---|---|
+| cnpg-databases | Synced | Healthy | 6 |
+| it-info-versand-secrets | Synced | Healthy | 7 |
+| it-info-versand | Synced | Healthy | 8 |
+
+#### Container-Struktur (Dockerfile)
+
+```
+WORKDIR /project
+/project/app/         # App-Code (kopiert aus src/app/)
+/project/alembic/     # Migrationen
+/project/alembic.ini  # Alembic Config
+CMD: uvicorn app.main:app --host 0.0.0.0 --port 8000
+```
+
+Init-Container fuehrt `alembic upgrade head` automatisch bei jedem Pod-Start aus.
+
+#### Secrets (SOPS-verschluesselt)
+
+| Key | Beschreibung | Generierung |
+|---|---|---|
+| db-password | PostgreSQL Passwort | `openssl rand -base64 24` |
+| session-secret | Cookie Signing Key | `openssl rand -base64 24` |
+| encryption-key | Fernet Key (sensitive DB-Settings) | `python -c "from cryptography.fernet import Fernet; print(Fernet.generate_key().decode())"` |
+| smtp-username | SMTP Benutzername | Manuell |
+| smtp-password | SMTP Passwort | Manuell |
+| keycloak-client-secret | OIDC Client Secret | Platzhalter (Phase 2) |
+
+#### Resources (DEV)
+
+| Parameter | Request | Limit |
+|---|---|---|
+| CPU | 250m | 1 |
+| Memory | 256Mi | 512Mi |
+
+#### Key Learnings IT-Info-Versand
+
+1. **Dockerfile WORKDIR:** Code muss unter `/project/app/` liegen, nicht `/app/`.
+   Damit `from app.config import settings` funktioniert, muss `app/` als Python-
+   Package erreichbar sein. CMD: `uvicorn app.main:app` (nicht `main:app`).
+
+2. **Alembic env.py Pfad-Erkennung:** env.py muss erkennen ob es lokal laeuft
+   (`src/` existiert → `sys.path.insert(0, src_path)`) oder im Container
+   (`/project/` → `sys.path.insert(0, project_root)`). Vorheriger Fallback
+   auf `/` (Parent von `/app`) funktionierte mit neuem WORKDIR nicht.
+
+3. **ghcr.io Private Image:** Erfordert ImagePullSecret im Namespace UND
+   `imagePullSecrets` im Deployment-Manifest. Ohne beides: `401 Unauthorized`.
+   Secret wird manuell angelegt (nicht via SOPS).
+
+4. **GitHub Actions Trigger:** Der Workflow triggert bei Push auf main nur
+   bei relevanten Pfaden (src/, alembic/, Dockerfile). Der Workflow selbst
+   (build.yaml) ist auch ein Trigger — damit wird beim ersten Commit
+   automatisch gebaut.
+
+5. **Alembic als Init-Container:** Robuster als `entrypoint.sh`, da Kubernetes
+   den Pod nicht startet wenn die Migration fehlschlaegt. Braucht dieselben
+   Env-Variablen (DATABASE_URL, SESSION_SECRET) wie der App-Container.
+
+---
+
 ## Naechste Schritte
 
 - Odoo SSO/OIDC ueber Keycloak (Community-Modul erforderlich)
@@ -1298,3 +1415,4 @@ docker push ghcr.io/dhenkeeneg/idoit-open:37
 | 04.03.2026 | OpenProject LDAP-Authentifizierung gegen AD (Schritt 6.4c) |
 | 04.03.2026 | Erkenntnis: OpenProject OIDC und n8n SSO sind Enterprise-only |
 | 10.03.2026 | i-doit Open 37 deployed (Schritt 6.5 abgeschlossen), eigenes Docker Image auf ghcr.io, MariaDB Operator CRDs |
+| 18.03.2026 | IT-Info-Versand deployed (Schritt 6.6 abgeschlossen), eigene FastAPI-App, CI/CD via GitHub Actions, Alembic Init-Container |
