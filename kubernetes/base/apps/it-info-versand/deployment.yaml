@@ -34,7 +34,7 @@ spec:
         - name: alembic-migrate
           image: ghcr.io/dhenkeeneg/eneg-it-info-versand:latest
           command: ["alembic", "upgrade", "head"]
-          workingDir: /app
+          workingDir: /project
           env:
             - name: DB_PASSWORD
               valueFrom:
