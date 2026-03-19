@@ -102,13 +102,13 @@ spec:
                 secretKeyRef:
                   name: it-info-versand-secrets
                   key: smtp-password
-            # --- Keycloak OIDC (Phase 2 — vorerst deaktiviert) ---
+            # --- Keycloak OIDC ---
             - name: AUTH_ENABLED
-              value: "false"
+              value: "true"
             - name: KEYCLOAK_URL
               value: "https://keycloak-dev-v2.eneg.de"
             - name: KEYCLOAK_REALM
-              value: "eneg"
+              value: "eNeG"
             - name: KEYCLOAK_CLIENT_ID
               value: "it-info-versand"
             - name: KEYCLOAK_CLIENT_SECRET
