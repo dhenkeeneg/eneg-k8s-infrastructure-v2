@@ -1,5 +1,5 @@
 ---
-# ArgoCD Application: CNPG Logical Backups
+# ArgoCD Application: CNPG Logical Backups (TEST)
 # CronJobs fuer pg_dumpall auf S3
 apiVersion: argoproj.io/v1alpha1
 kind: Application
@@ -16,7 +16,7 @@ spec:
   source:
     repoURL: git@github.com:dhenkeeneg/eneg-k8s-infrastructure-v2.git
     targetRevision: main
-    path: kubernetes/environments/dev/cnpg-backup
+    path: kubernetes/environments/test/cnpg-backup
 
   destination:
     server: https://kubernetes.default.svc

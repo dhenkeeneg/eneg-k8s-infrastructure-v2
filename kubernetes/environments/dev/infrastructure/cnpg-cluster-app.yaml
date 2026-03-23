@@ -18,7 +18,7 @@ spec:
   source:
     repoURL: git@github.com:dhenkeeneg/eneg-k8s-infrastructure-v2.git
     targetRevision: main
-    path: kubernetes/base/cloudnative-pg/cluster
+    path: kubernetes/environments/dev/cnpg-cluster
 
   destination:
     server: https://kubernetes.default.svc

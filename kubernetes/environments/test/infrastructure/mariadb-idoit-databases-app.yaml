@@ -1,10 +1,10 @@
 ---
-# ArgoCD Application: CNPG Logical Backups
-# CronJobs fuer pg_dumpall auf S3
+# ArgoCD Application: MariaDB i-doit Databases (TEST)
+# Erstellt Database, User und Grant CRDs fuer i-doit
 apiVersion: argoproj.io/v1alpha1
 kind: Application
 metadata:
-  name: cnpg-logical-backup
+  name: mariadb-idoit-databases
   namespace: argocd
   annotations:
     argocd.argoproj.io/sync-wave: "6"
@@ -16,7 +16,7 @@ spec:
   source:
     repoURL: git@github.com:dhenkeeneg/eneg-k8s-infrastructure-v2.git
     targetRevision: main
-    path: kubernetes/environments/dev/cnpg-backup
+    path: kubernetes/base/mariadb-galera/databases
 
   destination:
     server: https://kubernetes.default.svc
@@ -27,5 +27,5 @@ spec:
       prune: true
       selfHeal: true
     syncOptions:
-      - CreateNamespace=true
+      - CreateNamespace=false
       - ServerSideApply=true

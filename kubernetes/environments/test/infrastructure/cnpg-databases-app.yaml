@@ -1,10 +1,11 @@
 ---
-# ArgoCD Application: CNPG Logical Backups
-# CronJobs fuer pg_dumpall auf S3
+# ArgoCD Application: CloudNativePG Databases (TEST)
+# Deployed alle CNPG Database CRDs (n8n, keycloak, etc.)
+# Generisch — nutzt base/ direkt
 apiVersion: argoproj.io/v1alpha1
 kind: Application
 metadata:
-  name: cnpg-logical-backup
+  name: cnpg-databases
   namespace: argocd
   annotations:
     argocd.argoproj.io/sync-wave: "6"
@@ -16,7 +17,7 @@ spec:
   source:
     repoURL: git@github.com:dhenkeeneg/eneg-k8s-infrastructure-v2.git
     targetRevision: main
-    path: kubernetes/environments/dev/cnpg-backup
+    path: kubernetes/base/cloudnative-pg/databases
 
   destination:
     server: https://kubernetes.default.svc

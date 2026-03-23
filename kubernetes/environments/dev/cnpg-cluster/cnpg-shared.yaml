@@ -1,0 +1,110 @@
+---
+# CloudNativePG Cluster: cnpg-shared (DEV)
+# PostgreSQL 17.8 HA-Cluster fuer leichtgewichtige Apps
+# Apps: n8n, Keycloak, Gitea, Papermerge
+apiVersion: postgresql.cnpg.io/v1
+kind: Cluster
+metadata:
+  name: cnpg-shared
+  namespace: databases
+  labels:
+    app.kubernetes.io/part-of: cloudnative-pg
+    app.kubernetes.io/managed-by: argocd
+spec:
+  description: "Shared PostgreSQL Cluster fuer leichtgewichtige Apps"
+  imageName: ghcr.io/cloudnative-pg/postgresql:17.8-system-bookworm
+  instances: 3
+  primaryUpdateStrategy: unsupervised
+
+  # Superuser-Zugang fuer pg_dumpall Backups
+  enableSuperuserAccess: true
+
+  # PostgreSQL Konfiguration (DEV-Dimensionierung)
+  postgresql:
+    parameters:
+      # Memory
+      shared_buffers: "256MB"
+      effective_cache_size: "768MB"
+      work_mem: "4MB"
+      maintenance_work_mem: "64MB"
+      # Connections
+      max_connections: "200"
+      # WAL
+      wal_buffers: "8MB"
+      min_wal_size: "256MB"
+      max_wal_size: "1GB"
+      # Checkpoints
+      checkpoint_completion_target: "0.9"
+      # Logging
+      log_statement: "ddl"
+      log_min_duration_statement: "1000"
+      # Locale
+      lc_messages: "C"
+
+  # Storage
+  storage:
+    size: 20Gi
+    storageClass: longhorn-db
+
+  # WAL Storage (separates Volume fuer bessere I/O-Performance)
+  walStorage:
+    size: 5Gi
+    storageClass: longhorn-db
+
+  # Resources (DEV-Dimensionierung)
+  resources:
+    requests:
+      memory: "512Mi"
+      cpu: "250m"
+    limits:
+      memory: "1Gi"
+      cpu: "1"
+
+  # Backup auf S3 (WAL-Archivierung) — DEV-Bucket
+  backup:
+    barmanObjectStore:
+      destinationPath: s3://k8s-dev-postgres-wal/cnpg-shared/
+      endpointURL: http://nas10.eneg.de:8010
+      s3Credentials:
+        accessKeyId:
+          name: cnpg-s3-credentials
+          key: ACCESS_KEY_ID
+        secretAccessKey:
+          name: cnpg-s3-credentials
+          key: SECRET_ACCESS_KEY
+    retentionPolicy: "7d"
+
+  # Managed Roles (deklarativ, Passwoerter aus SOPS Secrets)
+  managed:
+    roles:
+      - name: n8n
+        login: true
+        createdb: false
+        superuser: false
+        inherit: true
+        connectionLimit: -1
+        ensure: present
+        passwordSecret:
+          name: n8n-db-credentials
+      - name: keycloak
+        login: true
+        createdb: false
+        superuser: false
+        inherit: true
+        connectionLimit: -1
+        ensure: present
+        passwordSecret:
+          name: keycloak-db-credentials
+      - name: it_info_versand
+        login: true
+        createdb: false
+        superuser: false
+        inherit: true
+        connectionLimit: -1
+        ensure: present
+        passwordSecret:
+          name: it-info-versand-db-credentials
+
+  # Monitoring (vorbereitet fuer Phase 7)
+  monitoring:
+    enablePodMonitor: false

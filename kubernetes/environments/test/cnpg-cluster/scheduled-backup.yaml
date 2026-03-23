@@ -1,0 +1,36 @@
+---
+# ScheduledBackup: cnpg-shared Full Backup (Barman Physical)
+# Taeglich um 02:00 UTC, 30 Tage Retention
+apiVersion: postgresql.cnpg.io/v1
+kind: ScheduledBackup
+metadata:
+  name: cnpg-shared-full
+  namespace: databases
+  labels:
+    app.kubernetes.io/part-of: cloudnative-pg
+    app.kubernetes.io/managed-by: argocd
+spec:
+  cluster:
+    name: cnpg-shared
+  schedule: "0 2 * * *"
+  backupOwnerReference: cluster
+  method: barmanObjectStore
+  immediate: true
+---
+# ScheduledBackup: cnpg-erp Full Backup (Barman Physical)
+# Taeglich um 02:15 UTC, 30 Tage Retention (versetzt zu shared)
+apiVersion: postgresql.cnpg.io/v1
+kind: ScheduledBackup
+metadata:
+  name: cnpg-erp-full
+  namespace: databases
+  labels:
+    app.kubernetes.io/part-of: cloudnative-pg
+    app.kubernetes.io/managed-by: argocd
+spec:
+  cluster:
+    name: cnpg-erp
+  schedule: "15 2 * * *"
+  backupOwnerReference: cluster
+  method: barmanObjectStore
+  immediate: true

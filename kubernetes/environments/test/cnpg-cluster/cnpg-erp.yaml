@@ -1,0 +1,93 @@
+---
+# CloudNativePG Cluster: cnpg-erp (TEST)
+# PostgreSQL 17.8 HA-Cluster fuer schwergewichtige ERP-Apps
+# Apps: Odoo, OpenProject
+apiVersion: postgresql.cnpg.io/v1
+kind: Cluster
+metadata:
+  name: cnpg-erp
+  namespace: databases
+  labels:
+    app.kubernetes.io/part-of: cloudnative-pg
+    app.kubernetes.io/managed-by: argocd
+spec:
+  description: "ERP PostgreSQL Cluster fuer Odoo und OpenProject"
+  imageName: ghcr.io/cloudnative-pg/postgresql:17.8-system-bookworm
+  instances: 3
+  primaryUpdateStrategy: unsupervised
+
+  # Superuser-Zugang fuer pg_dumpall Backups
+  enableSuperuserAccess: true
+
+  # Managed Roles (Passwort aus Secret, Login erlaubt)
+  managed:
+    roles:
+      - name: openproject
+        ensure: present
+        login: true
+        createdb: false
+        connectionLimit: -1
+        inherit: true
+        passwordSecret:
+          name: openproject-db-credentials
+      - name: odoo
+        ensure: present
+        login: true
+        createdb: false
+        connectionLimit: -1
+        inherit: true
+        passwordSecret:
+          name: odoo-db-credentials
+
+  # PostgreSQL Konfiguration (TEST - identisch zu DEV)
+  postgresql:
+    parameters:
+      shared_buffers: "512MB"
+      effective_cache_size: "1536MB"
+      work_mem: "8MB"
+      maintenance_work_mem: "128MB"
+      max_connections: "100"
+      wal_buffers: "16MB"
+      min_wal_size: "512MB"
+      max_wal_size: "2GB"
+      checkpoint_completion_target: "0.9"
+      log_statement: "ddl"
+      log_min_duration_statement: "1000"
+      lc_messages: "C"
+
+  # Storage
+  storage:
+    size: 20Gi
+    storageClass: longhorn-db
+
+  # WAL Storage (separates Volume)
+  walStorage:
+    size: 5Gi
+    storageClass: longhorn-db
+
+  # Resources (TEST - identisch zu DEV)
+  resources:
+    requests:
+      memory: "1Gi"
+      cpu: "500m"
+    limits:
+      memory: "2Gi"
+      cpu: "2"
+
+  # Backup auf S3 (WAL-Archivierung) — TEST-Bucket
+  backup:
+    barmanObjectStore:
+      destinationPath: s3://k8s-test-postgres-wal/cnpg-erp/
+      endpointURL: http://nas10.eneg.de:8010
+      s3Credentials:
+        accessKeyId:
+          name: cnpg-s3-credentials
+          key: ACCESS_KEY_ID
+        secretAccessKey:
+          name: cnpg-s3-credentials
+          key: SECRET_ACCESS_KEY
+    retentionPolicy: "7d"
+
+  # Monitoring (vorbereitet fuer Phase 7)
+  monitoring:
+    enablePodMonitor: false
