@@ -2,8 +2,13 @@
 # https://github.com/getsops/sops
 
 creation_rules:
-  # Regel 1: Alle Secrets in kubernetes/ verschlüsseln
-  - path_regex: kubernetes/.*/secrets/.*\.yaml$
+  # Regel 1: Alle Secrets in kubernetes/base/*/secrets/ verschlüsseln
+  - path_regex: kubernetes/base/.*/secrets/.*\.yaml$
+    encrypted_regex: ^(data|stringData)$
+    age: age1fdqtcha9jnzqafe5t6hed6v5sv858x2tt6nwuw00u3luyxuaqcxqh5mcrm
+
+  # Regel 1b: Alle Secrets in kubernetes/environments/*-secrets/ verschlüsseln
+  - path_regex: kubernetes/environments/.*-secrets/.*\.yaml$
     encrypted_regex: ^(data|stringData)$
     age: age1fdqtcha9jnzqafe5t6hed6v5sv858x2tt6nwuw00u3luyxuaqcxqh5mcrm
 
