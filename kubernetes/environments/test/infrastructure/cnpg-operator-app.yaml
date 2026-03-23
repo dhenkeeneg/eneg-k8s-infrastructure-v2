@@ -1,0 +1,43 @@
+---
+# ArgoCD Application: CloudNativePG Operator
+# Helm Chart: cloudnative-pg v0.27.1 (Operator v1.28.1)
+# Multi-Source: Helm Chart + Values aus Git
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: cnpg-operator
+  namespace: argocd
+  annotations:
+    # Nach Storage (Sync-Wave 3), vor DB-Clustern (Sync-Wave 5)
+    argocd.argoproj.io/sync-wave: "4"
+  finalizers:
+    - resources-finalizer.argocd.argoproj.io
+spec:
+  project: default
+
+  sources:
+    # Source 1: Helm Chart aus CNPG Repository
+    - repoURL: https://cloudnative-pg.github.io/charts
+      chart: cloudnative-pg
+      targetRevision: 0.27.1
+      helm:
+        releaseName: cnpg
+        valueFiles:
+          - $values/kubernetes/base/cloudnative-pg/operator/values.yaml
+
+    # Source 2: Values aus unserem Git Repository
+    - repoURL: git@github.com:dhenkeeneg/eneg-k8s-infrastructure-v2.git
+      targetRevision: main
+      ref: values
+
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: cnpg-system
+
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
+    syncOptions:
+      - CreateNamespace=true
+      - ServerSideApply=true
