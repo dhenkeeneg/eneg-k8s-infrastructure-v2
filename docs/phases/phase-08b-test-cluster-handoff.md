@@ -1,163 +1,174 @@
-# Phase 8b: TEST-Cluster Aufbau — Handoff-Dokument
+# Phase 8b: TEST-Cluster Aufbau — Abschlussdokument
 
 **Erstellt:** 16.03.2026  
-**Zuletzt bearbeitet:** 16.03.2026  
-**Zweck:** Nahtlose Fortsetzung in einem neuen Chat
+**Abgeschlossen:** 16.03.2026  
+**Zweck:** Dokumentation des TEST-Cluster Aufbaus
 
 ---
 
-## Abgeschlossen in Phase 8a (16.03.2026)
+## Ergebnis
 
-### Kustomize-Overlay Refactoring
+Der TEST-Cluster (VLAN 179) ist vollstaendig aufgebaut und betriebsbereit.
+Alle Infrastruktur-Komponenten (Phase 2-4) laufen identisch zum DEV-Cluster.
 
-Die Infrastruktur-Manifeste (Phase 2-4) wurden von DEV-spezifischen base-Manifesten
-auf generische base + Environment-Overlays umgestellt. Betrifft:
+### Cluster-Uebersicht
 
-- **MetalLB:** `kubernetes/environments/{dev,test}/metallb/` — IP-Pools, L2Advertisement
-- **Traefik:** `kubernetes/environments/{dev,test}/traefik/` — values-override, Certificate
-- **Longhorn:** `kubernetes/environments/{dev,test}/longhorn/` — Dashboard Ingress
-- **ArgoCD:** `kubernetes/environments/{dev,test}/argocd/` — URL-Patch, Ingress
+| Node | IP | Host | Datastore | Status |
+|------|-----|------|-----------|--------|
+| k8s-test-21 | 192.168.179.21 | s2842.eneg.de | S2842_SSD_01_VMS | Ready |
+| k8s-test-22 | 192.168.179.22 | s2843.eneg.de | S2843_SSD_01_VMS | Ready |
+| k8s-test-23 | 192.168.179.23 | s3168.eneg.de | S3168_SSD_01_VMS | Ready |
 
-ArgoCD App-Definitionen in `kubernetes/environments/dev/infrastructure/` zeigen
-jetzt auf Overlay-Pfade. Bootstrap-Dateien fuer TEST sind erstellt.
+**Ressourcen pro Node:** 6 vCPU, 16 GB RAM, 512 GB Disk
+**K3s Version:** v1.35.1+k3s1
+**kubeconfig:** `kubeconfig-test.yaml` auf k8s-mgmt-10
 
-**Verifiziert:** Alle DEV Apps Synced + Healthy, alle Dashboards erreichbar.
+### ArgoCD Applications (11/11 Synced + Healthy)
 
-**Dokumentation:**
-- Projektplan aktualisiert: `docs/K8s-GitOps-Infrastruktur-Projektplanung_v2.4.md` (Version 2.7)
-- Entscheidungsdokument: `docs/decisions/ADR-001-kustomize-overlay-pattern.md`
+| Application | Sync | Health | Quelle |
+|---|---|---|---|
+| argocd | Synced | Healthy | environments/test/argocd (Overlay) |
+| test-infrastructure | Synced | Healthy | environments/test/infrastructure (App-of-Apps) |
+| metallb | Synced | Healthy | environments/test/metallb (Overlay) |
+| traefik | Synced | Healthy | Multi-Source: base + test override |
+| cert-manager | Synced | Healthy | base (Helm) |
+| cert-manager-config | Synced | Healthy | base (ClusterIssuers) |
+| cert-manager-secrets | Synced | Healthy | base (KSOPS) |
+| cert-manager-webhook-ionos | Synced | Healthy | Helm Chart |
+| longhorn | Synced | Healthy | base (Helm) |
+| longhorn-ingress | Synced | Healthy | environments/test/longhorn (Overlay) |
+| longhorn-storageclass | Synced | Healthy | base (StorageClass) |
+
+### Dashboards und Zertifikate
+
+| Dashboard | URL | Zertifikat |
+|---|---|---|
+| ArgoCD | https://argocd-test.eneg.de | Ready (letsencrypt-prod) |
+| Traefik | https://traefik-test.eneg.de | Ready (letsencrypt-prod) |
+| Longhorn | https://longhorn-test.eneg.de | Ready (letsencrypt-prod) |
 
 ---
 
-## Naechste Schritte: Phase 8b — TEST-Cluster VMs und K3s
+## Durchgefuehrte Schritte
 
-### Voraussetzungen (bereits erledigt)
-- [x] VLAN 179 eingerichtet und routbar
-- [x] vSphere Folder `eNeG-VM-K8s/TEST` existiert
-- [x] Port Group fuer VLAN 179 auf allen drei ESXi-Hosts vorhanden
-- [x] Kubernetes Overlays fuer TEST vorbereitet (metallb, traefik, longhorn, argocd)
-- [x] Bootstrap-Dateien fuer TEST erstellt
+### Schritt 1: OpenTofu — VMs erstellt
+- `terraform/environments/test/` erstellt (main.tf, variables.tf, vms.tf, outputs.tf, folders.tf)
+- 3 VMs deployed: k8s-test-21/22/23 auf s2842/s2843/s3168
+- Folder: eNeG-VM-K8s/TEST, VLAN 179
 
-### Offene Voraussetzungen
-- [ ] DNS-Eintraege anlegen (beim DNS-Admin):
-  - `k8s-test-21.eneg.de` -> 192.168.179.21
-  - `k8s-test-22.eneg.de` -> 192.168.179.22
-  - `k8s-test-23.eneg.de` -> 192.168.179.23
-  - `traefik-test.eneg.de` -> 192.168.179.100 (A-Record)
-  - `argocd-test.eneg.de` -> traefik-test.eneg.de (CNAME)
-  - `longhorn-test.eneg.de` -> traefik-test.eneg.de (CNAME)
+### Schritt 2: Ansible — K3s installiert
+- `ansible/inventory/test/hosts.ini` erstellt
+- `ansible/inventory/test/group_vars/all.yml` erstellt (K3s-Config, SSH-Keys, TLS SANs)
+- Playbooks ausgefuehrt: 01-setup-ssh-keys, 04-longhorn-prerequisites, 02-install-k3s
+- K3s v1.35.1+k3s1 HA-Cluster mit embedded etcd
 
-### Schritt 1: OpenTofu — TEST-VMs erstellen
+### Schritt 3: ArgoCD Bootstrap
+- ArgoCD v3.3.0 installiert (Manifest-basiert)
+- SOPS Age Key Secret (`sops-age`) im argocd Namespace erstellt
+- KSOPS Patch auf repo-server angewendet
+- GitHub Deploy Key Secret erstellt (SOPS-entschluesselt)
+- ArgoCD Self-Management + App-of-Apps bootstrapped
 
-Erstelle `terraform/environments/test/` analog zu `terraform/environments/dev/`:
-- `main.tf` — Provider-Konfiguration (identisch, gleicher vCenter)
-- `variables.tf` — TEST-spezifisch: VLAN 179, 6 vCPU, 16384 MB RAM, 512 GB Disk
-- `vms.tf` — k8s-test-21/22/23 auf s2842/s2843/s3168, Folder `eNeG-VM-K8s/TEST`
-- `outputs.tf` — VM-Outputs
-- `folders.tf` — vSphere Folder
-- `credentials.example.tfvars` — Beispiel-Credentials
+### Schritt 4: Infrastruktur-Apps
+- 9 ArgoCD App-Definitionen in `kubernetes/environments/test/infrastructure/` erstellt
+- Alle Apps automatisch gesynced und healthy
 
-Ausfuehrung auf k8s-mgmt-10:
+---
+
+## Kritische Learnings (fuer PROD-Rollout beachten)
+
+### 1. SSH-Key Verteilung vor Ansible
+Das Packer-Template enthaelt keinen SSH-Key — nur Passwort-Login. Ansible Playbook
+`01-setup-ssh-keys.yml` benoetigt aber Key-basierte Authentifizierung. Loesung:
+**Vor** dem ersten Ansible-Lauf muss `ssh-copy-id` manuell von k8s-mgmt-10 ausgefuehrt werden:
 ```bash
-cd ~/git/eneg-k8s-infrastructure-v2/terraform/environments/test
-tofu init
-tofu plan -var-file="credentials.auto.tfvars"
-tofu apply -var-file="credentials.auto.tfvars"
+ssh-copy-id admin-ubuntu@<ip-node-1>
+ssh-copy-id admin-ubuntu@<ip-node-2>
+ssh-copy-id admin-ubuntu@<ip-node-3>
 ```
+**Empfehlung fuer Zukunft:** SSH Public Key von k8s-mgmt-10 im Packer-Template hinterlegen
+(in `user-data.pkrtpl.hcl` unter `late-commands` oder als `ssh_authorized_keys` in cloud-init).
 
-### Schritt 2: Ansible — K3s auf TEST installieren
+### 2. Ansible group_vars muessen pro Environment existieren
+Das Ansible Inventory braucht nicht nur `hosts.ini`, sondern auch `group_vars/all.yml` mit:
+- `k3s_version`, `k3s_server_url`, `k3s_tls_san` (environment-spezifische IPs/Hostnames)
+- `k3s_disable` (traefik, servicelb, local-storage)
+- `ssh_authorized_keys` (alle SSH-Keys: mgmt, Windows, Mac)
+- `system_timezone`, `system_locale`
 
-Erstelle `ansible/inventory/test/hosts.ini` analog zu `ansible/inventory/dev/hosts.ini`:
-- k8s-test-21 (192.168.179.21) als initial_server
-- k8s-test-22, k8s-test-23 als additional_servers
+Ohne `group_vars/all.yml` schlaegt Playbook 01 mit `'ssh_authorized_keys' is undefined` fehl.
 
-Ausfuehrung auf k8s-mgmt-10:
+### 3. SOPS Secret-Name: `sops-age` (nicht `age-key`)
+Der KSOPS-Patch (`argocd-repo-server-ksops-patch.yaml`) referenziert ein Secret namens
+**`sops-age`** (nicht `age-key`). Bei der manuellen Secret-Erstellung muss dieser Name
+verwendet werden:
 ```bash
-cd ~/git/eneg-k8s-infrastructure-v2
-ansible-playbook -i ansible/inventory/test/hosts.ini ansible/playbooks/01-setup-ssh-keys.yml
-ansible-playbook -i ansible/inventory/test/hosts.ini ansible/playbooks/04-longhorn-prerequisites.yml
-ansible-playbook -i ansible/inventory/test/hosts.ini ansible/playbooks/02-install-k3s.yml
-```
-
-kubeconfig sichern als `kubeconfig-test.yaml`.
-
-### Schritt 3: ArgoCD auf TEST bootstrappen
-
-Auf k8s-mgmt-10 mit kubeconfig-test:
-```bash
-export KUBECONFIG=~/git/eneg-k8s-infrastructure-v2/kubeconfig-test.yaml
-
-# 1. ArgoCD installieren (gleiche Version wie DEV: v3.3.0)
-kubectl create namespace argocd
-kubectl apply -n argocd -f https://raw.githubusercontent.com/argoproj/argo-cd/v3.3.0/manifests/install.yaml
-
-# 2. SOPS Age Key Secret erstellen
-kubectl create secret generic age-key -n argocd \
+kubectl create secret generic sops-age -n argocd \
   --from-file=keys.txt=$HOME/.config/sops/age/keys.txt
-
-# 3. KSOPS Patch anwenden (repo-server)
-kubectl patch deployment argocd-repo-server -n argocd \
-  --patch-file kubernetes/base/argocd/argocd-repo-server-ksops-patch.yaml
-
-# 4. GitHub Deploy Key Secret erstellen
-kubectl apply -f <(sops -d kubernetes/base/argocd/secrets/repository-secret.enc.yaml)
-
-# 5. ArgoCD Self-Management bootstrappen
-kubectl apply -f kubernetes/bootstrap/test-argocd-app.yaml
-
-# 6. App-of-Apps bootstrappen (deployed alle TEST-Infrastruktur-Apps)
-kubectl apply -f kubernetes/bootstrap/test-infrastructure-app.yaml
 ```
 
-### Schritt 4: TEST ArgoCD App-Definitionen erstellen
+### 4. ApplicationSet CRD zu gross fuer Annotation
+Bei ArgoCD v3.3.0 ist die `ApplicationSet` CRD zu gross fuer die Standard-Annotation
+`kubectl.kubernetes.io/last-applied-configuration` (262144 Byte Limit). Das fuehrt dazu,
+dass die CRD nicht korrekt installiert wird und der `applicationset-controller` in
+CrashLoopBackOff geraet mit dem Fehler:
+`no matches for kind "ApplicationSet" in version "argoproj.io/v1alpha1"`
 
-Die ArgoCD App-Definitionen fuer TEST muessen in
-`kubernetes/environments/test/infrastructure/` erstellt werden.
-Fuer Phase 2-4 (Infrastruktur) werden diese Apps benoetigt:
+**Loesung:** Manifest nochmal anwenden (`kubectl apply -f install.yaml`), dann den
+applicationset-controller Pod loeschen — Kubernetes erstellt einen neuen Pod, der dann
+die CRD findet. Der Fehler bei der CRD-Installation kann ignoriert werden, da die CRD
+trotzdem registriert wird (nur die Annotation fehlt).
 
-- `metallb-app.yaml` — zeigt auf `kubernetes/environments/test/metallb`
-- `traefik-app.yaml` — Multi-Source: base values + test override + test certificate
-- `longhorn-app.yaml` — zeigt auf base (values sind generisch)
-- `longhorn-ingress-app.yaml` — zeigt auf `kubernetes/environments/test/longhorn`
-- `longhorn-storageclass-app.yaml` — zeigt auf base (generisch)
-- `cert-manager-app.yaml` — zeigt auf base (generisch)
-- `cert-manager-config-app.yaml` — zeigt auf base
-- `cert-manager-secrets-app.yaml` — zeigt auf base
-- `cert-manager-webhook-ionos-app.yaml` — zeigt auf base
+### 5. ArgoCD `server.insecure` fuer TLS-Terminierung durch Traefik
+Wenn Traefik TLS terminiert und ArgoCD hinter Traefik laeuft, muss in der ConfigMap
+`argocd-cmd-params-cm` der Parameter `server.insecure: "true"` gesetzt werden.
+Ohne diesen Parameter entsteht eine Redirect-Schleife (ERR_TOO_MANY_REDIRECTS),
+weil ArgoCD selbst versucht, auf HTTPS zu redirecten.
 
-**Hinweis:** Die SOPS-verschluesselten Secrets (cert-manager, ArgoCD repo)
-verwenden denselben Age-Key wie DEV. Der Key muss auf dem TEST-Cluster
-als Secret `age-key` im `argocd` Namespace existieren.
+```bash
+kubectl -n argocd patch configmap argocd-cmd-params-cm \
+  --type merge -p '{"data":{"server.insecure":"true"}}'
+kubectl -n argocd rollout restart deployment argocd-server
+```
 
-### Schritt 5: Verifizierung
+**Hinweis:** Die ArgoCD Self-Management App korrigiert dies spaeter automatisch ueber
+die base ConfigMap (`kubernetes/base/argocd/argocd-cmd-params-cm.yaml`), sobald der
+erste Sync laeuft. Das manuelle Patchen ist nur fuer den initialen Bootstrap noetig.
 
-Nach erfolgreichem Bootstrap:
-- [ ] Alle ArgoCD Apps Synced + Healthy
-- [ ] MetalLB IP-Pool aktiv (192.168.179.151-199)
-- [ ] Traefik erreichbar unter https://traefik-test.eneg.de
-- [ ] ArgoCD erreichbar unter https://argocd-test.eneg.de
-- [ ] Longhorn erreichbar unter https://longhorn-test.eneg.de
-- [ ] Let's Encrypt Zertifikate ausgestellt (alle drei Dashboards)
+### 6. ArgoCD Bootstrap-Reihenfolge (exakt)
+Die korrekte Reihenfolge fuer den ArgoCD Bootstrap auf einem neuen Cluster:
+1. `kubectl create namespace argocd`
+2. `kubectl apply -n argocd -f .../install.yaml` (CRDs + Deployments)
+3. Warten: `kubectl -n argocd rollout status deployment argocd-server`
+4. Secret erstellen: `sops-age` (Age Key fuer KSOPS)
+5. KSOPS Patch: `kubectl patch deployment argocd-repo-server -n argocd --patch-file ...`
+6. Warten: `kubectl -n argocd rollout status deployment argocd-repo-server`
+7. Deploy Key: `kubectl apply -f <(sops -d .../repository-secret.enc.yaml)`
+8. Self-Management: `kubectl apply -f kubernetes/bootstrap/{env}-argocd-app.yaml`
+9. App-of-Apps: `kubectl apply -f kubernetes/bootstrap/{env}-infrastructure-app.yaml`
+10. Fix: `server.insecure: "true"` in argocd-cmd-params-cm (falls Redirect-Loop)
 
 ---
 
-## Wichtige Referenzen
+## Erstellte/Geaenderte Dateien
 
-| Dokument | Pfad |
-|----------|------|
-| Projektplan | `docs/K8s-GitOps-Infrastruktur-Projektplanung_v2.4.md` |
-| ADR Kustomize | `docs/decisions/ADR-001-kustomize-overlay-pattern.md` |
-| DEV Terraform | `terraform/environments/dev/` |
-| DEV Ansible | `ansible/inventory/dev/hosts.ini` |
-| DEV Bootstrap | `kubernetes/bootstrap/dev-infrastructure-app.yaml` |
-| TEST Bootstrap | `kubernetes/bootstrap/test-infrastructure-app.yaml` |
-| SOPS-Anleitung | `docs/SOPS-SECRET-MANAGEMENT.md` |
-
-## Kontext fuer den neuen Chat
-
-Bitte lies zu Beginn des Chats:
-1. `docs/K8s-GitOps-Infrastruktur-Projektplanung_v2.4.md` — Gesamtueberblick
-2. `docs/phases/phase-08b-test-cluster-handoff.md` — Dieses Dokument
-3. `docs/decisions/ADR-001-kustomize-overlay-pattern.md` — Overlay-Entscheidung
-4. `terraform/environments/dev/` — als Vorlage fuer TEST
-5. `ansible/inventory/dev/hosts.ini` — als Vorlage fuer TEST
+### Neu erstellt
+- `terraform/environments/test/main.tf`
+- `terraform/environments/test/variables.tf`
+- `terraform/environments/test/vms.tf`
+- `terraform/environments/test/outputs.tf`
+- `terraform/environments/test/folders.tf`
+- `terraform/environments/test/credentials.example.tfvars`
+- `terraform/environments/test/README.md`
+- `ansible/inventory/test/hosts.ini`
+- `ansible/inventory/test/group_vars/all.yml`
+- `ansible/inventory/test/group_vars/secrets.example.yml`
+- `kubernetes/environments/test/infrastructure/metallb-app.yaml`
+- `kubernetes/environments/test/infrastructure/traefik-app.yaml`
+- `kubernetes/environments/test/infrastructure/longhorn-app.yaml`
+- `kubernetes/environments/test/infrastructure/longhorn-ingress-app.yaml`
+- `kubernetes/environments/test/infrastructure/longhorn-storageclass-app.yaml`
+- `kubernetes/environments/test/infrastructure/cert-manager-app.yaml`
+- `kubernetes/environments/test/infrastructure/cert-manager-config-app.yaml`
+- `kubernetes/environments/test/infrastructure/cert-manager-secrets-app.yaml`
+- `kubernetes/environments/test/infrastructure/cert-manager-webhook-ionos-app.yaml`

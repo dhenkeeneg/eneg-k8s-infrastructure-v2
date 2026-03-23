@@ -1,6 +1,6 @@
 # GitOps Kubernetes-Infrastruktur auf VMware vSphere
 
-## Projektplanung - Version 2.7
+## Projektplanung - Version 2.8
 
 **Erstellt:** 04.02.2026  
 **Letzte Aktualisierung:** 16.03.2026  
@@ -729,7 +729,7 @@ extraArgs:
 | 5 | Datenbank-Cluster (CloudNativePG, MariaDB Galera) | 2-3 Tage | ✅ Abgeschlossen (25.02.2026) |
 | 6 | Pilot-Apps (Garage S3, n8n, OpenProject, Odoo, Keycloak, i-doit) | 3-5 Tage | 🔄 In Bearbeitung |
 | 7 | Monitoring-Stack (inkl. Backup-Health, WAL-Volume, S3-Endpoint Alerting) | 2-3 Tage | 🔲 Offen |
-| 8 | TEST & PROD Rollout | 2-3 Tage | 🔄 In Bearbeitung (Kustomize-Refactoring abgeschlossen) |
+| 8 | TEST & PROD Rollout | 2-3 Tage | 🔄 In Bearbeitung (TEST-Infrastruktur abgeschlossen) |
 | 9 | Security & Haertung | 3-5 Tage | 🔲 Offen |
 | 10 | Backup & Dokumentation | 2-3 Tage | 🔲 Offen |
 
@@ -948,13 +948,40 @@ alle Dashboards (ArgoCD, Traefik, Longhorn) weiterhin erreichbar.
 
 **Entscheidungsdokument:** `docs/decisions/ADR-001-kustomize-overlay-pattern.md`
 
-**Phase 8b: TEST-Cluster VMs und K3s (naechster Schritt)**
+**Phase 8b: TEST-Cluster VMs und K3s ✅ (16.03.2026)**
 
-1. OpenTofu: `terraform/environments/test/` erstellen (VLAN 179, 6 vCPU, 16GB, 512GB)
-2. DNS-Eintraege anlegen (k8s-test-21/22/23, traefik-test, argocd-test, longhorn-test)
-3. VMs deployen via OpenTofu
-4. Ansible: `ansible/inventory/test/` erstellen, K3s installieren
-5. ArgoCD bootstrappen, Infrastruktur-Apps syncen
+TEST-Cluster (VLAN 179) vollstaendig aufgebaut mit allen Infrastruktur-Komponenten.
+
+**Erstellte Konfigurationen:**
+- `terraform/environments/test/` — OpenTofu (6 vCPU, 16GB RAM, 512GB Disk)
+- `ansible/inventory/test/` — K3s Inventory + group_vars
+- `kubernetes/environments/test/infrastructure/` — 9 ArgoCD App-Definitionen
+
+**Infrastruktur-Status (11 ArgoCD Apps Synced + Healthy):**
+
+| Komponente | Version | URL |
+|---|---|---|
+| K3s | v1.35.1+k3s1 | 3 Nodes (192.168.179.21-23) |
+| ArgoCD | v3.3.0 | https://argocd-test.eneg.de |
+| MetalLB | v0.15.3 | Pool: 192.168.179.151-199 |
+| Traefik | v3.6.7 | https://traefik-test.eneg.de (LB: .100) |
+| Cert-Manager | v1.17.2 | ClusterIssuers Ready |
+| Longhorn | v1.9.2 | https://longhorn-test.eneg.de |
+
+**Kritische Learnings:**
+- SSH-Keys muessen vor Ansible via `ssh-copy-id` verteilt werden (Template hat keinen Key)
+- Ansible `group_vars/all.yml` pro Environment noetig (K3s-Config, SSH-Keys)
+- SOPS Secret-Name: `sops-age` (nicht `age-key`)
+- ArgoCD v3.3.0: ApplicationSet CRD Annotation-Limit, Manifest ggf. zweimal anwenden
+- ArgoCD hinter Traefik: `server.insecure: "true"` in argocd-cmd-params-cm noetig
+
+**Abschlussdokument:** `docs/phases/phase-08b-test-cluster-handoff.md`
+
+**Phase 8b-continued: TEST-Umgebung Apps (naechster Schritt)**
+
+1. Pilot-Apps (n8n, Odoo, OpenProject, Keycloak, i-doit) von DEV-spezifisch auf Overlay refactoren
+2. Datenbank-Cluster (CNPG, MariaDB Galera) fuer TEST erstellen
+3. Apps nach TEST deployen und verifizieren
 
 **Phase 8c: PROD Rollout (spaeter)**
 
@@ -1028,6 +1055,7 @@ docs/
 | 10.03.2026 | 2.5 | i-doit Open 37 deployed (Phase 6.5), eigenes Docker Image, MariaDB Operator CRDs, ghcr.io Registry |
 | 15.03.2026 | 2.6 | Garage bootstrap_peers Fix (Node-IDs hinzugefuegt), Barman Cloud Plugin Migrations-Anleitung erstellt, ArgoCD CLI auf k8s-mgmt-10 installiert, Cluster Shutdown/Startup Prozedur durchgefuehrt und dokumentiert |
 | 16.03.2026 | 2.7 | Phase 8a: Kustomize-Overlay Refactoring fuer Multi-Environment (MetalLB, Traefik, Longhorn, ArgoCD), TEST-Overlays vorbereitet, Repository-Struktur und GitOps-Workflow aktualisiert, ADR-001 erstellt |
+| 16.03.2026 | 2.8 | Phase 8b: TEST-Cluster aufgebaut (OpenTofu, Ansible, K3s, ArgoCD Bootstrap), 11 Infrastruktur-Apps Synced+Healthy, Dashboards erreichbar, Learnings dokumentiert |
 
 ---
 
