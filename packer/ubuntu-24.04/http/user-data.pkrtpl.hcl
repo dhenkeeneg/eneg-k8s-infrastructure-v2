@@ -69,6 +69,26 @@ autoinstall:
     - sed -i 's/^#*PasswordAuthentication.*/PasswordAuthentication yes/' /target/etc/ssh/sshd_config
     - echo '${ssh_username} ALL=(ALL) NOPASSWD:ALL' > /target/etc/sudoers.d/${ssh_username}
     - chmod 0440 /target/etc/sudoers.d/${ssh_username}
+    # LVM-Erweiterung: Partition + PV + LV + Filesystem beim ersten Boot erweitern
+    # cloud-initramfs-growroot erweitert nur die Partition, nicht LVM
+    # Dieses Script wird beim ersten Boot nach dem vSphere-Clone ausgefuehrt
+    - |
+      cat > /target/etc/systemd/system/extend-lvm.service << 'LVMEOF'
+      [Unit]
+      Description=Extend LVM to use full disk after vSphere clone
+      After=local-fs.target
+      ConditionPathExists=/etc/.extend-lvm-marker
+
+      [Service]
+      Type=oneshot
+      ExecStart=/bin/bash -c 'growpart /dev/sda 3 && pvresize /dev/sda3 && lvextend -l +100%%FREE /dev/mapper/ubuntu--vg-ubuntu--lv && resize2fs /dev/mapper/ubuntu--vg-ubuntu--lv && rm /etc/.extend-lvm-marker'
+      RemainAfterExit=yes
+
+      [Install]
+      WantedBy=multi-user.target
+      LVMEOF
+    - curtin in-target -- systemctl enable extend-lvm.service
+    - curtin in-target -- touch /etc/.extend-lvm-marker
     # SSH-Host-Keys beim ersten Boot generieren (systemd service)
     - |
       cat > /target/etc/systemd/system/regenerate-ssh-host-keys.service << 'SVCEOF'

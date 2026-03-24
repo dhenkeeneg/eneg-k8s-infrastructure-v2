@@ -148,6 +148,33 @@ Die korrekte Reihenfolge fuer den ArgoCD Bootstrap auf einem neuen Cluster:
 9. App-of-Apps: `kubectl apply -f kubernetes/bootstrap/{env}-infrastructure-app.yaml`
 10. Fix: `server.insecure: "true"` in argocd-cmd-params-cm (falls Redirect-Loop)
 
+### 7. LVM-Partition nicht automatisch erweitert nach vSphere Clone
+Das Packer-Template erstellt VMs mit LVM-Layout und ~47 GB Root-Partition (Template-Groesse).
+Wenn vSphere die Disk beim Clone vergroessert (z.B. auf 512 GB), wird die LVM-Partition
+**nicht automatisch** auf die volle Disk-Groesse erweitert, obwohl `cloud-initramfs-growroot`
+und `growpart`/`resize_rootfs` in der cloud-init User-Data konfiguriert sind.
+
+**Symptom:** Longhorn meldet `disks are unavailable; precheck new replica failed` weil nur
+~49 GB statt 512 GB zur Verfuegung stehen. `df -h /` zeigt ~47 GB.
+
+**Manuelle Loesung (fuer bestehende Nodes):**
+```bash
+sudo growpart /dev/sda 3
+sudo pvresize /dev/sda3
+sudo lvextend -l +100%FREE /dev/mapper/ubuntu--vg-ubuntu--lv
+sudo resize2fs /dev/mapper/ubuntu--vg-ubuntu--lv
+```
+
+**Permanenter Fix (im Packer-Template):**
+Ein systemd-Service `extend-lvm.service` wurde hinzugefuegt, der beim ersten Boot nach dem
+Clone automatisch Partition, PV, LV und Filesystem auf die volle Disk erweitert. Der Service
+nutzt ein Marker-File (`/etc/.extend-lvm-marker`), damit er nur einmal ausgefuehrt wird.
+Datei: `packer/ubuntu-24.04/http/user-data.pkrtpl.hcl`
+
+**PROD-Hinweis:** Dieser Fix ist erst im naechsten Template-Build wirksam. Fuer PROD-Nodes
+muss entweder ein neues Template gebaut werden oder die manuelle Loesung nach dem Clone
+angewendet werden (in Ansible Playbook integrieren).
+
 ---
 
 ## Erstellte/Geaenderte Dateien
