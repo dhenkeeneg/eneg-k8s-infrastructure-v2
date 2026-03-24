@@ -12,6 +12,11 @@ creation_rules:
     encrypted_regex: ^(data|stringData)$
     age: age1fdqtcha9jnzqafe5t6hed6v5sv858x2tt6nwuw00u3luyxuaqcxqh5mcrm
 
+  # Regel 1c: Alle Secrets in kubernetes/environments/*/apps/*/secrets/ verschlüsseln
+  - path_regex: kubernetes/environments/.*/apps/.*/secrets/.*\.yaml$
+    encrypted_regex: ^(data|stringData)$
+    age: age1fdqtcha9jnzqafe5t6hed6v5sv858x2tt6nwuw00u3luyxuaqcxqh5mcrm
+
   # Regel 2: Alle .enc.yaml Dateien verschlüsseln
   - path_regex: .*\.enc\.yaml$
     encrypted_regex: ^(data|stringData|spec)$

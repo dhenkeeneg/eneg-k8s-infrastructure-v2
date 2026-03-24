@@ -18,7 +18,7 @@ spec:
   source:
     repoURL: git@github.com:dhenkeeneg/eneg-k8s-infrastructure-v2.git
     targetRevision: main
-    path: kubernetes/base/apps/n8n
+    path: kubernetes/environments/dev/apps/n8n
     directory:
       recurse: false
 

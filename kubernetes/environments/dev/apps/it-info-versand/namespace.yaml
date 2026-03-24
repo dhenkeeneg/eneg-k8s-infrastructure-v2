@@ -1,0 +1,10 @@
+---
+# Namespace fuer eNeG IT-Info-Versand
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: it-info-versand
+  labels:
+    app.kubernetes.io/name: it-info-versand
+    app.kubernetes.io/part-of: pilot-apps
+    app.kubernetes.io/managed-by: argocd

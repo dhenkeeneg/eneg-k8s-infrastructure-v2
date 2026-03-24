@@ -1,0 +1,21 @@
+---
+# OpenProject Web Service (TEST)
+apiVersion: v1
+kind: Service
+metadata:
+  name: openproject-web
+  namespace: openproject
+  labels:
+    app.kubernetes.io/name: openproject
+    app.kubernetes.io/component: web
+    app.kubernetes.io/managed-by: argocd
+spec:
+  type: ClusterIP
+  ports:
+    - port: 8080
+      targetPort: http
+      protocol: TCP
+      name: http
+  selector:
+    app.kubernetes.io/name: openproject
+    app.kubernetes.io/component: web

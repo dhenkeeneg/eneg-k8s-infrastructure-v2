@@ -1,0 +1,141 @@
+---
+# Odoo 18 CE Deployment (TEST)
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: odoo
+  namespace: odoo
+  labels:
+    app.kubernetes.io/name: odoo
+    app.kubernetes.io/version: "18"
+    app.kubernetes.io/managed-by: argocd
+spec:
+  replicas: 1
+  strategy:
+    type: Recreate
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: odoo
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: odoo
+    spec:
+      securityContext:
+        fsGroup: 101
+        runAsUser: 101
+        runAsGroup: 101
+      initContainers:
+        - name: init-config
+          image: busybox:1.37
+          command:
+            - /bin/sh
+            - -c
+            - |
+              cp /config-template/odoo.conf /config/odoo.conf
+              echo "" >> /config/odoo.conf
+              echo "; Injected from Secrets" >> /config/odoo.conf
+              echo "db_password = $(cat /secrets/db-password)" >> /config/odoo.conf
+              echo "admin_passwd = $(cat /secrets/admin-password)" >> /config/odoo.conf
+          volumeMounts:
+            - name: config-template
+              mountPath: /config-template
+              readOnly: true
+            - name: config
+              mountPath: /config
+            - name: secrets
+              mountPath: /secrets
+              readOnly: true
+      containers:
+        - name: odoo
+          image: odoo:18
+          ports:
+            - name: http
+              containerPort: 8069
+              protocol: TCP
+            - name: gevent
+              containerPort: 8072
+              protocol: TCP
+          args:
+            - "--config=/config/odoo.conf"
+          env:
+            - name: ODOO_RC
+              value: "/config/odoo.conf"
+            - name: HOST
+              value: "cnpg-erp-rw.databases.svc.cluster.local"
+            - name: PORT
+              value: "5432"
+            - name: USER
+              value: "odoo"
+            - name: PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: odoo-secrets
+                  key: db-password
+          volumeMounts:
+            - name: config
+              mountPath: /config
+              readOnly: true
+            - name: filestore
+              mountPath: /var/lib/odoo
+          resources:
+            requests:
+              cpu: 500m
+              memory: 512Mi
+            limits:
+              cpu: "2"
+              memory: 2Gi
+          startupProbe:
+            httpGet:
+              path: /web/health
+              port: http
+            initialDelaySeconds: 10
+            periodSeconds: 10
+            failureThreshold: 30
+            timeoutSeconds: 5
+          livenessProbe:
+            httpGet:
+              path: /web/health
+              port: http
+            periodSeconds: 30
+            failureThreshold: 3
+            timeoutSeconds: 5
+          readinessProbe:
+            httpGet:
+              path: /web/health
+              port: http
+            periodSeconds: 10
+            failureThreshold: 3
+            timeoutSeconds: 5
+      volumes:
+        - name: config-template
+          configMap:
+            name: odoo-config
+            items:
+              - key: odoo.conf
+                path: odoo.conf
+        - name: config
+          emptyDir: {}
+        - name: secrets
+          secret:
+            secretName: odoo-secrets
+        - name: filestore
+          persistentVolumeClaim:
+            claimName: odoo-filestore
+---
+# PVC fuer Odoo Filestore (TEST)
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: odoo-filestore
+  namespace: odoo
+  labels:
+    app.kubernetes.io/name: odoo
+    app.kubernetes.io/managed-by: argocd
+spec:
+  accessModes:
+    - ReadWriteOnce
+  storageClassName: longhorn
+  resources:
+    requests:
+      storage: 10Gi

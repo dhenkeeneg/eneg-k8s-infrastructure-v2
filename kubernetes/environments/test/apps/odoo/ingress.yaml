@@ -1,0 +1,39 @@
+---
+# TLS Zertifikat fuer Odoo (TEST)
+apiVersion: cert-manager.io/v1
+kind: Certificate
+metadata:
+  name: odoo-tls
+  namespace: traefik
+spec:
+  secretName: odoo-tls
+  issuerRef:
+    name: letsencrypt-prod
+    kind: ClusterIssuer
+  dnsNames:
+    - odoo-test.eneg.de
+---
+# IngressRoute fuer Odoo (TEST)
+apiVersion: traefik.io/v1alpha1
+kind: IngressRoute
+metadata:
+  name: odoo
+  namespace: traefik
+spec:
+  entryPoints:
+    - websecure
+  routes:
+    - match: Host(`odoo-test.eneg.de`) && PathPrefix(`/websocket`)
+      kind: Rule
+      services:
+        - name: odoo
+          namespace: odoo
+          port: 8072
+    - match: Host(`odoo-test.eneg.de`)
+      kind: Rule
+      services:
+        - name: odoo
+          namespace: odoo
+          port: 8069
+  tls:
+    secretName: odoo-tls

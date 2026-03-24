@@ -1,0 +1,33 @@
+---
+# TLS Zertifikat fuer Keycloak (TEST)
+apiVersion: cert-manager.io/v1
+kind: Certificate
+metadata:
+  name: keycloak-tls
+  namespace: traefik
+spec:
+  secretName: keycloak-tls
+  issuerRef:
+    name: letsencrypt-prod
+    kind: ClusterIssuer
+  dnsNames:
+    - keycloak-test.eneg.de
+---
+# IngressRoute fuer Keycloak (TEST)
+apiVersion: traefik.io/v1alpha1
+kind: IngressRoute
+metadata:
+  name: keycloak
+  namespace: traefik
+spec:
+  entryPoints:
+    - websecure
+  routes:
+    - match: Host(`keycloak-test.eneg.de`)
+      kind: Rule
+      services:
+        - name: keycloak
+          namespace: keycloak
+          port: 8080
+  tls:
+    secretName: keycloak-tls

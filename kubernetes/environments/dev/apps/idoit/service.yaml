@@ -1,0 +1,18 @@
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: idoit
+  namespace: idoit
+  labels:
+    app.kubernetes.io/name: idoit
+    app.kubernetes.io/managed-by: argocd
+spec:
+  type: ClusterIP
+  selector:
+    app.kubernetes.io/name: idoit
+  ports:
+    - name: http
+      port: 80
+      targetPort: http
+      protocol: TCP

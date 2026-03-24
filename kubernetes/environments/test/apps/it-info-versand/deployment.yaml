@@ -1,0 +1,141 @@
+---
+# eNeG IT-Info-Versand Deployment (TEST)
+# Init-Container fuehrt Alembic-Migrationen aus, dann startet die App
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: it-info-versand
+  namespace: it-info-versand
+  labels:
+    app.kubernetes.io/name: it-info-versand
+    app.kubernetes.io/version: "1.0.0"
+    app.kubernetes.io/part-of: pilot-apps
+    app.kubernetes.io/managed-by: argocd
+spec:
+  replicas: 1
+  strategy:
+    type: Recreate
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: it-info-versand
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: it-info-versand
+    spec:
+      securityContext:
+        fsGroup: 1000
+        runAsUser: 1000
+        runAsGroup: 1000
+      imagePullSecrets:
+        - name: ghcr-pull-secret
+      # --- Init-Container: Alembic DB-Migrationen ---
+      initContainers:
+        - name: alembic-migrate
+          image: ghcr.io/dhenkeeneg/eneg-it-info-versand:de4d0c0
+          command: ["alembic", "upgrade", "head"]
+          workingDir: /project
+          env:
+            - name: DB_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: it-info-versand-secrets
+                  key: db-password
+            - name: DATABASE_URL
+              value: "postgresql+asyncpg://it_info_versand:$(DB_PASSWORD)@cnpg-shared-rw.databases.svc.cluster.local:5432/it_info_versand"
+            - name: SESSION_SECRET
+              valueFrom:
+                secretKeyRef:
+                  name: it-info-versand-secrets
+                  key: session-secret
+            - name: ENVIRONMENT
+              value: "test"
+      # --- App-Container ---
+      containers:
+        - name: it-info-versand
+          image: ghcr.io/dhenkeeneg/eneg-it-info-versand:de4d0c0
+          ports:
+            - name: http
+              containerPort: 8000
+              protocol: TCP
+          env:
+            # --- Datenbank ---
+            - name: DB_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: it-info-versand-secrets
+                  key: db-password
+            - name: DATABASE_URL
+              value: "postgresql+asyncpg://it_info_versand:$(DB_PASSWORD)@cnpg-shared-rw.databases.svc.cluster.local:5432/it_info_versand"
+            # --- App ---
+            - name: ENVIRONMENT
+              value: "test"
+            - name: APP_BASE_URL
+              value: "https://it-info-versand-test.eneg.de"
+            - name: DEBUG
+              value: "false"
+            # --- Secrets ---
+            - name: SESSION_SECRET
+              valueFrom:
+                secretKeyRef:
+                  name: it-info-versand-secrets
+                  key: session-secret
+            - name: ENCRYPTION_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: it-info-versand-secrets
+                  key: encryption-key
+            # --- SMTP (Defaults, ueberschreibbar via DB-Settings) ---
+            - name: SMTP_HOST
+              value: "smtpout1.eneg.customers.hosting.zone"
+            - name: SMTP_PORT
+              value: "587"
+            - name: SMTP_USE_TLS
+              value: "true"
+            - name: SMTP_USERNAME
+              valueFrom:
+                secretKeyRef:
+                  name: it-info-versand-secrets
+                  key: smtp-username
+            - name: SMTP_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: it-info-versand-secrets
+                  key: smtp-password
+            # --- Keycloak OIDC ---
+            - name: AUTH_ENABLED
+              value: "true"
+            - name: KEYCLOAK_URL
+              value: "https://keycloak-test.eneg.de"
+            - name: KEYCLOAK_REALM
+              value: "eNeG"
+            - name: KEYCLOAK_CLIENT_ID
+              value: "it-info-versand"
+            - name: KEYCLOAK_CLIENT_SECRET
+              valueFrom:
+                secretKeyRef:
+                  name: it-info-versand-secrets
+                  key: keycloak-client-secret
+          # --- Resources ---
+          resources:
+            requests:
+              cpu: 250m
+              memory: 256Mi
+            limits:
+              cpu: "1"
+              memory: 512Mi
+          # --- Health Checks ---
+          livenessProbe:
+            httpGet:
+              path: /health
+              port: http
+            initialDelaySeconds: 10
+            periodSeconds: 30
+            timeoutSeconds: 5
+          readinessProbe:
+            httpGet:
+              path: /health
+              port: http
+            initialDelaySeconds: 5
+            periodSeconds: 10
+            timeoutSeconds: 5
