@@ -1,0 +1,177 @@
+---
+# ConfigMap: rclone Konfiguration fuer Garage Backup (DEV)
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: garage-backup-config
+  namespace: garage
+  labels:
+    app.kubernetes.io/name: garage-backup
+    app.kubernetes.io/part-of: infrastructure
+    app.kubernetes.io/managed-by: argocd
+data:
+  rclone.conf: |
+    [garage]
+    type = s3
+    provider = Other
+    env_auth = true
+    access_key_id_command =
+    secret_access_key_command =
+    endpoint = http://garage-s3.garage.svc.cluster.local:3900
+    region = eu-central-1
+    force_path_style = true
+    no_check_bucket = true
+
+    [nas10]
+    type = s3
+    provider = Other
+    env_auth = true
+    endpoint = http://nas10.eneg.de:8010
+    region = us-east-1
+    force_path_style = true
+    no_check_bucket = true
+
+  backup.sh: |
+    #!/bin/sh
+    set -e
+
+    echo "=== Garage S3 Backup gestartet: $(date -Iseconds) ==="
+
+    export RCLONE_CONFIG_GARAGE_ACCESS_KEY_ID="${GARAGE_ACCESS_KEY_ID}"
+    export RCLONE_CONFIG_GARAGE_SECRET_ACCESS_KEY="${GARAGE_SECRET_ACCESS_KEY}"
+    export RCLONE_CONFIG_NAS10_ACCESS_KEY_ID="${NAS10_ACCESS_KEY_ID}"
+    export RCLONE_CONFIG_NAS10_SECRET_ACCESS_KEY="${NAS10_SECRET_ACCESS_KEY}"
+
+    BACKUP_DATE=$(date +%Y-%m-%d)
+
+    echo "--- Buckets auflisten ---"
+    BUCKETS=$(rclone lsd garage: --config /config/rclone.conf 2>/dev/null | awk '{print $NF}')
+
+    if [ -z "$BUCKETS" ]; then
+      echo "WARNUNG: Keine Buckets gefunden oder Zugriff verweigert"
+      exit 1
+    fi
+
+    echo "Gefundene Buckets: $BUCKETS"
+
+    for BUCKET in $BUCKETS; do
+      echo ""
+      echo "--- Sichere Bucket: ${BUCKET} ---"
+      rclone sync \
+        "garage:${BUCKET}" \
+        "nas10:k8s-dev-garage-backup/${BUCKET}" \
+        --backup-dir "nas10:k8s-dev-garage-backup/_backups/${BACKUP_DATE}/${BUCKET}" \
+        --config /config/rclone.conf \
+        --checksum \
+        --fast-list \
+        --transfers 4 \
+        --checkers 8 \
+        --stats 30s \
+        --stats-one-line \
+        --log-level INFO
+      echo "--- Bucket ${BUCKET} gesichert ---"
+    done
+
+    echo ""
+    echo "--- Alte Backups aufraemen (>32 Tage) ---"
+    CUTOFF_DATE=$(date -d "@$(($(date +%s) - 32*86400))" +%Y-%m-%d)
+
+    if [ -n "$CUTOFF_DATE" ]; then
+      rclone lsd "nas10:k8s-dev-garage-backup/_backups/" --config /config/rclone.conf 2>/dev/null | awk '{print $NF}' | while read DIR; do
+        if [ "$DIR" \< "$CUTOFF_DATE" ] || [ "$DIR" = "$CUTOFF_DATE" ]; then
+          echo "Loesche altes Backup: _backups/${DIR}"
+          rclone purge "nas10:k8s-dev-garage-backup/_backups/${DIR}" \
+            --config /config/rclone.conf
+        fi
+      done
+    else
+      echo "WARNUNG: Konnte Cutoff-Datum nicht berechnen"
+    fi
+
+    echo ""
+    echo "=== Garage S3 Backup abgeschlossen: $(date -Iseconds) ==="
+---
+# CronJob: Garage S3 Backup auf NAS10 (DEV)
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: garage-backup
+  namespace: garage
+  labels:
+    app.kubernetes.io/name: garage-backup
+    app.kubernetes.io/part-of: infrastructure
+    app.kubernetes.io/managed-by: argocd
+spec:
+  schedule: "0 4 * * *"
+  timeZone: "Europe/Berlin"
+  concurrencyPolicy: Forbid
+  successfulJobsHistoryLimit: 3
+  failedJobsHistoryLimit: 5
+  startingDeadlineSeconds: 3600
+  jobTemplate:
+    spec:
+      backoffLimit: 2
+      activeDeadlineSeconds: 7200
+      template:
+        metadata:
+          labels:
+            app.kubernetes.io/name: garage-backup
+        spec:
+          restartPolicy: OnFailure
+          containers:
+            - name: rclone
+              image: rclone/rclone:1.73.1
+              command:
+                - /bin/sh
+                - /scripts/backup.sh
+              env:
+                - name: GARAGE_ACCESS_KEY_ID
+                  valueFrom:
+                    secretKeyRef:
+                      name: garage-backup-credentials
+                      key: GARAGE_ACCESS_KEY_ID
+                - name: GARAGE_SECRET_ACCESS_KEY
+                  valueFrom:
+                    secretKeyRef:
+                      name: garage-backup-credentials
+                      key: GARAGE_SECRET_ACCESS_KEY
+                - name: NAS10_ACCESS_KEY_ID
+                  valueFrom:
+                    secretKeyRef:
+                      name: garage-backup-credentials
+                      key: NAS10_ACCESS_KEY_ID
+                - name: NAS10_SECRET_ACCESS_KEY
+                  valueFrom:
+                    secretKeyRef:
+                      name: garage-backup-credentials
+                      key: NAS10_SECRET_ACCESS_KEY
+              volumeMounts:
+                - name: config
+                  mountPath: /config/rclone.conf
+                  subPath: rclone.conf
+                  readOnly: true
+                - name: scripts
+                  mountPath: /scripts/backup.sh
+                  subPath: backup.sh
+                  readOnly: true
+              resources:
+                requests:
+                  cpu: 100m
+                  memory: 128Mi
+                limits:
+                  cpu: 500m
+                  memory: 256Mi
+          volumes:
+            - name: config
+              configMap:
+                name: garage-backup-config
+                items:
+                  - key: rclone.conf
+                    path: rclone.conf
+            - name: scripts
+              configMap:
+                name: garage-backup-config
+                defaultMode: 0755
+                items:
+                  - key: backup.sh
+                    path: backup.sh

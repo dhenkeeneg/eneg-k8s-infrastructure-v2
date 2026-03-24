@@ -1,0 +1,66 @@
+---
+# TLS Zertifikat fuer Garage S3 API (TEST)
+apiVersion: cert-manager.io/v1
+kind: Certificate
+metadata:
+  name: garage-s3-tls
+  namespace: traefik
+spec:
+  secretName: garage-s3-tls
+  issuerRef:
+    name: letsencrypt-prod
+    kind: ClusterIssuer
+  dnsNames:
+    - s3-test.eneg.de
+---
+# TLS Zertifikat fuer Garage WebUI (TEST)
+apiVersion: cert-manager.io/v1
+kind: Certificate
+metadata:
+  name: garage-webui-tls
+  namespace: traefik
+spec:
+  secretName: garage-webui-tls
+  issuerRef:
+    name: letsencrypt-prod
+    kind: ClusterIssuer
+  dnsNames:
+    - s3-gui-test.eneg.de
+---
+# IngressRoute fuer Garage S3 API (TEST)
+apiVersion: traefik.io/v1alpha1
+kind: IngressRoute
+metadata:
+  name: garage-s3
+  namespace: traefik
+spec:
+  entryPoints:
+    - websecure
+  routes:
+    - match: Host(`s3-test.eneg.de`)
+      kind: Rule
+      services:
+        - name: garage-s3
+          namespace: garage
+          port: 3900
+  tls:
+    secretName: garage-s3-tls
+---
+# IngressRoute fuer Garage WebUI (TEST)
+apiVersion: traefik.io/v1alpha1
+kind: IngressRoute
+metadata:
+  name: garage-webui
+  namespace: traefik
+spec:
+  entryPoints:
+    - websecure
+  routes:
+    - match: Host(`s3-gui-test.eneg.de`)
+      kind: Rule
+      services:
+        - name: garage-webui
+          namespace: garage
+          port: 3909
+  tls:
+    secretName: garage-webui-tls

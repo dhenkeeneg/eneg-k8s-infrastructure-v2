@@ -1,0 +1,46 @@
+---
+# Garage Konfiguration (garage.toml) — TEST
+# Platzhalter werden durch den Init-Container ersetzt
+# WICHTIG: bootstrap_peers Node-IDs muessen nach erstem Start
+# aus den Garage-Pods ausgelesen und hier eingetragen werden:
+#   kubectl -n garage exec garage-0 -- /garage node id -q
+#   kubectl -n garage exec garage-1 -- /garage node id -q
+#   kubectl -n garage exec garage-2 -- /garage node id -q
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: garage-config
+  namespace: garage
+  labels:
+    app.kubernetes.io/name: garage
+    app.kubernetes.io/part-of: infrastructure
+    app.kubernetes.io/managed-by: argocd
+data:
+  garage.toml: |
+    metadata_dir = "/var/lib/garage/meta"
+    data_dir = "/var/lib/garage/data"
+
+    db_engine = "lmdb"
+    metadata_auto_snapshot_interval = "6h"
+
+    replication_factor = 2
+    compression_level = 1
+
+    rpc_bind_addr = "[::]:3901"
+    rpc_public_addr = "__POD_IP__:3901"
+    rpc_secret = "__RPC_SECRET__"
+
+    bootstrap_peers = [
+      "PLACEHOLDER_NODE_ID_0@garage-0.garage-headless.garage.svc.cluster.local:3901",
+      "PLACEHOLDER_NODE_ID_1@garage-1.garage-headless.garage.svc.cluster.local:3901",
+      "PLACEHOLDER_NODE_ID_2@garage-2.garage-headless.garage.svc.cluster.local:3901",
+    ]
+
+    [s3_api]
+    s3_region = "eu-central-1"
+    api_bind_addr = "[::]:3900"
+
+    [admin]
+    api_bind_addr = "[::]:3903"
+    admin_token = "__ADMIN_TOKEN__"
+    metrics_token = "__METRICS_TOKEN__"

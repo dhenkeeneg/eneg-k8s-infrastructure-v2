@@ -1,0 +1,42 @@
+---
+# Garage Konfiguration (garage.toml) — DEV
+# Platzhalter werden durch den Init-Container ersetzt
+# Bootstrap-Peers mit DEV-spezifischen Node-IDs
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: garage-config
+  namespace: garage
+  labels:
+    app.kubernetes.io/name: garage
+    app.kubernetes.io/part-of: infrastructure
+    app.kubernetes.io/managed-by: argocd
+data:
+  garage.toml: |
+    metadata_dir = "/var/lib/garage/meta"
+    data_dir = "/var/lib/garage/data"
+
+    db_engine = "lmdb"
+    metadata_auto_snapshot_interval = "6h"
+
+    replication_factor = 2
+    compression_level = 1
+
+    rpc_bind_addr = "[::]:3901"
+    rpc_public_addr = "__POD_IP__:3901"
+    rpc_secret = "__RPC_SECRET__"
+
+    bootstrap_peers = [
+      "232bd5d527019e9fbb74f01f8ff5e5ca43cb8e2163eefff6fb69797a5335f392@garage-0.garage-headless.garage.svc.cluster.local:3901",
+      "7bbe5485006dce780f5545ed83c3bebc1c8c8de1eba9e334bded61b3a8cbf7ed@garage-1.garage-headless.garage.svc.cluster.local:3901",
+      "e54bdcd9e2001e96d78eee022a2ebd24fe4a4c838045d9cf6690f1b89051eae0@garage-2.garage-headless.garage.svc.cluster.local:3901",
+    ]
+
+    [s3_api]
+    s3_region = "eu-central-1"
+    api_bind_addr = "[::]:3900"
+
+    [admin]
+    api_bind_addr = "[::]:3903"
+    admin_token = "__ADMIN_TOKEN__"
+    metrics_token = "__METRICS_TOKEN__"
