@@ -1,11 +1,7 @@
 ---
 # Garage Konfiguration (garage.toml) — TEST
 # Platzhalter werden durch den Init-Container ersetzt
-# WICHTIG: bootstrap_peers Node-IDs muessen nach erstem Start
-# aus den Garage-Pods ausgelesen und hier eingetragen werden:
-#   kubectl -n garage exec garage-0 -- /garage node id -q
-#   kubectl -n garage exec garage-1 -- /garage node id -q
-#   kubectl -n garage exec garage-2 -- /garage node id -q
+# Bootstrap-Peers mit TEST-spezifischen Node-IDs
 apiVersion: v1
 kind: ConfigMap
 metadata:
@@ -31,9 +27,9 @@ data:
     rpc_secret = "__RPC_SECRET__"
 
     bootstrap_peers = [
-      "PLACEHOLDER_NODE_ID_0@garage-0.garage-headless.garage.svc.cluster.local:3901",
-      "PLACEHOLDER_NODE_ID_1@garage-1.garage-headless.garage.svc.cluster.local:3901",
-      "PLACEHOLDER_NODE_ID_2@garage-2.garage-headless.garage.svc.cluster.local:3901",
+      "fc1ebc11fa2d81c476fb40c965c8501cd201b1fd24999f638ab723c8c156928a@garage-0.garage-headless.garage.svc.cluster.local:3901",
+      "479cedd151418e025e88c90a7d51c35d202d326c449531142a7f5656a719044f@garage-1.garage-headless.garage.svc.cluster.local:3901",
+      "3217ac97a6825c635cbb031902f816e23b79a81fdb1e8560facf0dc20f5fefe6@garage-2.garage-headless.garage.svc.cluster.local:3901",
     ]
 
     [s3_api]
