@@ -1,9 +1,9 @@
 # GitOps Kubernetes-Infrastruktur auf VMware vSphere
 
-## Projektplanung - Version 2.8
+## Projektplanung - Version 2.9
 
 **Erstellt:** 04.02.2026  
-**Letzte Aktualisierung:** 16.03.2026  
+**Letzte Aktualisierung:** 26.03.2026  
 **Standort:** Hamburg  
 **Projekt:** eNeG K8s Infrastructure v2
 
@@ -977,11 +977,44 @@ TEST-Cluster (VLAN 179) vollstaendig aufgebaut mit allen Infrastruktur-Komponent
 
 **Abschlussdokument:** `docs/phases/phase-08b-test-cluster-handoff.md`
 
-**Phase 8b-continued: TEST-Umgebung Apps (naechster Schritt)**
+**Phase 8b-continued: TEST-Umgebung Apps ✅ ABGESCHLOSSEN (26.03.2026)**
 
-1. Pilot-Apps (n8n, Odoo, OpenProject, Keycloak, i-doit) von DEV-spezifisch auf Overlay refactoren
-2. Datenbank-Cluster (CNPG, MariaDB Galera) fuer TEST erstellen
-3. Apps nach TEST deployen und verifizieren
+Alle 6 Pilot-Apps + Datenbank-Operatoren/Cluster von DEV-spezifisch auf Environment-Overlays
+umgestellt und erfolgreich nach TEST deployed.
+
+**Refactored auf Overlay-Basis (Schritt 1-6, vorherige Session):**
+- CNPG Operator, MariaDB Operator + CRDs (generische ArgoCD Apps fuer TEST)
+- CNPG/MariaDB Secrets (SOPS-verschluesselt fuer TEST)
+- CNPG Cluster + Backup CronJobs (environment-spezifische S3-Buckets)
+- MariaDB Galera Cluster + Physical Backup
+- Garage S3 (environment-spezifische Node-IDs, Ingress, Backup-Buckets)
+
+**Refactored auf Overlay-Basis (Schritt 7, diese Session):**
+- n8n: DEV + TEST Manifeste, TEST Secrets
+- Keycloak: DEV + TEST Manifeste, TEST Secrets
+- i-doit: DEV + TEST Manifeste, TEST Secrets (inkl. ghcr-pull-secret)
+- it-info-versand: DEV + TEST Manifeste, TEST Secrets (inkl. ghcr-pull-secret)
+- OpenProject: DEV + TEST Manifeste, TEST Secrets (Web, Worker, Seeder, Memcached, Hocuspocus)
+- Odoo: DEV + TEST Manifeste, TEST Secrets (inkl. Backup CronJob + Backup Secrets)
+
+**ArgoCD App-Definitionen:**
+- 7 DEV App-Pfade aktualisiert: `base/apps/*` → `environments/dev/apps/*`
+- DEV Secret-Apps bleiben auf `base/apps/*/secrets/` (keine Re-Encryption noetig)
+- 14 TEST ArgoCD App-Definitionen neu erstellt
+- `.sops.yaml` Regel 1c fuer `environments/*/apps/*/secrets/`
+
+**TEST-Cluster Gesamtstatus:** Alle Apps Synced + Healthy auf ArgoCD TEST
+- https://argocd-test.eneg.de — Alle Apps gruen
+- https://openproject-test.eneg.de — Erreichbar (Admin: admin/admin)
+- https://odoo-test.eneg.de — Erreichbar
+- https://idoit-test.eneg.de — Erreichbar
+- https://it-info-versand-test.eneg.de — Erreichbar
+
+**Fixes waehrend Deployment:**
+- ghcr-pull-secret: `auth`-Feld darf nur reinen Base64-String enthalten (kein Prefix)
+- OpenProject DB-Passwort: Sonderzeichen (`/`, `%`) in DATABASE_URL vermeiden → Hex-only Passwoerter
+- OpenProject: DB-Migrationen muessen beim ersten Start manuell angestossen werden (`rails db:migrate`)
+- Odoo: DB-Initialisierung beim ersten Start manuell anstossen (`odoo -i base --stop-after-init --no-http`)
 
 **Phase 8c: PROD Rollout (spaeter)**
 
@@ -1009,7 +1042,8 @@ docs/
 │   ├── phase-03-abschluss.md
 │   ├── phase-03b-abschluss.md    # SOPS + KSOPS
 │   ├── phase-04-abschluss.md
-│   └── phase-08b-test-cluster-handoff.md  # TEST-Cluster Aufbau
+│   ├── phase-08b-test-cluster-handoff.md  # TEST-Cluster Aufbau
+│   └── phase-08b-continued-handoff.md     # TEST-Cluster Apps
 ├── architecture/
 ├── runbooks/
 ├── decisions/
@@ -1056,6 +1090,7 @@ docs/
 | 15.03.2026 | 2.6 | Garage bootstrap_peers Fix (Node-IDs hinzugefuegt), Barman Cloud Plugin Migrations-Anleitung erstellt, ArgoCD CLI auf k8s-mgmt-10 installiert, Cluster Shutdown/Startup Prozedur durchgefuehrt und dokumentiert |
 | 16.03.2026 | 2.7 | Phase 8a: Kustomize-Overlay Refactoring fuer Multi-Environment (MetalLB, Traefik, Longhorn, ArgoCD), TEST-Overlays vorbereitet, Repository-Struktur und GitOps-Workflow aktualisiert, ADR-001 erstellt |
 | 16.03.2026 | 2.8 | Phase 8b: TEST-Cluster aufgebaut (OpenTofu, Ansible, K3s, ArgoCD Bootstrap), 11 Infrastruktur-Apps Synced+Healthy, Dashboards erreichbar, Learnings dokumentiert |
+| 26.03.2026 | 2.9 | Phase 8b-continued: Alle 6 Pilot-Apps nach TEST deployed (Environment-Overlay Refactoring), DB-Operatoren/Cluster/Garage refactored, 14 TEST ArgoCD Apps, Fixes (ghcr auth, DB-Passwort Sonderzeichen, manuelle DB-Migration/Init) |
 
 ---
 
