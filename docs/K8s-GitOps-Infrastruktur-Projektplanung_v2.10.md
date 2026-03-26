@@ -1,6 +1,6 @@
 # GitOps Kubernetes-Infrastruktur auf VMware vSphere
 
-## Projektplanung - Version 2.9
+## Projektplanung - Version 2.10
 
 **Erstellt:** 04.02.2026  
 **Letzte Aktualisierung:** 26.03.2026  
@@ -1005,16 +1005,27 @@ umgestellt und erfolgreich nach TEST deployed.
 
 **TEST-Cluster Gesamtstatus:** Alle Apps Synced + Healthy auf ArgoCD TEST
 - https://argocd-test.eneg.de — Alle Apps gruen
-- https://openproject-test.eneg.de — Erreichbar (Admin: admin/admin)
+- https://openproject-test.eneg.de — Erreichbar, LDAP-Auth (AD), SMTP konfiguriert, S3-Attachments (Garage)
 - https://odoo-test.eneg.de — Erreichbar
 - https://idoit-test.eneg.de — Erreichbar
-- https://it-info-versand-test.eneg.de — Erreichbar
+- https://it-info-versand-test.eneg.de — Erreichbar, Keycloak OIDC Login
+- https://n8n-test.eneg.de — Erreichbar
+- https://keycloak-test.eneg.de — Erreichbar, Realm `eNeG`, AD/LDAP Federation
+- https://s3-gui-test.eneg.de — Erreichbar, Garage WebUI
+
+**Post-Deployment Konfiguration (26.03.2026):**
+- Garage TEST: WebUI-Passwort neu gesetzt, API Key + Bucket fuer OpenProject erstellt
+- Keycloak TEST: Realm `eNeG`, AD/LDAP Federation, Group Mapper, OIDC-Clients
+- OpenProject TEST: S3-Credentials, SMTP (smtpout1.eneg.customers.hosting.zone:587), LDAP-Auth
+- it-info-versand TEST: OIDC-Client-Secret, Keycloak Group Membership Mapper
+- Bugfix: Keycloak Realm-Name `eneg` -> `eNeG` in allen OpenProject-Deployments (case-sensitive)
 
 **Fixes waehrend Deployment:**
 - ghcr-pull-secret: `auth`-Feld darf nur reinen Base64-String enthalten (kein Prefix)
 - OpenProject DB-Passwort: Sonderzeichen (`/`, `%`) in DATABASE_URL vermeiden → Hex-only Passwoerter
 - OpenProject: DB-Migrationen muessen beim ersten Start manuell angestossen werden (`rails db:migrate`)
 - Odoo: DB-Initialisierung beim ersten Start manuell anstossen (`odoo -i base --stop-after-init --no-http`)
+- Keycloak OIDC: Group Membership Protocol Mapper noetig fuer gruppenbasierte App-Autorisierung
 
 **Phase 8c: PROD Rollout (spaeter)**
 
@@ -1091,6 +1102,7 @@ docs/
 | 16.03.2026 | 2.7 | Phase 8a: Kustomize-Overlay Refactoring fuer Multi-Environment (MetalLB, Traefik, Longhorn, ArgoCD), TEST-Overlays vorbereitet, Repository-Struktur und GitOps-Workflow aktualisiert, ADR-001 erstellt |
 | 16.03.2026 | 2.8 | Phase 8b: TEST-Cluster aufgebaut (OpenTofu, Ansible, K3s, ArgoCD Bootstrap), 11 Infrastruktur-Apps Synced+Healthy, Dashboards erreichbar, Learnings dokumentiert |
 | 26.03.2026 | 2.9 | Phase 8b-continued: Alle 6 Pilot-Apps nach TEST deployed (Environment-Overlay Refactoring), DB-Operatoren/Cluster/Garage refactored, 14 TEST ArgoCD Apps, Fixes (ghcr auth, DB-Passwort Sonderzeichen, manuelle DB-Migration/Init) |
+| 26.03.2026 | 2.10 | Post-Deployment TEST: Garage S3 Key+Bucket fuer OpenProject, Keycloak AD/LDAP+OIDC (Realm eNeG), OpenProject SMTP+LDAP, it-info-versand OIDC+Group Mapper, Fix Realm-Name eneg->eNeG |
 
 ---
 
