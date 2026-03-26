@@ -279,17 +279,17 @@ spec:
                   name: openproject-secrets
                   key: oidc-client-secret
             - name: OPENPROJECT_OPENID__CONNECT_KEYCLOAK_ISSUER
-              value: "https://keycloak-test.eneg.de/realms/eneg"
+              value: "https://keycloak-test.eneg.de/realms/eNeG"
             - name: OPENPROJECT_OPENID__CONNECT_KEYCLOAK_AUTHORIZATION__ENDPOINT
-              value: "https://keycloak-test.eneg.de/realms/eneg/protocol/openid-connect/auth"
+              value: "https://keycloak-test.eneg.de/realms/eNeG/protocol/openid-connect/auth"
             - name: OPENPROJECT_OPENID__CONNECT_KEYCLOAK_TOKEN__ENDPOINT
-              value: "https://keycloak-test.eneg.de/realms/eneg/protocol/openid-connect/token"
+              value: "https://keycloak-test.eneg.de/realms/eNeG/protocol/openid-connect/token"
             - name: OPENPROJECT_OPENID__CONNECT_KEYCLOAK_USERINFO__ENDPOINT
-              value: "https://keycloak-test.eneg.de/realms/eneg/protocol/openid-connect/userinfo"
+              value: "https://keycloak-test.eneg.de/realms/eNeG/protocol/openid-connect/userinfo"
             - name: OPENPROJECT_OPENID__CONNECT_KEYCLOAK_END__SESSION__ENDPOINT
-              value: "https://keycloak-test.eneg.de/realms/eneg/protocol/openid-connect/logout"
+              value: "https://keycloak-test.eneg.de/realms/eNeG/protocol/openid-connect/logout"
             - name: OPENPROJECT_OPENID__CONNECT_KEYCLOAK_JWKS__URI
-              value: "https://keycloak-test.eneg.de/realms/eneg/protocol/openid-connect/certs"
+              value: "https://keycloak-test.eneg.de/realms/eNeG/protocol/openid-connect/certs"
             - name: OPENPROJECT_OPENID__CONNECT_KEYCLOAK_SCOPE
               value: "[openid,profile,email]"
             - name: OPENPROJECT_OPENID__CONNECT_KEYCLOAK_ATTRIBUTE__MAP_LOGIN
@@ -304,6 +304,31 @@ spec:
               value: "de"
             - name: OPENPROJECT_SEED__LOCALE
               value: "de"
+            # SMTP
+            - name: OPENPROJECT_EMAIL__DELIVERY__METHOD
+              value: "smtp"
+            - name: OPENPROJECT_SMTP__ADDRESS
+              value: "smtpout1.eneg.customers.hosting.zone"
+            - name: OPENPROJECT_SMTP__PORT
+              value: "587"
+            - name: OPENPROJECT_SMTP__DOMAIN
+              value: "eneg.de"
+            - name: OPENPROJECT_SMTP__AUTHENTICATION
+              value: "login"
+            - name: OPENPROJECT_SMTP__ENABLE__STARTTLS__AUTO
+              value: "true"
+            - name: OPENPROJECT_SMTP__USER__NAME
+              valueFrom:
+                secretKeyRef:
+                  name: openproject-secrets
+                  key: smtp-username
+            - name: OPENPROJECT_SMTP__PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: openproject-secrets
+                  key: smtp-password
+            - name: OPENPROJECT_MAIL__FROM
+              value: "openproject-test@eneg.de"
             - name: TZ
               value: "Europe/Berlin"
           volumeMounts:
@@ -411,6 +436,31 @@ spec:
               value: "eu-central-1"
             - name: OPENPROJECT_FOG_CREDENTIALS_PATH__STYLE
               value: "true"
+            # SMTP
+            - name: OPENPROJECT_EMAIL__DELIVERY__METHOD
+              value: "smtp"
+            - name: OPENPROJECT_SMTP__ADDRESS
+              value: "smtpout1.eneg.customers.hosting.zone"
+            - name: OPENPROJECT_SMTP__PORT
+              value: "587"
+            - name: OPENPROJECT_SMTP__DOMAIN
+              value: "eneg.de"
+            - name: OPENPROJECT_SMTP__AUTHENTICATION
+              value: "login"
+            - name: OPENPROJECT_SMTP__ENABLE__STARTTLS__AUTO
+              value: "true"
+            - name: OPENPROJECT_SMTP__USER__NAME
+              valueFrom:
+                secretKeyRef:
+                  name: openproject-secrets
+                  key: smtp-username
+            - name: OPENPROJECT_SMTP__PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: openproject-secrets
+                  key: smtp-password
+            - name: OPENPROJECT_MAIL__FROM
+              value: "openproject-test@eneg.de"
             - name: TZ
               value: "Europe/Berlin"
           resources:

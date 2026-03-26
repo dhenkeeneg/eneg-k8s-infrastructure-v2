@@ -293,17 +293,17 @@ spec:
                   name: openproject-secrets
                   key: oidc-client-secret
             - name: OPENPROJECT_OPENID__CONNECT_KEYCLOAK_ISSUER
-              value: "https://keycloak-dev-v2.eneg.de/realms/eneg"
+              value: "https://keycloak-dev-v2.eneg.de/realms/eNeG"
             - name: OPENPROJECT_OPENID__CONNECT_KEYCLOAK_AUTHORIZATION__ENDPOINT
-              value: "https://keycloak-dev-v2.eneg.de/realms/eneg/protocol/openid-connect/auth"
+              value: "https://keycloak-dev-v2.eneg.de/realms/eNeG/protocol/openid-connect/auth"
             - name: OPENPROJECT_OPENID__CONNECT_KEYCLOAK_TOKEN__ENDPOINT
-              value: "https://keycloak-dev-v2.eneg.de/realms/eneg/protocol/openid-connect/token"
+              value: "https://keycloak-dev-v2.eneg.de/realms/eNeG/protocol/openid-connect/token"
             - name: OPENPROJECT_OPENID__CONNECT_KEYCLOAK_USERINFO__ENDPOINT
-              value: "https://keycloak-dev-v2.eneg.de/realms/eneg/protocol/openid-connect/userinfo"
+              value: "https://keycloak-dev-v2.eneg.de/realms/eNeG/protocol/openid-connect/userinfo"
             - name: OPENPROJECT_OPENID__CONNECT_KEYCLOAK_END__SESSION__ENDPOINT
-              value: "https://keycloak-dev-v2.eneg.de/realms/eneg/protocol/openid-connect/logout"
+              value: "https://keycloak-dev-v2.eneg.de/realms/eNeG/protocol/openid-connect/logout"
             - name: OPENPROJECT_OPENID__CONNECT_KEYCLOAK_JWKS__URI
-              value: "https://keycloak-dev-v2.eneg.de/realms/eneg/protocol/openid-connect/certs"
+              value: "https://keycloak-dev-v2.eneg.de/realms/eNeG/protocol/openid-connect/certs"
             - name: OPENPROJECT_OPENID__CONNECT_KEYCLOAK_SCOPE
               value: "[openid,profile,email]"
             - name: OPENPROJECT_OPENID__CONNECT_KEYCLOAK_ATTRIBUTE__MAP_LOGIN
