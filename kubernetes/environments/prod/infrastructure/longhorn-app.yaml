@@ -1,0 +1,41 @@
+---
+# ArgoCD Application: Longhorn Storage
+# Helm Chart v1.9.2 - Distributed Block Storage
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: longhorn
+  namespace: argocd
+  annotations:
+    argocd.argoproj.io/sync-wave: "2"
+  finalizers:
+    - resources-finalizer.argocd.argoproj.io
+spec:
+  project: default
+
+  sources:
+    # Source 1: Longhorn Helm Chart
+    - repoURL: https://charts.longhorn.io
+      chart: longhorn
+      targetRevision: v1.9.2
+      helm:
+        releaseName: longhorn
+        valueFiles:
+          - $values/kubernetes/base/longhorn/values.yaml
+
+    # Source 2: Values aus Git Repository
+    - repoURL: git@github.com:dhenkeeneg/eneg-k8s-infrastructure-v2.git
+      targetRevision: main
+      ref: values
+
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: longhorn-system
+
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
+    syncOptions:
+      - CreateNamespace=true
+      - ServerSideApply=true

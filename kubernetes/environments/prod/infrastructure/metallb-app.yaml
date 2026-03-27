@@ -1,0 +1,29 @@
+---
+# ArgoCD Application: MetalLB LoadBalancer
+# Installiert MetalLB v0.15.3 im L2-Modus mit IP-Pool fuer PROD
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: metallb
+  namespace: argocd
+  finalizers:
+    - resources-finalizer.argocd.argoproj.io
+spec:
+  project: default
+
+  source:
+    repoURL: git@github.com:dhenkeeneg/eneg-k8s-infrastructure-v2.git
+    targetRevision: main
+    path: kubernetes/environments/prod/metallb
+
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: metallb-system
+
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
+    syncOptions:
+      - CreateNamespace=true
+      - ServerSideApply=true

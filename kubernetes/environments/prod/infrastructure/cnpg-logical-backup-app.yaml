@@ -1,0 +1,31 @@
+---
+# ArgoCD Application: CNPG Logical Backups (PROD)
+# CronJobs fuer pg_dumpall auf S3
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: cnpg-logical-backup
+  namespace: argocd
+  annotations:
+    argocd.argoproj.io/sync-wave: "6"
+  finalizers:
+    - resources-finalizer.argocd.argoproj.io
+spec:
+  project: default
+
+  source:
+    repoURL: git@github.com:dhenkeeneg/eneg-k8s-infrastructure-v2.git
+    targetRevision: main
+    path: kubernetes/environments/prod/cnpg-backup
+
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: databases
+
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
+    syncOptions:
+      - CreateNamespace=true
+      - ServerSideApply=true

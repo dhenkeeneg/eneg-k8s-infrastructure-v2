@@ -27,3 +27,134 @@ spec:
       securityContext:
         fsGroup: 1000
       terminationGracePeriodSeconds: 30
+      # Init-Container: Ersetzt Platzhalter in garage.toml
+      initContainers:
+        - name: init-config
+          image: busybox:1.37
+          command: ['sh', '-c']
+          args:
+            - |
+              cp /etc/garage-template/garage.toml /etc/garage/garage.toml
+              sed -i "s|__RPC_SECRET__|$(cat /etc/garage-secrets/rpc-secret)|g" /etc/garage/garage.toml
+              sed -i "s|__ADMIN_TOKEN__|$(cat /etc/garage-secrets/admin-token)|g" /etc/garage/garage.toml
+              sed -i "s|__METRICS_TOKEN__|$(cat /etc/garage-secrets/metrics-token)|g" /etc/garage/garage.toml
+              sed -i "s|__POD_IP__|${POD_IP}|g" /etc/garage/garage.toml
+
+              # DNS-Aufloesung der Peer-Hostnamen zu IPs
+              echo "Waiting for DNS resolution of peers..."
+              for peer in garage-0 garage-1 garage-2; do
+                FQDN="${peer}.garage-headless.garage.svc.cluster.local"
+                echo "Resolving ${FQDN}..."
+                for i in $(seq 1 30); do
+                  IP=$(nslookup "${FQDN}" 2>/dev/null | grep -A1 "Name:" | grep "Address:" | awk '{print $2}')
+                  if [ -n "$IP" ]; then
+                    echo "  ${FQDN} -> ${IP}"
+                    sed -i "s|${FQDN}:3901|${IP}:3901|g" /etc/garage/garage.toml
+                    break
+                  fi
+                  echo "  Retry $i..."
+                  sleep 2
+                done
+              done
+
+              echo "Config generated for ${POD_NAME}"
+              cat /etc/garage/garage.toml | grep -v secret | grep -v token
+          env:
+            - name: POD_NAME
+              valueFrom:
+                fieldRef:
+                  fieldPath: metadata.name
+            - name: POD_IP
+              valueFrom:
+                fieldRef:
+                  fieldPath: status.podIP
+          volumeMounts:
+            - name: garage-config-template
+              mountPath: /etc/garage-template
+              readOnly: true
+            - name: garage-config
+              mountPath: /etc/garage
+            - name: garage-secrets-vol
+              mountPath: /etc/garage-secrets
+              readOnly: true
+      # Garage Container
+      containers:
+        - name: garage
+          image: dxflrs/garage:v2.2.0
+          env:
+            - name: GARAGE_CONFIG_FILE
+              value: "/etc/garage/garage.toml"
+          ports:
+            - name: s3-api
+              containerPort: 3900
+              protocol: TCP
+            - name: rpc
+              containerPort: 3901
+              protocol: TCP
+            - name: admin
+              containerPort: 3903
+              protocol: TCP
+          volumeMounts:
+            - name: garage-config
+              mountPath: /etc/garage
+              readOnly: true
+            - name: garage-meta
+              mountPath: /var/lib/garage/meta
+            - name: garage-data
+              mountPath: /var/lib/garage/data
+          resources:
+            requests:
+              cpu: 100m
+              memory: 128Mi
+            limits:
+              cpu: "1"
+              memory: 512Mi
+          livenessProbe:
+            httpGet:
+              path: /health
+              port: admin
+            initialDelaySeconds: 15
+            periodSeconds: 30
+            timeoutSeconds: 5
+          readinessProbe:
+            httpGet:
+              path: /health
+              port: admin
+            initialDelaySeconds: 10
+            periodSeconds: 10
+            timeoutSeconds: 5
+      # Volumes
+      volumes:
+        - name: garage-config-template
+          configMap:
+            name: garage-config
+        - name: garage-config
+          emptyDir: {}
+        - name: garage-secrets-vol
+          secret:
+            secretName: garage-secrets
+
+  # PVC Templates fuer StatefulSet
+  volumeClaimTemplates:
+    - metadata:
+        name: garage-meta
+        labels:
+          app.kubernetes.io/name: garage
+      spec:
+        accessModes:
+          - ReadWriteOnce
+        storageClassName: longhorn
+        resources:
+          requests:
+            storage: 1Gi
+    - metadata:
+        name: garage-data
+        labels:
+          app.kubernetes.io/name: garage
+      spec:
+        accessModes:
+          - ReadWriteOnce
+        storageClassName: longhorn
+        resources:
+          requests:
+            storage: 20Gi

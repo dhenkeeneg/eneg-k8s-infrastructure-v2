@@ -1,0 +1,23 @@
+---
+# Odoo HTTP Service (PROD)
+apiVersion: v1
+kind: Service
+metadata:
+  name: odoo
+  namespace: odoo
+  labels:
+    app.kubernetes.io/name: odoo
+    app.kubernetes.io/managed-by: argocd
+spec:
+  type: ClusterIP
+  ports:
+    - port: 8069
+      targetPort: http
+      protocol: TCP
+      name: http
+    - port: 8072
+      targetPort: gevent
+      protocol: TCP
+      name: websocket
+  selector:
+    app.kubernetes.io/name: odoo

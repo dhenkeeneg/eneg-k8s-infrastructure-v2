@@ -1,0 +1,10 @@
+---
+# Namespace fuer n8n Workflow-Automation
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: n8n
+  labels:
+    app.kubernetes.io/name: n8n
+    app.kubernetes.io/part-of: pilot-apps
+    app.kubernetes.io/managed-by: argocd

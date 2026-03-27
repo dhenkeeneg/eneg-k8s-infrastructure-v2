@@ -1,0 +1,31 @@
+---
+# ArgoCD Application: MariaDB i-doit Databases (PROD)
+# Erstellt Database, User und Grant CRDs fuer i-doit
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: mariadb-idoit-databases
+  namespace: argocd
+  annotations:
+    argocd.argoproj.io/sync-wave: "6"
+  finalizers:
+    - resources-finalizer.argocd.argoproj.io
+spec:
+  project: default
+
+  source:
+    repoURL: git@github.com:dhenkeeneg/eneg-k8s-infrastructure-v2.git
+    targetRevision: main
+    path: kubernetes/base/mariadb-galera/databases
+
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: databases
+
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
+    syncOptions:
+      - CreateNamespace=false
+      - ServerSideApply=true

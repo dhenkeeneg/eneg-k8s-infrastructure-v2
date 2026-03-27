@@ -1,0 +1,42 @@
+---
+# ArgoCD Application: mariadb-operator
+# Multi-Source: Helm Chart + Values aus Git
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: mariadb-operator
+  namespace: argocd
+  annotations:
+    # Nach CRDs (Sync-Wave 4)
+    argocd.argoproj.io/sync-wave: "4"
+  finalizers:
+    - resources-finalizer.argocd.argoproj.io
+spec:
+  project: default
+
+  sources:
+    # Source 1: Helm Chart
+    - repoURL: https://helm.mariadb.com/mariadb-operator
+      chart: mariadb-operator
+      targetRevision: 25.10.4
+      helm:
+        releaseName: mariadb-operator
+        valueFiles:
+          - $values/kubernetes/base/mariadb-galera/operator/values.yaml
+
+    # Source 2: Values aus unserem Git Repository
+    - repoURL: git@github.com:dhenkeeneg/eneg-k8s-infrastructure-v2.git
+      targetRevision: main
+      ref: values
+
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: mariadb-operator
+
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
+    syncOptions:
+      - CreateNamespace=true
+      - ServerSideApply=true

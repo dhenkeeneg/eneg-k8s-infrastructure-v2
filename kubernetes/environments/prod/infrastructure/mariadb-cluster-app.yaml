@@ -1,0 +1,32 @@
+---
+# ArgoCD Application: MariaDB Galera Cluster (PROD)
+# Deployed den Galera Cluster + PhysicalBackup aus dem Environment-Verzeichnis
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: mariadb-cluster
+  namespace: argocd
+  annotations:
+    # Nach Operator (Wave 4) und Secrets (Wave 4)
+    argocd.argoproj.io/sync-wave: "5"
+  finalizers:
+    - resources-finalizer.argocd.argoproj.io
+spec:
+  project: default
+
+  source:
+    repoURL: git@github.com:dhenkeeneg/eneg-k8s-infrastructure-v2.git
+    targetRevision: main
+    path: kubernetes/environments/prod/mariadb-cluster
+
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: databases
+
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
+    syncOptions:
+      - CreateNamespace=true
+      - ServerSideApply=true

@@ -1,0 +1,32 @@
+---
+# ArgoCD App-of-Apps: PROD Infrastructure
+# Ueberwacht das Verzeichnis environments/prod/infrastructure/ und deployed
+# automatisch alle ArgoCD Application-Manifests (*-app.yaml) darin.
+#
+# Einmalig manuell deployen auf dem PROD-Cluster:
+#   kubectl apply -f kubernetes/bootstrap/prod-infrastructure-app.yaml
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: prod-infrastructure
+  namespace: argocd
+  finalizers:
+    - resources-finalizer.argocd.argoproj.io
+spec:
+  project: default
+
+  source:
+    repoURL: git@github.com:dhenkeeneg/eneg-k8s-infrastructure-v2.git
+    targetRevision: main
+    path: kubernetes/environments/prod/infrastructure
+
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: argocd
+
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
+    syncOptions:
+      - ServerSideApply=true

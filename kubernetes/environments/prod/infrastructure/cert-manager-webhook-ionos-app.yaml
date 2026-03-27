@@ -1,0 +1,32 @@
+---
+# ArgoCD Application: IONOS Webhook fuer cert-manager
+# DNS-01 Challenge Provider fuer IONOS DNS API
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: cert-manager-webhook-ionos
+  namespace: argocd
+  annotations:
+    argocd.argoproj.io/sync-wave: "2"
+  finalizers:
+    - resources-finalizer.argocd.argoproj.io
+spec:
+  project: default
+
+  source:
+    repoURL: https://fabmade.github.io/cert-manager-webhook-ionos
+    chart: cert-manager-webhook-ionos
+    targetRevision: "*"
+    helm:
+      releaseName: cert-manager-webhook-ionos
+
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: cert-manager
+
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
+    syncOptions:
+      - ServerSideApply=true

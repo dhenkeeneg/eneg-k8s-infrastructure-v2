@@ -1,0 +1,33 @@
+---
+# TLS Zertifikat fuer i-doit (PROD)
+apiVersion: cert-manager.io/v1
+kind: Certificate
+metadata:
+  name: idoit-tls
+  namespace: traefik
+spec:
+  secretName: idoit-tls
+  issuerRef:
+    name: letsencrypt-prod
+    kind: ClusterIssuer
+  dnsNames:
+    - idoit.eneg.de
+---
+# IngressRoute fuer i-doit (PROD)
+apiVersion: traefik.io/v1alpha1
+kind: IngressRoute
+metadata:
+  name: idoit
+  namespace: traefik
+spec:
+  entryPoints:
+    - websecure
+  routes:
+    - match: Host(`idoit.eneg.de`)
+      kind: Rule
+      services:
+        - name: idoit
+          namespace: idoit
+          port: 80
+  tls:
+    secretName: idoit-tls
