@@ -1,0 +1,29 @@
+---
+# Garage StatefulSet
+# 3 Replicas mit je Meta- und Data-PVC
+# Init-Container ersetzt Platzhalter in garage.toml mit Secret-Werten
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: garage
+  namespace: garage
+  labels:
+    app.kubernetes.io/name: garage
+    app.kubernetes.io/version: "2.2.0"
+    app.kubernetes.io/part-of: infrastructure
+    app.kubernetes.io/managed-by: argocd
+spec:
+  serviceName: garage-headless
+  replicas: 3
+  podManagementPolicy: Parallel
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: garage
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: garage
+    spec:
+      securityContext:
+        fsGroup: 1000
+      terminationGracePeriodSeconds: 30

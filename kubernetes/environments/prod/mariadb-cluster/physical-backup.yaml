@@ -1,0 +1,46 @@
+---
+# PhysicalBackup: MariaDB Galera auf S3 (PROD)
+# Taeglich um 02:30 UTC (versetzt zu CNPG Backups)
+apiVersion: k8s.mariadb.com/v1alpha1
+kind: PhysicalBackup
+metadata:
+  name: mariadb-galera-backup
+  namespace: databases
+  labels:
+    app.kubernetes.io/part-of: mariadb-galera
+    app.kubernetes.io/managed-by: argocd
+spec:
+  mariaDbRef:
+    name: mariadb-galera
+
+  schedule:
+    cron: "30 2 * * *"
+
+  target: PreferReplica
+  compression: gzip
+  maxRetention: 168h
+
+  storage:
+    s3:
+      endpoint: "nas10.eneg.de:8010"
+      bucket: k8s-prod-mariadb-backup
+      prefix: mariadb-galera/
+      accessKeyIdSecretKeyRef:
+        name: mariadb-credentials
+        key: S3_ACCESS_KEY_ID
+      secretAccessKeySecretKeyRef:
+        name: mariadb-credentials
+        key: S3_SECRET_ACCESS_KEY
+      tls:
+        enabled: false
+
+  backoffLimit: 3
+  successfulJobsHistoryLimit: 3
+
+  resources:
+    requests:
+      memory: "256Mi"
+      cpu: "100m"
+    limits:
+      memory: "512Mi"
+      cpu: "500m"

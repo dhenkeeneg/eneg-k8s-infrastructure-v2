@@ -27,7 +27,7 @@
   hosts: k3s_cluster
   become: true
   vars_files:
-    - ../inventory/dev/group_vars/secrets.yml
+    - "{{ inventory_dir }}/group_vars/secrets.yml"
   
   tasks:
     - name: System-Pakete aktualisieren
@@ -92,7 +92,7 @@
   hosts: k3s_initial_server
   become: true
   vars_files:
-    - ../inventory/dev/group_vars/secrets.yml
+    - "{{ inventory_dir }}/group_vars/secrets.yml"
   
   tasks:
     - name: K3s Token generieren wenn nicht gesetzt
@@ -167,7 +167,7 @@
   become: true
   serial: 1
   vars_files:
-    - ../inventory/dev/group_vars/secrets.yml
+    - "{{ inventory_dir }}/group_vars/secrets.yml"
   
   tasks:
     - name: K3s Konfigurationsverzeichnis erstellen
@@ -224,7 +224,7 @@
   serial: 1
   order: sorted
   vars_files:
-    - ../inventory/dev/group_vars/secrets.yml
+    - "{{ inventory_dir }}/group_vars/secrets.yml"
   
   tasks:
     - name: "Upgrade {{ inventory_hostname }} von {{ k3s_current_version.stdout }} auf {{ k3s_version }}"
@@ -306,10 +306,14 @@
         src: /etc/rancher/k3s/k3s.yaml
       register: kubeconfig_content
 
+    - name: Environment-Name aus Inventory-Pfad ableiten
+      ansible.builtin.set_fact:
+        k3s_env_name: "{{ inventory_dir | basename }}"
+
     - name: kubeconfig lokal speichern
       ansible.builtin.copy:
         content: "{{ kubeconfig_content.content | b64decode | replace('127.0.0.1', ansible_host) }}"
-        dest: "{{ playbook_dir }}/../../kubeconfig-dev.yaml"
+        dest: "{{ playbook_dir }}/../../kubeconfig-{{ k3s_env_name }}.yaml"
         mode: '0600'
       delegate_to: localhost
       become: false
@@ -318,13 +322,13 @@
       ansible.builtin.debug:
         msg: |
           ============================================================
-          K3s Cluster erfolgreich installiert/aktualisiert!
+          K3s Cluster ({{ k3s_env_name | upper }}) erfolgreich installiert/aktualisiert!
           
           kubeconfig wurde gespeichert unter:
-            {{ playbook_dir }}/../../kubeconfig-dev.yaml
+            {{ playbook_dir }}/../../kubeconfig-{{ k3s_env_name }}.yaml
           
           Verwendung:
-            export KUBECONFIG={{ playbook_dir }}/../../kubeconfig-dev.yaml
+            export KUBECONFIG={{ playbook_dir }}/../../kubeconfig-{{ k3s_env_name }}.yaml
             kubectl get nodes
           
           Oder kopieren nach ~/.kube/config

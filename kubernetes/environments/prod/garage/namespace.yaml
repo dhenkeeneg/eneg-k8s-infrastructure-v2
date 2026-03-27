@@ -1,0 +1,10 @@
+---
+# Namespace fuer Garage S3-kompatiblen Object Storage
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: garage
+  labels:
+    app.kubernetes.io/name: garage
+    app.kubernetes.io/part-of: infrastructure
+    app.kubernetes.io/managed-by: argocd

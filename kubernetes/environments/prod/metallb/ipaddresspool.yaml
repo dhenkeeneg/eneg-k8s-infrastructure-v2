@@ -1,0 +1,14 @@
+---
+# MetalLB IP Address Pool für PROD-Umgebung
+# Dedizierte IP für Traefik + Pool für weitere Services
+apiVersion: metallb.io/v1beta1
+kind: IPAddressPool
+metadata:
+  name: prod-pool
+  namespace: metallb-system
+spec:
+  addresses:
+    # Dedizierte Traefik IP
+    - 192.168.178.100/32
+    # Allgemeiner Pool für weitere LoadBalancer Services
+    - 192.168.178.151-192.168.178.199

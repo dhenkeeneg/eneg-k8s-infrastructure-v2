@@ -1,0 +1,19 @@
+# Traefik Helm Chart Values - PROD-Umgebung Override
+# Ergaenzt kubernetes/base/traefik/values.yaml mit PROD-spezifischen Werten
+
+# --- Service (MetalLB) - PROD-spezifisch ---
+service:
+  spec:
+    loadBalancerIP: "192.168.178.100"
+  annotations:
+    metallb.universe.tf/address-pool: prod-pool
+
+# --- Traefik Dashboard - PROD-spezifisch ---
+ingressRoute:
+  dashboard:
+    enabled: true
+    matchRule: Host(`traefik-prod.eneg.de`)
+    entryPoints:
+      - websecure
+    tls:
+      secretName: traefik-dashboard-tls

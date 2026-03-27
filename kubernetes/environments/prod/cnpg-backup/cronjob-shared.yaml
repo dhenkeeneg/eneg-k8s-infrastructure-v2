@@ -1,0 +1,72 @@
+---
+# CronJob: Logical Backup cnpg-shared (PROD)
+# pg_dumpall aller Datenbanken, Upload auf S3, 32 Tage Retention
+# Taeglich 03:00 UTC (nach Physical Backups um 02:00)
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: cnpg-shared-logical-backup
+  namespace: databases
+  labels:
+    app.kubernetes.io/part-of: cloudnative-pg
+    app.kubernetes.io/managed-by: argocd
+spec:
+  schedule: "0 3 * * *"
+  concurrencyPolicy: Forbid
+  successfulJobsHistoryLimit: 3
+  failedJobsHistoryLimit: 3
+  jobTemplate:
+    spec:
+      backoffLimit: 2
+      template:
+        spec:
+          restartPolicy: OnFailure
+          volumes:
+            - name: scripts
+              configMap:
+                name: cnpg-logical-backup-script
+                defaultMode: 0755
+          containers:
+            - name: pg-backup
+              image: postgres:17
+              command: ["/bin/bash", "/scripts/backup.sh"]
+              env:
+                - name: CLUSTER_NAME
+                  value: "cnpg-shared"
+                - name: PGHOST
+                  value: "cnpg-shared-r.databases.svc.cluster.local"
+                - name: PGUSER
+                  value: "postgres"
+                - name: PGPASSWORD
+                  valueFrom:
+                    secretKeyRef:
+                      name: cnpg-shared-superuser
+                      key: password
+                - name: S3_BUCKET
+                  value: "k8s-prod-postgres-backup"
+                - name: S3_PREFIX
+                  value: "cnpg-shared/"
+                - name: S3_ENDPOINT
+                  value: "http://nas10.eneg.de:8010"
+                - name: RETENTION_DAYS
+                  value: "32"
+                - name: AWS_ACCESS_KEY_ID
+                  valueFrom:
+                    secretKeyRef:
+                      name: cnpg-s3-credentials
+                      key: ACCESS_KEY_ID
+                - name: AWS_SECRET_ACCESS_KEY
+                  valueFrom:
+                    secretKeyRef:
+                      name: cnpg-s3-credentials
+                      key: SECRET_ACCESS_KEY
+              volumeMounts:
+                - name: scripts
+                  mountPath: /scripts
+              resources:
+                requests:
+                  memory: "256Mi"
+                  cpu: "100m"
+                limits:
+                  memory: "512Mi"
+                  cpu: "500m"
