@@ -1,284 +1,178 @@
 #!/bin/bash
 # =============================================================================
-# Phase 8c PROD: Reparatur-Script fuer fehlende 6 Secrets
+# Phase 8c PROD: Reparatur — 6 fehlende Secrets
 # Ausfuehren auf k8s-mgmt-10
 # =============================================================================
-# Erstellt die 6 fehlenden/kaputten Secrets:
-#   1. idoit ghcr-pull-secret (kaputt, neu erstellen)
-#   2. openproject-secrets
-#   3. odoo-secrets
-#   4. odoo-backup-credentials
-#   5. it-info-versand-secrets
-#   6. it-info-versand ghcr-pull-secret
+# Fuer jedes Secret:
+#   1. Kopiert Template -> YAML
+#   2. Generiert Passwoerter und traegt sie per sed ein
+#   3. Zeigt die fertige Datei an
+#   4. Verschluesselt mit SOPS nach Bestaetigung
+#   5. Loescht Klartext
+#
+# GHCR-Secrets: Template wird kopiert, PAT + auth manuell eingetragen per nano
 # =============================================================================
 
 set -e
 REPO=~/git/eneg-k8s-infrastructure-v2
 PROD=$REPO/kubernetes/environments/prod
-AGE_KEY="age1fdqtcha9jnzqafe5t6hed6v5sv858x2tt6nwuw00u3luyxuaqcxqh5mcrm"
+AGE="age1fdqtcha9jnzqafe5t6hed6v5sv858x2tt6nwuw00u3luyxuaqcxqh5mcrm"
+SOPS_ENC="sops --encrypt --age $AGE --encrypted-regex ^(data|stringData)$"
 
 encrypt_and_verify() {
   local src="$1"
-  local dst="$2"
-  sops --encrypt --age "$AGE_KEY" --encrypted-regex '^(data|stringData)$' "$src" > "$dst"
-  local size=$(wc -c < "$dst")
-  if [ "$size" -lt 10 ]; then
-    echo "  FEHLER: $dst ist nur $size Bytes!"
+  local enc="$2"
+  sops --encrypt --age "$AGE" --encrypted-regex '^(data|stringData)$' "$src" > "$enc"
+  local size=$(wc -c < "$enc")
+  if [ "$size" -lt 50 ]; then
+    echo "  FEHLER: $enc nur $size Bytes — Verschluesselung fehlgeschlagen!"
     exit 1
   fi
   rm "$src"
-  echo "  -> Verschluesselt: $dst ($size Bytes)"
+  echo "  OK: $enc ($size Bytes)"
 }
 
-show_and_confirm() {
-  local file="$1"
+confirm_and_encrypt() {
+  local yaml="$1"
+  local enc="$2"
   echo ""
-  echo "--- Inhalt von $file ---"
-  cat "$file"
+  echo "=== Datei: $yaml ==="
+  cat "$yaml"
   echo ""
-  echo "--- Ende ---"
-  echo ""
-  read -p "OK? Verschluesseln und Klartext loeschen? (j/n) " answer
+  read -p "Verschluesseln? (j/n) " answer
   if [ "$answer" != "j" ] && [ "$answer" != "y" ]; then
-    echo "Abgebrochen. Klartext bleibt: $file"
+    echo "Abgebrochen."
     exit 1
   fi
+  encrypt_and_verify "$yaml" "$enc"
 }
 
 echo "========================================"
 echo "Phase 8c: 6 fehlende PROD Secrets"
 echo "========================================"
+
+# --- DB-Passwoerter aus bestehenden CNPG-Secrets lesen ---
 echo ""
+echo "Lese DB-Passwoerter aus bestehenden CNPG-Secrets..."
+PW_OP=$(sops --decrypt $PROD/cnpg-secrets/openproject-db-credentials.enc.yaml 2>/dev/null | grep 'password:' | awk '{print $2}' | tr -d '"')
+PW_ODOO=$(sops --decrypt $PROD/cnpg-secrets/odoo-db-credentials.enc.yaml 2>/dev/null | grep 'password:' | awk '{print $2}' | tr -d '"')
+PW_ITINFO=$(sops --decrypt $PROD/cnpg-secrets/it-info-versand-db-credentials.enc.yaml 2>/dev/null | grep 'password:' | awk '{print $2}' | tr -d '"')
+echo "  OpenProject: ${PW_OP:0:8}..."
+echo "  Odoo:        ${PW_ODOO:0:8}..."
+echo "  IT-Info:     ${PW_ITINFO:0:8}..."
 
-# --- Externe Werte abfragen ---
-read -p "NAS10 S3 Secret Key (s3-k8s-prod): " NAS10_SECRET
-read -p "SMTP Username: " SMTP_USER
-read -p "SMTP Passwort: " SMTP_PASS
-read -p "GitHub PAT (ghcr.io read:packages): " GITHUB_PAT
-
-GHCR_AUTH=$(echo -n "dhenkeeneg:${GITHUB_PAT}" | base64)
-
-# --- DB-Passwoerter aus bereits verschluesselten CNPG-Secrets holen ---
-echo "Lese bestehende DB-Passwoerter aus CNPG-Secrets..."
-PW_OPENPROJECT=$(sops --decrypt $PROD/cnpg-secrets/openproject-db-credentials.enc.yaml | grep 'password:' | awk '{print $2}' | tr -d '"')
-PW_ODOO=$(sops --decrypt $PROD/cnpg-secrets/odoo-db-credentials.enc.yaml | grep 'password:' | awk '{print $2}' | tr -d '"')
-PW_ITINFO=$(sops --decrypt $PROD/cnpg-secrets/it-info-versand-db-credentials.enc.yaml | grep 'password:' | awk '{print $2}' | tr -d '"')
-echo "  OpenProject DB-PW: ${PW_OPENPROJECT:0:8}..."
-echo "  Odoo DB-PW: ${PW_ODOO:0:8}..."
-echo "  it-info-versand DB-PW: ${PW_ITINFO:0:8}..."
-echo ""
-
-# --- App-spezifische Keys generieren ---
-ODOO_ADMIN=$(openssl rand -hex 24)
-OP_SECRET_KEY=$(openssl rand -hex 64)
-OP_HOCUSPOCUS=$(openssl rand -hex 32)
-ITINFO_SESSION=$(openssl rand -hex 32)
-ITINFO_FERNET=$(python3 -c "from cryptography.fernet import Fernet; print(Fernet.generate_key().decode())" 2>/dev/null || openssl rand -base64 32)
-
-echo "App-Keys generiert."
-echo ""
 
 # =====================================================================
-# 1/6: idoit ghcr-pull-secret (kaputt, neu erstellen)
+# 1/6: idoit ghcr-pull-secret
 # =====================================================================
-echo "=== 1/6: idoit ghcr-pull-secret (Reparatur) ==="
+echo ""
+echo "=== 1/6: idoit ghcr-pull-secret ==="
+echo "Oeffne nano — trage PAT und auth (base64) ein, speichere."
+echo "  auth erzeugen: echo -n 'dhenkeeneg:DEIN_PAT' | base64"
 cd $PROD/apps/idoit/secrets
 rm -f ghcr-pull-secret.enc.yaml
-
-# GHCR-Secret per Python schreiben (vermeidet heredoc/YAML-Escaping)
-python3 -c "
-import json, yaml
-
-doc = {
-    'apiVersion': 'v1',
-    'kind': 'Secret',
-    'metadata': {
-        'name': 'ghcr-pull-secret',
-        'namespace': 'idoit',
-        'labels': {
-            'app.kubernetes.io/managed-by': 'argocd'
-        }
-    },
-    'type': 'kubernetes.io/dockerconfigjson',
-    'stringData': {
-        '.dockerconfigjson': json.dumps({
-            'auths': {
-                'ghcr.io': {
-                    'username': 'dhenkeeneg',
-                    'password': '${GITHUB_PAT}',
-                    'auth': '${GHCR_AUTH}'
-                }
-            }
-        })
-    }
-}
-
-with open('ghcr-pull-secret.yaml', 'w') as f:
-    f.write('---\n')
-    yaml.dump(doc, f, default_flow_style=False, allow_unicode=True)
-"
-
-show_and_confirm "$PROD/apps/idoit/secrets/ghcr-pull-secret.yaml"
-encrypt_and_verify ghcr-pull-secret.yaml ghcr-pull-secret.enc.yaml
+cp ghcr-pull-secret.yaml.template ghcr-pull-secret.yaml
+read -p "Enter zum Oeffnen von nano..."
+nano ghcr-pull-secret.yaml
+confirm_and_encrypt ghcr-pull-secret.yaml ghcr-pull-secret.enc.yaml
 
 # =====================================================================
-# 2/6: OpenProject App-Secrets
+# 2/6: OpenProject Secrets
 # =====================================================================
-echo "=== 2/6: OpenProject App-Secrets ==="
-echo "  HINWEIS: s3-keys und oidc-client-secret = Platzhalter"
+echo ""
+echo "=== 2/6: OpenProject Secrets ==="
 cd $PROD/apps/openproject/secrets
-cat > openproject-secrets.yaml << ENDOFYAML
-apiVersion: v1
-kind: Secret
-metadata:
-  name: openproject-secrets
-  namespace: openproject
-  labels:
-    app.kubernetes.io/name: openproject
-    app.kubernetes.io/managed-by: argocd
-type: Opaque
-stringData:
-  secret-key-base: "${OP_SECRET_KEY}"
-  hocuspocus-secret: "${OP_HOCUSPOCUS}"
-  database-url: "postgres://openproject:${PW_OPENPROJECT}@cnpg-erp-rw.databases.svc.cluster.local:5432/openproject"
-  s3-access-key-id: "PLATZHALTER_GARAGE_DEPLOY"
-  s3-secret-access-key: "PLATZHALTER_GARAGE_DEPLOY"
-  oidc-client-secret: "PLATZHALTER_KEYCLOAK_DEPLOY"
-  smtp-username: "${SMTP_USER}"
-  smtp-password: "${SMTP_PASS}"
-ENDOFYAML
-show_and_confirm "$PROD/apps/openproject/secrets/openproject-secrets.yaml"
-encrypt_and_verify openproject-secrets.yaml openproject-secrets.enc.yaml
+cp openproject-secrets.yaml.template openproject-secrets.yaml
+
+# Generiere Keys
+OP_SKB=$(openssl rand -hex 64)
+OP_HPS=$(openssl rand -hex 32)
+
+# Trage generierte Werte + DB-PW ein
+sed -i "s|HIER_SECRET_KEY_BASE|${OP_SKB}|" openproject-secrets.yaml
+sed -i "s|HIER_HOCUSPOCUS_SECRET|${OP_HPS}|" openproject-secrets.yaml
+sed -i "s|HIER_DB_PASSWORT|${PW_OP}|" openproject-secrets.yaml
+
+echo "Generierte Keys eingetragen. SMTP noch manuell eintragen."
+echo "Oeffne nano — trage SMTP-Username und SMTP-Passwort ein."
+read -p "Enter zum Oeffnen von nano..."
+nano openproject-secrets.yaml
+confirm_and_encrypt openproject-secrets.yaml openproject-secrets.enc.yaml
 
 # =====================================================================
-# 3/6: Odoo App-Secrets
+# 3/6: Odoo Secrets
 # =====================================================================
-echo "=== 3/6: Odoo App-Secrets ==="
+echo ""
+echo "=== 3/6: Odoo Secrets ==="
 cd $PROD/apps/odoo/secrets
-cat > odoo-secrets.yaml << ENDOFYAML
-apiVersion: v1
-kind: Secret
-metadata:
-  name: odoo-secrets
-  namespace: odoo
-  labels:
-    app.kubernetes.io/name: odoo
-    app.kubernetes.io/managed-by: argocd
-type: Opaque
-stringData:
-  db-password: "${PW_ODOO}"
-  admin-password: "${ODOO_ADMIN}"
-ENDOFYAML
-show_and_confirm "$PROD/apps/odoo/secrets/odoo-secrets.yaml"
-encrypt_and_verify odoo-secrets.yaml odoo-secrets.enc.yaml
+cp odoo-secrets.yaml.template odoo-secrets.yaml
+
+ODOO_ADMIN=$(openssl rand -hex 24)
+
+sed -i "s|HIER_DB_PASSWORT_EINTRAGEN|${PW_ODOO}|" odoo-secrets.yaml
+sed -i "s|HIER_ADMIN_PASSWORT_EINTRAGEN|${ODOO_ADMIN}|" odoo-secrets.yaml
+
+confirm_and_encrypt odoo-secrets.yaml odoo-secrets.enc.yaml
 
 # =====================================================================
 # 4/6: Odoo Backup Credentials
 # =====================================================================
+echo ""
 echo "=== 4/6: Odoo Backup Credentials ==="
 cd $PROD/apps/odoo/backup/secrets
-cat > odoo-backup-credentials.yaml << ENDOFYAML
-apiVersion: v1
-kind: Secret
-metadata:
-  name: odoo-backup-credentials
-  namespace: odoo
-  labels:
-    app.kubernetes.io/name: odoo-backup
-    app.kubernetes.io/part-of: pilot-apps
-    app.kubernetes.io/managed-by: argocd
-type: Opaque
-stringData:
-  NAS10_ACCESS_KEY_ID: "s3-k8s-prod"
-  NAS10_SECRET_ACCESS_KEY: "${NAS10_SECRET}"
-ENDOFYAML
-show_and_confirm "$PROD/apps/odoo/backup/secrets/odoo-backup-credentials.yaml"
-encrypt_and_verify odoo-backup-credentials.yaml odoo-backup-credentials.enc.yaml
+cp odoo-backup-credentials.yaml.template odoo-backup-credentials.yaml
+
+echo "Oeffne nano — trage NAS10 SECRET_ACCESS_KEY ein."
+read -p "Enter zum Oeffnen von nano..."
+nano odoo-backup-credentials.yaml
+confirm_and_encrypt odoo-backup-credentials.yaml odoo-backup-credentials.enc.yaml
 
 # =====================================================================
-# 5/6: it-info-versand App-Secrets
+# 5/6: it-info-versand Secrets
 # =====================================================================
-echo "=== 5/6: it-info-versand App-Secrets ==="
-echo "  HINWEIS: keycloak-client-secret = Platzhalter"
+echo ""
+echo "=== 5/6: it-info-versand Secrets ==="
 cd $PROD/apps/it-info-versand/secrets
-cat > it-info-versand-secrets.yaml << ENDOFYAML
-apiVersion: v1
-kind: Secret
-metadata:
-  name: it-info-versand-secrets
-  namespace: it-info-versand
-  labels:
-    app.kubernetes.io/name: it-info-versand
-    app.kubernetes.io/managed-by: argocd
-type: Opaque
-stringData:
-  db-password: "${PW_ITINFO}"
-  session-secret: "${ITINFO_SESSION}"
-  encryption-key: "${ITINFO_FERNET}"
-  smtp-username: "${SMTP_USER}"
-  smtp-password: "${SMTP_PASS}"
-  keycloak-client-secret: "PLATZHALTER_KEYCLOAK_DEPLOY"
-ENDOFYAML
-show_and_confirm "$PROD/apps/it-info-versand/secrets/it-info-versand-secrets.yaml"
-encrypt_and_verify it-info-versand-secrets.yaml it-info-versand-secrets.enc.yaml
+cp it-info-versand-secrets.yaml.template it-info-versand-secrets.yaml
+
+ITINFO_SESSION=$(openssl rand -hex 32)
+ITINFO_FERNET=$(python3 -c "from cryptography.fernet import Fernet; print(Fernet.generate_key().decode())" 2>/dev/null || openssl rand -base64 32)
+
+sed -i "s|HIER_DASSELBE_PASSWORT_WIE_IN_DB_CREDENTIALS|${PW_ITINFO}|" it-info-versand-secrets.yaml
+sed -i "s|HIER_SESSION_SECRET|${ITINFO_SESSION}|" it-info-versand-secrets.yaml
+sed -i "s|HIER_FERNET_KEY|${ITINFO_FERNET}|" it-info-versand-secrets.yaml
+
+echo "DB-PW, Session-Secret und Fernet-Key eingetragen."
+echo "Oeffne nano — trage SMTP-Username und SMTP-Passwort ein."
+read -p "Enter zum Oeffnen von nano..."
+nano it-info-versand-secrets.yaml
+confirm_and_encrypt it-info-versand-secrets.yaml it-info-versand-secrets.enc.yaml
 
 # =====================================================================
 # 6/6: it-info-versand ghcr-pull-secret
 # =====================================================================
+echo ""
 echo "=== 6/6: it-info-versand ghcr-pull-secret ==="
-
+echo "Oeffne nano — trage PAT und auth (base64) ein (gleich wie bei idoit)."
 cd $PROD/apps/it-info-versand/secrets
-
-# GHCR-Secrets per Python schreiben (vermeidet heredoc/YAML-Escaping-Probleme)
-python3 -c "
-import json, yaml
-
-doc = {
-    'apiVersion': 'v1',
-    'kind': 'Secret',
-    'metadata': {
-        'name': 'ghcr-pull-secret',
-        'namespace': 'it-info-versand',
-        'labels': {
-            'app.kubernetes.io/managed-by': 'argocd'
-        }
-    },
-    'type': 'kubernetes.io/dockerconfigjson',
-    'stringData': {
-        '.dockerconfigjson': json.dumps({
-            'auths': {
-                'ghcr.io': {
-                    'username': 'dhenkeeneg',
-                    'password': '${GITHUB_PAT}',
-                    'auth': '${GHCR_AUTH}'
-                }
-            }
-        })
-    }
-}
-with open('ghcr-pull-secret.yaml', 'w') as f:
-    f.write('---\n')
-    yaml.dump(doc, f, default_flow_style=False, allow_unicode=True)
-"
-show_and_confirm "$PROD/apps/it-info-versand/secrets/ghcr-pull-secret.yaml"
-encrypt_and_verify ghcr-pull-secret.yaml ghcr-pull-secret.enc.yaml
+rm -f ghcr-pull-secret.enc.yaml
+cp ghcr-pull-secret.yaml.template ghcr-pull-secret.yaml
+read -p "Enter zum Oeffnen von nano..."
+nano ghcr-pull-secret.yaml
+confirm_and_encrypt ghcr-pull-secret.yaml ghcr-pull-secret.enc.yaml
 
 # =====================================================================
 echo ""
 echo "========================================"
-echo "FERTIG! 6 fehlende Secrets erstellt."
+echo "FERTIG! Alle 6 fehlenden Secrets erstellt."
 echo "========================================"
 echo ""
-echo "Neue verschluesselte Secrets:"
+echo "Pruefung — alle enc.yaml:"
 find $PROD -name "*.enc.yaml" | sort
 echo ""
-echo "NOCH OFFEN (nach Deploy):"
-echo "  1. garage-backup-secrets/garage-backup-credentials.enc.yaml"
-echo "  2. openproject-secrets: s3-keys aktualisieren"
-echo "  3. openproject-secrets: oidc-client-secret aktualisieren"
-echo "  4. it-info-versand-secrets: keycloak-client-secret aktualisieren"
+echo "Anzahl: $(find $PROD -name '*.enc.yaml' | wc -l) (erwartet: 19)"
 echo ""
-echo "Naechster Schritt:"
+echo "Naechster Schritt auf k8s-mgmt-10:"
 echo "  cd $REPO"
 echo "  git add kubernetes/environments/prod/"
 echo "  git commit -m 'Phase 8c: PROD secrets encrypted'"
