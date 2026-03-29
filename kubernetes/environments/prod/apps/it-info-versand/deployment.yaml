@@ -49,7 +49,7 @@ spec:
                   name: it-info-versand-secrets
                   key: session-secret
             - name: ENVIRONMENT
-              value: "production"
+              value: "prod"
       # --- App-Container ---
       containers:
         - name: it-info-versand
@@ -69,7 +69,7 @@ spec:
               value: "postgresql+asyncpg://it_info_versand:$(DB_PASSWORD)@cnpg-shared-rw.databases.svc.cluster.local:5432/it_info_versand"
             # --- App ---
             - name: ENVIRONMENT
-              value: "production"
+              value: "prod"
             - name: APP_BASE_URL
               value: "https://it-info-versand.eneg.de"
             - name: DEBUG
