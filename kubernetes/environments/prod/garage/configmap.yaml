@@ -28,9 +28,9 @@ data:
     rpc_secret = "__RPC_SECRET__"
 
     bootstrap_peers = [
-      "PLATZHALTER_NODE_ID_0@garage-0.garage-headless.garage.svc.cluster.local:3901",
-      "PLATZHALTER_NODE_ID_1@garage-1.garage-headless.garage.svc.cluster.local:3901",
-      "PLATZHALTER_NODE_ID_2@garage-2.garage-headless.garage.svc.cluster.local:3901",
+      "4b17a0c30796df60a63ba338ccdc5876b505242df468b1aa40389e08a13aa76e@garage-0.garage-headless.garage.svc.cluster.local:3901",
+      "5969a75cbfa419856c15d913a32dd0dd45b8d56ca18db799c653107b309f3d3f@garage-1.garage-headless.garage.svc.cluster.local:3901",
+      "d0dc02bf1faed9c76434bd28d9f609ce3df19fa88bcad4a477e0de7bc1785eb4@garage-2.garage-headless.garage.svc.cluster.local:3901",
     ]
 
     [s3_api]
