@@ -75,6 +75,8 @@ spec:
                 secretKeyRef:
                   name: idoit-secrets
                   key: admin-password
+            - name: TZ
+              value: "Europe/Berlin"
           volumeMounts:
             - name: idoit-data
               mountPath: /var/www/html/i-doit/src

@@ -68,6 +68,8 @@ spec:
                 secretKeyRef:
                   name: keycloak-secrets
                   key: admin-password
+            - name: TZ
+              value: "Europe/Berlin"
           resources:
             requests:
               cpu: 500m

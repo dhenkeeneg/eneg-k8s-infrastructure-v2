@@ -116,6 +116,8 @@ spec:
                 secretKeyRef:
                   name: it-info-versand-secrets
                   key: keycloak-client-secret
+            - name: TZ
+              value: "Europe/Berlin"
           # --- Resources ---
           resources:
             requests:
