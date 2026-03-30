@@ -75,6 +75,8 @@ spec:
                 secretKeyRef:
                   name: odoo-secrets
                   key: db-password
+            - name: TZ
+              value: "Europe/Berlin"
           volumeMounts:
             - name: config
               mountPath: /config
