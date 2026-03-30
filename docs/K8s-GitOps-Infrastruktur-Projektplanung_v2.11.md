@@ -1,9 +1,9 @@
 # GitOps Kubernetes-Infrastruktur auf VMware vSphere
 
-## Projektplanung - Version 2.10
+## Projektplanung - Version 2.11
 
 **Erstellt:** 04.02.2026  
-**Letzte Aktualisierung:** 26.03.2026  
+**Letzte Aktualisierung:** 30.03.2026  
 **Standort:** Hamburg  
 **Projekt:** eNeG K8s Infrastructure v2
 
@@ -1027,9 +1027,31 @@ umgestellt und erfolgreich nach TEST deployed.
 - Odoo: DB-Initialisierung beim ersten Start manuell anstossen (`odoo -i base --stop-after-init --no-http`)
 - Keycloak OIDC: Group Membership Protocol Mapper noetig fuer gruppenbasierte App-Autorisierung
 
-**Phase 8c: PROD Rollout (spaeter)**
+**Phase 8c: PROD Rollout ✅ ABGESCHLOSSEN (30.03.2026)**
 
-Rollout des PROD-Clusters analog zu TEST.
+Rollout des PROD-Clusters analog zu TEST, inklusive Post-Deployment-Konfiguration.
+
+**PROD-Cluster:**
+- 3 Nodes (k8s-prod-21/22/23), VLAN 178, K3s v1.35.1+k3s1
+- 8 vCPU, 24 GB RAM, 768 GB Disk pro Node
+- 39 ArgoCD Apps Synced + Healthy
+
+**Post-Deployment-Konfiguration (30.03.2026):**
+- Garage: API Keys + Buckets erstellt, Backup-Credentials (Secret #19) verschluesselt
+- Keycloak: Realm `eNeG`, AD/LDAP Federation, OIDC-Client `it-info-versand`
+- OpenProject: LDAP-Auth, S3-Attachments, SMTP, Hocuspocus Echtzeit-Kollaboration
+- Odoo: Admin-Passwort konfiguriert
+- SSL/DNS: Alle 10 PROD-URLs erreichbar
+- Backups: Alle 5 Backup-Jobs (CNPG Physical+Logical, MariaDB, Garage, Odoo) verifiziert
+
+**Kritische Learnings:**
+- LVM nach vSphere-Clone manuell erweitern (growpart + pvresize + lvextend + resize2fs)
+- GHCR Pull-Secrets nie per heredoc/Script, immer per Template mit `|` Block-Scalar
+- Garage Node-IDs aus Rohbytes auslesen (`xxd -p | tr -d '\n'`)
+- Hocuspocus muss in OpenProject Administration → Documents manuell konfiguriert werden
+- OpenProject-Pods brauchen Restart nach Secret-Updates
+
+**Abschlussdokument:** `docs/phases/phase-08c-prod-deployment-handoff.md`
 
 ---
 
@@ -1103,6 +1125,7 @@ docs/
 | 16.03.2026 | 2.8 | Phase 8b: TEST-Cluster aufgebaut (OpenTofu, Ansible, K3s, ArgoCD Bootstrap), 11 Infrastruktur-Apps Synced+Healthy, Dashboards erreichbar, Learnings dokumentiert |
 | 26.03.2026 | 2.9 | Phase 8b-continued: Alle 6 Pilot-Apps nach TEST deployed (Environment-Overlay Refactoring), DB-Operatoren/Cluster/Garage refactored, 14 TEST ArgoCD Apps, Fixes (ghcr auth, DB-Passwort Sonderzeichen, manuelle DB-Migration/Init) |
 | 26.03.2026 | 2.10 | Post-Deployment TEST: Garage S3 Key+Bucket fuer OpenProject, Keycloak AD/LDAP+OIDC (Realm eNeG), OpenProject SMTP+LDAP, it-info-versand OIDC+Group Mapper, Fix Realm-Name eneg->eNeG |
+| 30.03.2026 | 2.11 | Phase 8c ABGESCHLOSSEN: PROD-Cluster komplett deployed + Post-Deployment-Konfiguration (Garage Keys, Keycloak OIDC, OpenProject LDAP/S3/SMTP/Hocuspocus, Odoo, SSL/DNS, Backups verifiziert) |
 
 ---
 

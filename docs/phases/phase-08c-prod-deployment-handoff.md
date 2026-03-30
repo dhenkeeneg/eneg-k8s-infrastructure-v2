@@ -1,7 +1,8 @@
 # Phase 8c: PROD Rollout — Handoff-Dokument (Abschluss Deployment)
 
 **Erstellt:** 29.03.2026
-**Status:** PROD-Cluster deployed und alle Apps Running — Post-Deployment-Konfiguration steht noch aus
+**Aktualisiert:** 30.03.2026
+**Status:** ✅ ABGESCHLOSSEN (inkl. Post-Deployment-Konfiguration)
 
 ---
 
@@ -284,6 +285,70 @@ Alle URLs auf HTTPS-Erreichbarkeit pruefen:
 
 ---
 
+## Post-Deployment-Konfiguration (abgeschlossen 30.03.2026)
+
+### Schritt 1+2: Garage API Keys + Secret #19
+- API Key `openproject-app` erstellt, Bucket `openproject-assets` angelegt (read+write)
+- API Key `garage-backup-readonly` erstellt (read-only auf openproject-assets)
+- `garage-backup-credentials.enc.yaml` (Secret #19) erstellt und verschluesselt
+- ArgoCD garage-backup-secrets App nun Synced + Healthy
+
+### Schritt 3: Keycloak PROD
+- Realm `eNeG` erstellt (case-sensitive!)
+- AD/LDAP User Federation konfiguriert (dc01/dc02/dc03, READ_ONLY)
+- Group Mapper `ad-groups` (Preserve Group Inheritance: Off)
+- OIDC-Client `it-info-versand` erstellt mit Group Membership Protocol Mapper
+  (Token Claim Name: `groups`, Full group path: Off, ID+access+userinfo: On)
+- User-Sync erfolgreich
+
+### Schritt 4+5: Secrets aktualisiert
+- `it-info-versand-secrets.enc.yaml` — Keycloak OIDC Client Secret eingetragen
+- `openproject-secrets.enc.yaml` — Garage S3-Keys eingetragen
+
+### Schritt 6: Commit + Push
+- Alle aktualisierten Secrets committed und gepusht
+- ArgoCD hat Secrets automatisch gesynct
+
+### Schritt 7: OpenProject PROD
+- Admin-Passwort geaendert
+- LDAP-Authentifizierung gegen AD konfiguriert
+- SMTP getestet und funktioniert (smtpout1.eneg.customers.hosting.zone:587)
+- S3-Attachments getestet und funktioniert (nach Pod-Restart)
+- **Fix:** Hocuspocus musste in Administration → Documents konfiguriert werden
+  (URL + Secret manuell eintragen), plus Documents-Modul pro Projekt aktivieren
+- **Fix:** OpenProject-Pods brauchten Restart nach Secret-Update
+  (`kubectl rollout restart deployment openproject-web openproject-worker -n openproject`)
+
+### Schritt 8: Odoo PROD
+- Admin-Passwort geaendert und dokumentiert
+
+### Schritt 9: SSL/DNS-Pruefung
+Alle 10 PROD-URLs erreichbar:
+
+| URL | Status | Bedeutung |
+|-----|--------|-----------|
+| https://argocd-prod.eneg.de | 200 | OK |
+| https://longhorn-prod.eneg.de | 200 | OK |
+| https://s3-gui-prod.eneg.de | 200 | OK |
+| https://s3-prod.eneg.de | 403 | Erwartet (S3 API ohne Auth) |
+| https://n8n.eneg.de | 200 | OK |
+| https://keycloak.eneg.de | 302 | Redirect auf Login |
+| https://openproject.eneg.de | 302 | Redirect auf Login |
+| https://odoo.eneg.de | 303 | Redirect auf Login |
+| https://idoit.eneg.de | 200 | OK |
+| https://it-info-versand.eneg.de | 302 | Redirect auf Login |
+
+### Schritt 10: Backup-Pruefung (30.03.2026)
+| Backup | Status | Anmerkung |
+|--------|--------|-----------|
+| CNPG Physical (shared+erp) | ✅ | ScheduledBackups laufen |
+| CNPG Logical (shared+erp) | ✅ | Complete |
+| MariaDB Galera | ✅ | Complete |
+| Garage → NAS10 | ✅ | Complete (nach manuellem Test) |
+| Odoo Filestore | ✅ | Complete |
+
+---
+
 ## Kritische Learnings (diese Session)
 
 1. **LVM-Erweiterung nach vSphere-Clone fehlt weiterhin**
@@ -315,6 +380,17 @@ Alle URLs auf HTTPS-Erreichbarkeit pruefen:
 7. **kubeconfig Context-Name `default` umbenennen**
    K3s generiert kubeconfig mit Context `default`. Fuer Multi-Cluster-Setups
    umbenennen: `kubectl config rename-context default k8s-prod`
+
+8. **OpenProject Hocuspocus muss in der Web-UI konfiguriert werden**
+   Containerized Installations starten Hocuspocus automatisch, aber die Verbindung
+   muss in Administration → Documents manuell konfiguriert werden (URL + Secret).
+   Zusaetzlich muss das Documents-Modul pro Projekt aktiviert werden:
+   Project settings → Modules → Documents aktivieren.
+
+9. **OpenProject-Pods brauchen Restart nach Secret-Update**
+   ENV-Variablen werden nur beim Pod-Start gelesen. Nach SOPS-Secret-Update
+   und ArgoCD-Sync muessen Web- und Worker-Pods manuell restartet werden:
+   `kubectl rollout restart deployment openproject-web openproject-worker -n openproject`
 
 ---
 
