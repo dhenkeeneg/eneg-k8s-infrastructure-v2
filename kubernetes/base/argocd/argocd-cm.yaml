@@ -13,4 +13,13 @@ data:
   # Enable KSOPS Kustomize plugin for SOPS decryption
   kustomize.buildOptions: "--enable-alpha-plugins --enable-exec"
 
+  # Bekanntes ArgoCD-Normalisierungsproblem: Bei App-of-Apps fuegt Kubernetes
+  # den Default "directory: recurse: false" zu Application-Ressourcen hinzu,
+  # der im Git-Manifest nicht steht. Ohne diese Einstellung zeigt die
+  # Infrastructure-App permanentes OutOfSync.
+  # Ref: https://github.com/argoproj/argo-cd/issues/4501
+  resource.customizations.ignoreDifferences.argoproj.io_Application: |
+    jqPathExpressions:
+      - .spec.source.directory
+
   # Server URL wird per Environment-Overlay gesetzt

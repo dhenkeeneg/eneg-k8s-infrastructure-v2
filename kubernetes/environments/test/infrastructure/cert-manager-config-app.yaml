@@ -16,8 +16,6 @@ spec:
     repoURL: git@github.com:dhenkeeneg/eneg-k8s-infrastructure-v2.git
     targetRevision: main
     path: kubernetes/base/cert-manager
-    directory:
-      recurse: false
       include: '{clusterissuer-*.yaml}'
 
   destination:
