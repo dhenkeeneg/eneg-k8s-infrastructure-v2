@@ -1,6 +1,6 @@
 # GitOps Kubernetes-Infrastruktur auf VMware vSphere
 
-## Projektplanung - Version 2.11
+## Projektplanung - Version 2.12
 
 **Erstellt:** 04.02.2026  
 **Letzte Aktualisierung:** 30.03.2026  
@@ -57,6 +57,7 @@ mit drei Umgebungen (DEV, TEST, PROD) auf VMware vSphere.
 | Storage (Object) | Garage (In-Cluster S3) | v2.2.0 |
 | Datenbanken | CloudNativePG (PostgreSQL) + MariaDB Galera | - |
 | Monitoring | Prometheus + Grafana + Loki + AlertManager | - |
+| Dashboard | Headlamp (Kubernetes Web UI) | Helm v0.41.0 |
 | Secrets | SOPS + Age (verschluesselt in Git) | 3.11.0 / 1.1.1 |
 
 ---
@@ -1053,6 +1054,21 @@ Rollout des PROD-Clusters analog zu TEST, inklusive Post-Deployment-Konfiguratio
 
 **Abschlussdokument:** `docs/phases/phase-08c-prod-deployment-handoff.md`
 
+**Headlamp Kubernetes Dashboard (30.03.2026):**
+
+Headlamp als Web-basiertes Kubernetes Dashboard auf allen 3 Clustern deployed.
+
+| Umgebung | URL | Helm Chart |
+|----------|-----|------------|
+| DEV | https://k8s-dashboard-dev-v2.eneg.de | v0.41.0 |
+| TEST | https://k8s-dashboard-test.eneg.de | v0.41.0 |
+| PROD | https://k8s-dashboard-prod.eneg.de | v0.41.0 |
+
+- Deployment: Helm via ArgoCD (Multi-Source: Helm Chart + Git Values)
+- Auth: ServiceAccount Token (OIDC/Keycloak optional spaeter)
+- Ingress: Traefik IngressRoute mit Let's Encrypt TLS
+- DNS: Split-DNS (nur lokal konfiguriert)
+
 ---
 
 ## 14. Dokumentation
@@ -1126,6 +1142,7 @@ docs/
 | 26.03.2026 | 2.9 | Phase 8b-continued: Alle 6 Pilot-Apps nach TEST deployed (Environment-Overlay Refactoring), DB-Operatoren/Cluster/Garage refactored, 14 TEST ArgoCD Apps, Fixes (ghcr auth, DB-Passwort Sonderzeichen, manuelle DB-Migration/Init) |
 | 26.03.2026 | 2.10 | Post-Deployment TEST: Garage S3 Key+Bucket fuer OpenProject, Keycloak AD/LDAP+OIDC (Realm eNeG), OpenProject SMTP+LDAP, it-info-versand OIDC+Group Mapper, Fix Realm-Name eneg->eNeG |
 | 30.03.2026 | 2.11 | Phase 8c ABGESCHLOSSEN: PROD-Cluster komplett deployed + Post-Deployment-Konfiguration (Garage Keys, Keycloak OIDC, OpenProject LDAP/S3/SMTP/Hocuspocus, Odoo, SSL/DNS, Backups verifiziert) |
+| 30.03.2026 | 2.12 | Headlamp Kubernetes Dashboard (Helm v0.41.0) auf DEV, TEST, PROD deployed, ServiceAccount Token Auth, Split-DNS |
 
 ---
 
