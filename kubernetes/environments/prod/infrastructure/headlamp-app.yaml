@@ -1,0 +1,39 @@
+---
+# ArgoCD Application: Headlamp Kubernetes Dashboard (PROD)
+# Helm Chart v0.41.0 - Kubernetes Web UI
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: headlamp
+  namespace: argocd
+  annotations:
+    argocd.argoproj.io/sync-wave: "3"
+  finalizers:
+    - resources-finalizer.argocd.argoproj.io
+spec:
+  project: default
+
+  sources:
+    - repoURL: https://kubernetes-sigs.github.io/headlamp/
+      chart: headlamp
+      targetRevision: 0.41.0
+      helm:
+        releaseName: headlamp
+        valueFiles:
+          - $values/kubernetes/base/headlamp/values.yaml
+
+    - repoURL: git@github.com:dhenkeeneg/eneg-k8s-infrastructure-v2.git
+      targetRevision: main
+      ref: values
+
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: headlamp
+
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
+    syncOptions:
+      - CreateNamespace=true
+      - ServerSideApply=true

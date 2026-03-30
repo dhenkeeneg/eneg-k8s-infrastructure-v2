@@ -1,0 +1,33 @@
+---
+# TLS Zertifikat fuer Headlamp (PROD)
+apiVersion: cert-manager.io/v1
+kind: Certificate
+metadata:
+  name: headlamp-tls
+  namespace: traefik
+spec:
+  secretName: headlamp-tls
+  issuerRef:
+    name: letsencrypt-prod
+    kind: ClusterIssuer
+  dnsNames:
+    - k8s-dashboard-prod.eneg.de
+---
+# IngressRoute fuer Headlamp (PROD)
+apiVersion: traefik.io/v1alpha1
+kind: IngressRoute
+metadata:
+  name: headlamp
+  namespace: traefik
+spec:
+  entryPoints:
+    - websecure
+  routes:
+    - match: Host(`k8s-dashboard-prod.eneg.de`)
+      kind: Rule
+      services:
+        - name: headlamp
+          namespace: headlamp
+          port: 80
+  tls:
+    secretName: headlamp-tls

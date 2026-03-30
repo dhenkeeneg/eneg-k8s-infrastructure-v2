@@ -1,0 +1,28 @@
+---
+# ArgoCD Application: Headlamp Ingress (PROD)
+# Certificate + IngressRoute fuer k8s-dashboard-prod.eneg.de
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: headlamp-ingress
+  namespace: argocd
+  annotations:
+    argocd.argoproj.io/sync-wave: "3"
+  finalizers:
+    - resources-finalizer.argocd.argoproj.io
+spec:
+  project: default
+
+  source:
+    repoURL: git@github.com:dhenkeeneg/eneg-k8s-infrastructure-v2.git
+    targetRevision: main
+    path: kubernetes/environments/prod/headlamp
+
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: traefik
+
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
