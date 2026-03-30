@@ -34,6 +34,8 @@ spec:
       log_statement: "ddl"
       log_min_duration_statement: "1000"
       lc_messages: "C"
+      # Timezone
+      timezone: "Europe/Berlin"
 
   # Storage
   storage:

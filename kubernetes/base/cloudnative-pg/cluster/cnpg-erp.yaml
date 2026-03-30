@@ -60,6 +60,8 @@ spec:
       log_min_duration_statement: "1000"
       # Locale
       lc_messages: "C"
+      # Timezone
+      timezone: "Europe/Berlin"
 
   # Storage
   storage:

@@ -68,6 +68,7 @@ spec:
     log_warnings=2
     slow_query_log=ON
     long_query_time=2
+    default_time_zone=Europe/Berlin
 
   # Update-Strategie
   updateStrategy:
