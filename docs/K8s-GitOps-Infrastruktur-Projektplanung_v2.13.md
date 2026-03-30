@@ -723,30 +723,45 @@ Grafana (Dashboards) + Loki (Logs)
 
 | Was | Wohin | Frequenz | Retention | Tool |
 |-----|-------|----------|-----------|------|
-| PostgreSQL (WAL) | S3 (QuObject) | Kontinuierlich | 7 Tage | CloudNativePG |
-| PostgreSQL (Full) | S3 (QuObject) | Taeglich 02:00 | 30 Tage | Barman |
-| PostgreSQL (Dump) | S3 (QuObject) | Taeglich 03:00 | 30 Tage | pg_dump |
-| MariaDB | S3/NFS | Taeglich 02:30 | 30 Tage | mariabackup |
-| Kubernetes Resources | S3 (QuObject) | Taeglich 04:00 | 14 Tage | Velero |
-| Longhorn Volumes | S3/NFS | Taeglich 05:00 | 14 Tage | Longhorn |
-| OpenTofu State | S3 (QuObject) | Bei jedem Apply | Versioniert | S3 Backend |
+| PostgreSQL (WAL) | NAS10 S3 (k8s-{env}-postgres-wal) | Kontinuierlich | 7 Tage | CloudNativePG/Barman |
+| PostgreSQL (Dump) | NAS10 S3 (k8s-{env}-postgres-backup) | Taeglich 03:00/03:15 | 32 Tage | pg_dumpall CronJob |
+| MariaDB (Physical) | NAS10 S3 (k8s-{env}-mariadb-backup) | Taeglich 02:30 | 7 Tage (168h) | MariaDB Operator |
+| Garage S3-Inhalte | NAS10 S3 (k8s-{env}-garage-backup) | Taeglich | 30 Tage | rclone CronJob |
+| Odoo Filestore | NAS10 S3 (k8s-{env}-odoo-backup) | Taeglich | 30 Tage | rclone CronJob |
+| Kubernetes Resources | S3 | Taeglich 04:00 | 14 Tage | Velero (Phase 10) |
+| Longhorn Volumes | S3/NFS | Taeglich 05:00 | 14 Tage | Longhorn (Phase 10) |
+| OpenTofu State | S3 (k8s-terraform-state, geplant) | Bei jedem Apply | Versioniert | S3 Backend |
 | VMs | Veeam | Bestehend | Bestehend | Veeam |
 
 ### Backup-Ziele
 
-- **Primaer:** nas10.eneg.de (QuObject S3)
-- **In-Cluster S3:** Garage (s3-dev-v2.eneg.de) — fuer App-Daten, Uploads, Attachments
+- **Primaer:** nas10.eneg.de (S3-kompatibler Object Storage, Port 8010, HTTP)
+- **In-Cluster S3:** Garage — fuer App-Daten, Uploads, Attachments (pro Umgebung)
 - **Sekundaer:** Weitere Sicherung auf andere Medien (nicht Teil dieses Projekts)
 
-### S3 Buckets
+### S3 Buckets auf NAS10 (Backup-Ziel)
 
-| Bucket | Inhalt |
-|--------|--------|
-| k8s-backups-postgres | PostgreSQL Backups |
-| k8s-backups-mariadb | MariaDB Backups |
-| k8s-backups-velero | Kubernetes Resource Backups |
-| k8s-backups-longhorn | Longhorn Volume Backups |
-| k8s-terraform-state | OpenTofu State |
+Bucket-Namenskonvention: `k8s-{env}-{service}` mit `{env}` = dev, test, prod
+
+| Bucket-Schema | Inhalt | Sub-Prefix |
+|---------------|--------|------------|
+| `k8s-{env}-postgres-wal` | CNPG WAL-Archivierung (Barman) | `cnpg-shared/`, `cnpg-erp/` |
+| `k8s-{env}-postgres-backup` | CNPG Logical Backups (pg_dumpall) | `cnpg-shared/`, `cnpg-erp/` |
+| `k8s-{env}-mariadb-backup` | MariaDB Galera Physical Backup | `mariadb-galera/` |
+| `k8s-{env}-garage-backup` | Garage S3-Inhalte (rclone sync) | pro Bucket |
+| `k8s-{env}-odoo-backup` | Odoo Filestore + DB-Dumps | `filestore/`, `_backups/` |
+| `k8s-terraform-state` | OpenTofu State (geplant, noch nicht aktiv) | `{env}/terraform.tfstate` |
+
+### In-Cluster S3 Buckets (Garage)
+
+Garage stellt pro Umgebung S3-kompatiblen Storage bereit. Buckets werden nach Bedarf
+ueber die Garage WebUI oder API angelegt.
+
+| Umgebung | Garage S3 API | Garage WebUI | Beispiel-Buckets |
+|----------|---------------|--------------|------------------|
+| DEV | s3-dev-v2.eneg.de | s3-gui-dev-v2.eneg.de | openproject-attachments |
+| TEST | s3-test.eneg.de | s3-gui-test.eneg.de | openproject-attachments |
+| PROD | s3-prod.eneg.de | s3-gui-prod.eneg.de | openproject-attachments |
 
 ### Restore-Verfahren
 
@@ -1281,7 +1296,7 @@ docs/
 | 26.03.2026 | 2.10 | Post-Deployment TEST: Garage S3 Key+Bucket fuer OpenProject, Keycloak AD/LDAP+OIDC (Realm eNeG), OpenProject SMTP+LDAP, it-info-versand OIDC+Group Mapper, Fix Realm-Name eneg->eNeG |
 | 30.03.2026 | 2.11 | Phase 8c ABGESCHLOSSEN: PROD-Cluster komplett deployed + Post-Deployment-Konfiguration (Garage Keys, Keycloak OIDC, OpenProject LDAP/S3/SMTP/Hocuspocus, Odoo, SSL/DNS, Backups verifiziert) |
 | 30.03.2026 | 2.12 | Headlamp Kubernetes Dashboard (Helm v0.41.0) auf DEV, TEST, PROD deployed, ServiceAccount Token Auth, Split-DNS |
-| 30.03.2026 | 2.13 | Dokumentation gegen Repository abgeglichen: Phase 6+8 Status auf Abgeschlossen, DNS PROD Wildcard durch Einzel-Eintraege ersetzt, Pilot-Apps-Tabelle auf 6 Apps erweitert (Keycloak, i-doit, it-info-versand ergaenzt), Repository-Struktur aktualisiert (docker/, scripts/, prod-Overlays, Ansible Playbooks), Namespace-Struktur vervollstaendigt, Dokumentationsstruktur aktualisiert, cnpg-barman-cloud-plugin-migration.md Guide erstellt |
+| 30.03.2026 | 2.13 | Dokumentation gegen Repository abgeglichen: Phase 6+8 Status auf Abgeschlossen, DNS PROD Wildcard durch Einzel-Eintraege ersetzt, Pilot-Apps-Tabelle auf 6 Apps erweitert (Keycloak, i-doit, it-info-versand ergaenzt), Repository-Struktur aktualisiert (docker/, scripts/, prod-Overlays, Ansible Playbooks), Namespace-Struktur vervollstaendigt, Dokumentationsstruktur aktualisiert, cnpg-barman-cloud-plugin-migration.md Guide erstellt, CNPG-Spec auf cnpg-shared + cnpg-erp angepasst, Kustomize-Overlay-Tabellen um DB- und App-Layer erweitert, S3-Bucket-Tabelle mit tatsaechlichen Namenskonventionen aktualisiert, Backup-Uebersicht korrigiert, DEV App-Secrets von base/apps/*/secrets nach environments/dev/apps/*/secrets migriert (6 ArgoCD Apps angepasst) |
 
 ---
 
