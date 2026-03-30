@@ -1,7 +1,8 @@
 # i-doit Open 37 — Post-Deployment TEST + PROD
 
 **Erstellt:** 30.03.2026
-**Status:** Anleitung fuer neuen Chat
+**Abgeschlossen:** 30.03.2026
+**Status:** ✅ Abgeschlossen (TEST + PROD)
 **Referenz:** `docs/guides/phase-6.5-handoff-idoit.md` (DEV-Setup-Doku)
 
 ---
@@ -41,8 +42,8 @@ Erstkonfiguration ueber den i-doit Setup-Wizard.
 | Umgebung | URL | ArgoCD App |
 |----------|-----|------------|
 | DEV | https://idoit-dev-v2.eneg.de | ✅ Laeuft seit 10.03.2026 |
-| TEST | https://idoit-test.eneg.de | ✅ Deployed, Post-Deployment offen |
-| PROD | https://idoit.eneg.de | ✅ Deployed, Post-Deployment offen |
+| TEST | https://idoit-test.eneg.de | ✅ Setup abgeschlossen 30.03.2026 |
+| PROD | https://idoit.eneg.de | ✅ Setup abgeschlossen 30.03.2026 |
 
 ### Datenbank-Konfiguration
 
@@ -82,7 +83,29 @@ kubectl get pvc -n idoit
 
 Erwartung: 1x idoit Pod Running, 1x idoit-data PVC Bound.
 
-### Schritt 2: i-doit Setup-Wizard ausfuehren
+### Schritt 2: Vorbereitungen vor dem Setup-Wizard
+
+**2a: Upload-Verzeichnisse anlegen (auf k8s-mgmt-10):**
+
+```bash
+kubectl exec -it $(kubectl get pod -n idoit -o jsonpath='{.items[0].metadata.name}') -n idoit -- bash -c \
+  "mkdir -p /var/www/html/i-doit/upload/files /var/www/html/i-doit/upload/images && \
+   chown -R www-data:www-data /var/www/html/i-doit/upload"
+```
+
+**2b: Globale DB-Rechte temporaer setzen (auf k8s-mgmt-10):**
+
+```bash
+kubectl exec -it mariadb-galera-0 -n databases -- mariadb -u root -p \
+  -e "GRANT ALL PRIVILEGES ON *.* TO 'idoit'@'%'; FLUSH PRIVILEGES;"
+```
+
+Root-Passwort auslesen:
+```bash
+sops --decrypt kubernetes/environments/{env}/mariadb-secrets/mariadb-credentials.enc.yaml | grep ROOT_PASSWORD
+```
+
+### Schritt 3: i-doit Setup-Wizard ausfuehren
 
 1. Browser oeffnen: https://idoit-test.eneg.de (bzw. https://idoit.eneg.de)
 2. Der Setup-Wizard sollte automatisch starten (Erstinstallation)
@@ -90,21 +113,29 @@ Erwartung: 1x idoit Pod Running, 1x idoit-data PVC Bound.
    - **Sprache:** Deutsch
    - **Datenbank-Host:** `mariadb-galera-primary.databases.svc.cluster.local`
    - **Datenbank-Port:** `3306`
-   - **Datenbank-User:** `idoit`
-   - **Datenbank-Passwort:** (aus SOPS-Secret, siehe Schritt 2a)
+   - **Datenbank-Root-User:** `root` (Connection settings oben)
+   - **Datenbank-Root-Passwort:** (aus mariadb-credentials Secret)
+   - **MySQL-User:** `idoit` (MySQL user settings Mitte)
+   - **MySQL-User-Passwort:** (aus idoit-secrets Secret, 2x eingeben)
    - **System-Datenbank:** `idoit_system`
    - **Mandant-Datenbank:** `idoit_data`
-   - **Admin-Passwort:** (aus SOPS-Secret)
+   - **Mandant-Title:** `eNeG` (PROD) bzw. `eNeG Test` (TEST)
+   - **Admin-Center-Passwort:** Sicheres Passwort setzen (notieren!)
 4. Setup abschliessen
 
-**Schritt 2a: DB-Passwort auslesen (auf k8s-mgmt-10):**
+**Schritt 3a: Passwoerter auslesen (auf k8s-mgmt-10):**
 
 ```bash
-# TEST:
 cd ~/git/eneg-k8s-infrastructure-v2
-sops --decrypt kubernetes/environments/test/apps/idoit/secrets/idoit-secrets.enc.yaml | grep db-password
 
-# PROD:
+# Root-Passwort (fuer Connection settings):
+sops --decrypt kubernetes/environments/test/mariadb-secrets/mariadb-credentials.enc.yaml | grep ROOT_PASSWORD
+# bzw. fuer PROD:
+sops --decrypt kubernetes/environments/prod/mariadb-secrets/mariadb-credentials.enc.yaml | grep ROOT_PASSWORD
+
+# idoit DB-Passwort (fuer MySQL user settings):
+sops --decrypt kubernetes/environments/test/apps/idoit/secrets/idoit-secrets.enc.yaml | grep db-password
+# bzw. fuer PROD:
 sops --decrypt kubernetes/environments/prod/apps/idoit/secrets/idoit-secrets.enc.yaml | grep db-password
 ```
 
@@ -113,19 +144,41 @@ idoit_data) selbst. Die MariaDB Operator Grant CRDs geben dem User `idoit`
 die noetige Berechtigung dafuer. Es duerfen KEINE Database CRDs vorhanden
 sein, sonst meldet i-doit "EXISTS. PLEASE DROP IT".
 
-### Schritt 3: Admin-Passwort aendern
+### Schritt 4: Globale DB-Rechte wieder entziehen
+
+Nach erfolgreichem Setup-Wizard muessen die temporaeren globalen Rechte
+wieder entfernt werden:
+
+```bash
+kubectl exec -it mariadb-galera-0 -n databases -- mariadb -u root -p \
+  -e "REVOKE ALL PRIVILEGES ON *.* FROM 'idoit'@'%'; \
+      GRANT ALL PRIVILEGES ON idoit_system.* TO 'idoit'@'%'; \
+      GRANT ALL PRIVILEGES ON idoit_data.* TO 'idoit'@'%'; \
+      FLUSH PRIVILEGES;"
+```
+
+Kontrolle:
+```bash
+kubectl exec -it mariadb-galera-0 -n databases -- mariadb -u root -p \
+  -e "SHOW GRANTS FOR 'idoit'@'%';"
+```
+
+Erwartung: Nur USAGE auf *.* plus ALL PRIVILEGES auf idoit_system.* und
+idoit_data.* — keine globalen Rechte mehr.
+
+### Schritt 5: Admin-Passwort aendern
 
 Nach dem Setup-Wizard: Admin-Passwort auf ein sicheres Passwort aendern
 und dokumentieren. Standard-Login nach Setup ist admin/admin.
 
-### Schritt 4: Funktionstest
+### Schritt 6: Funktionstest
 
 - Login mit admin-Credentials
 - Objekt erstellen (z.B. Test-Server)
 - Pruefe ob Upload funktioniert (Datei an Objekt anhaengen)
 - Pruefe ob Log-Verzeichnis beschreibbar ist
 
-### Schritt 5: LDAP-Anbindung (optional)
+### Schritt 7: LDAP-Anbindung (optional)
 
 i-doit Open unterstuetzt LDAP nativ:
 - Administration > Schnittstellen > LDAP
@@ -153,6 +206,48 @@ i-doit Open unterstuetzt LDAP nativ:
    muessen die Pods manuell restartet werden:
    `kubectl rollout restart deployment idoit -n idoit`
 
+6. **Upload-Verzeichnisse muessen manuell angelegt werden:** Der Setup-Wizard
+   prueft `/var/www/html/i-doit/upload/files/` und `upload/images/`. Diese
+   existieren nicht im PVC nach dem ersten Start. Vor dem Setup-Wizard
+   muessen sie manuell erstellt werden:
+   ```bash
+   kubectl exec -it <pod> -n idoit -- bash -c \
+     "mkdir -p /var/www/html/i-doit/upload/files /var/www/html/i-doit/upload/images && \
+      chown -R www-data:www-data /var/www/html/i-doit/upload"
+   ```
+   Die Verzeichnisse liegen auf dem PVC (subPath: upload) und ueberleben
+   Pod-Restarts.
+
+7. **Setup-Wizard benoetigt Root-DB-Zugang:** Der Wizard muss unter
+   "Connection settings" den MariaDB **root**-User und dessen Passwort
+   verwenden (nicht den idoit-User). Der idoit-User wird unter
+   "MySQL user settings" eingetragen. Root-Passwort:
+   ```bash
+   sops --decrypt kubernetes/environments/{env}/mariadb-secrets/mariadb-credentials.enc.yaml | grep ROOT_PASSWORD
+   ```
+
+8. **Globale DB-Rechte temporaer noetig:** Die MariaDB Operator Grant CRDs
+   geben dem idoit-User nur DB-spezifische Rechte. Der Setup-Wizard
+   benoetigt aber globale Rechte (CREATE DATABASE, GRANT). Ablauf:
+   - VOR dem Wizard: `GRANT ALL PRIVILEGES ON *.* TO 'idoit'@'%';`
+   - NACH dem Wizard: Globale Rechte wieder entziehen:
+     ```bash
+     REVOKE ALL PRIVILEGES ON *.* FROM 'idoit'@'%';
+     GRANT ALL PRIVILEGES ON idoit_system.* TO 'idoit'@'%';
+     GRANT ALL PRIVILEGES ON idoit_data.* TO 'idoit'@'%';
+     FLUSH PRIVILEGES;
+     ```
+   - Kontrolle: `SHOW GRANTS FOR 'idoit'@'%';` sollte nur die
+     DB-spezifischen Grants zeigen.
+
+9. **query_cache Warnung ignorierbar:** MariaDB 11.8 zeigt eine Warnung
+   fuer query_cache_size und query_cache_limit. Diese sind in 11.8
+   deprecated und koennen ignoriert werden.
+
+10. **MariaDB 11.8.6 Versionswarnung ignorierbar:** i-doit zeigt eine
+    Warnung, dass MariaDB 11.8 nicht offiziell unterstuetzt wird.
+    Funktioniert aber problemlos (bestaetigt auf DEV, TEST, PROD).
+
 ---
 
 ## Arbeitsumgebungen
@@ -171,4 +266,13 @@ i-doit Open unterstuetzt LDAP nativ:
 
 ---
 
-*Erstellt am 30.03.2026. Dieses Dokument dient als Startpunkt fuer den neuen Chat.*
+## Durchfuehrungsprotokoll
+
+| Umgebung | Datum | Status | Mandant-Title | Bemerkungen |
+|----------|-------|--------|---------------|-------------|
+| TEST | 30.03.2026 | ✅ Abgeschlossen | eNeG Test | Upload-Dirs + globale Grants vor Wizard noetig |
+| PROD | 30.03.2026 | ✅ Abgeschlossen | eNeG | Gleicher Ablauf, keine Probleme |
+
+---
+
+*Erstellt am 30.03.2026. Post-Deployment abgeschlossen am 30.03.2026.*
