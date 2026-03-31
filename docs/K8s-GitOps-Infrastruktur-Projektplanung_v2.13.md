@@ -3,7 +3,7 @@
 ## Projektplanung - Version 2.13
 
 **Erstellt:** 04.02.2026  
-**Letzte Aktualisierung:** 30.03.2026  
+**Letzte Aktualisierung:** 31.03.2026  
 **Standort:** Hamburg  
 **Projekt:** eNeG K8s Infrastructure v2
 
@@ -1115,6 +1115,11 @@ TEST-Cluster (VLAN 179) vollstaendig aufgebaut mit allen Infrastruktur-Komponent
 - SOPS Secret-Name: `sops-age` (nicht `age-key`)
 - ArgoCD v3.3.0: ApplicationSet CRD Annotation-Limit, Manifest ggf. zweimal anwenden
 - ArgoCD hinter Traefik: `server.insecure: "true"` in argocd-cmd-params-cm noetig
+- ArgoCD App-of-Apps: Permanentes OutOfSync durch `directory: recurse: false` Default
+  (Kubernetes API fuegt dieses Feld automatisch hinzu, ArgoCD erkennt den Diff).
+  Fix: `resource.customizations.ignoreDifferences` in argocd-cm ConfigMap fuer
+  `argoproj.io/Application` mit jqPathExpression `.spec.source.directory`
+  (Ref: https://github.com/argoproj/argo-cd/issues/4501)
 
 **Abschlussdokument:** `docs/phases/phase-08b-test-cluster-handoff.md`
 
@@ -1296,7 +1301,7 @@ docs/
 | 26.03.2026 | 2.10 | Post-Deployment TEST: Garage S3 Key+Bucket fuer OpenProject, Keycloak AD/LDAP+OIDC (Realm eNeG), OpenProject SMTP+LDAP, it-info-versand OIDC+Group Mapper, Fix Realm-Name eneg->eNeG |
 | 30.03.2026 | 2.11 | Phase 8c ABGESCHLOSSEN: PROD-Cluster komplett deployed + Post-Deployment-Konfiguration (Garage Keys, Keycloak OIDC, OpenProject LDAP/S3/SMTP/Hocuspocus, Odoo, SSL/DNS, Backups verifiziert) |
 | 30.03.2026 | 2.12 | Headlamp Kubernetes Dashboard (Helm v0.41.0) auf DEV, TEST, PROD deployed, ServiceAccount Token Auth, Split-DNS |
-| 30.03.2026 | 2.13 | Dokumentation gegen Repository abgeglichen: Phase 6+8 Status auf Abgeschlossen, DNS PROD Wildcard durch Einzel-Eintraege ersetzt, Pilot-Apps-Tabelle auf 6 Apps erweitert (Keycloak, i-doit, it-info-versand ergaenzt), Repository-Struktur aktualisiert (docker/, scripts/, prod-Overlays, Ansible Playbooks), Namespace-Struktur vervollstaendigt, Dokumentationsstruktur aktualisiert, cnpg-barman-cloud-plugin-migration.md Guide erstellt, CNPG-Spec auf cnpg-shared + cnpg-erp angepasst, Kustomize-Overlay-Tabellen um DB- und App-Layer erweitert, S3-Bucket-Tabelle mit tatsaechlichen Namenskonventionen aktualisiert, Backup-Uebersicht korrigiert, DEV App-Secrets von base/apps/*/secrets nach environments/dev/apps/*/secrets migriert (6 ArgoCD Apps angepasst) |
+| 31.03.2026 | 2.13 | Dokumentation gegen Repository abgeglichen: Phase 6+8 Status auf Abgeschlossen, DNS PROD Wildcard durch Einzel-Eintraege ersetzt, Pilot-Apps-Tabelle auf 6 Apps erweitert (Keycloak, i-doit, it-info-versand ergaenzt), Repository-Struktur aktualisiert (docker/, scripts/, prod-Overlays, Ansible Playbooks), Namespace-Struktur vervollstaendigt, Dokumentationsstruktur aktualisiert, cnpg-barman-cloud-plugin-migration.md Guide erstellt, CNPG-Spec auf cnpg-shared + cnpg-erp angepasst, Kustomize-Overlay-Tabellen um DB- und App-Layer erweitert, S3-Bucket-Tabelle mit tatsaechlichen Namenskonventionen aktualisiert, Backup-Uebersicht korrigiert, DEV App-Secrets von base/apps/*/secrets nach environments/dev/apps/*/secrets migriert (7 ArgoCD Apps angepasst), ArgoCD App-of-Apps OutOfSync Fix via resource.customizations.ignoreDifferences in argocd-cm (directory.recurse Default, Ref: #4501) |
 
 ---
 
