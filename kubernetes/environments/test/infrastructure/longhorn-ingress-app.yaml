@@ -18,6 +18,7 @@ spec:
     repoURL: git@github.com:dhenkeeneg/eneg-k8s-infrastructure-v2.git
     targetRevision: main
     path: kubernetes/environments/test/longhorn
+    directory:
       include: 'ingress.yaml'
 
   destination:

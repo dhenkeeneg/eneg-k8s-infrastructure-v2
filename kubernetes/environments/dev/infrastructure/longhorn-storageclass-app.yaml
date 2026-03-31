@@ -19,6 +19,7 @@ spec:
     repoURL: git@github.com:dhenkeeneg/eneg-k8s-infrastructure-v2.git
     targetRevision: main
     path: kubernetes/base/longhorn
+    directory:
       include: 'storageclass-db.yaml'
 
   destination:
