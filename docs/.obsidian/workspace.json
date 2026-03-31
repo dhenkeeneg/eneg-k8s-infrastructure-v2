@@ -185,6 +185,8 @@
   },
   "active": "0e142a399461d587",
   "lastOpenFiles": [
+    "phases/phase-08e-branch-migration-handoff.md",
+    "decisions/ADR-002-branch-per-environment.md",
     "guides/cnpg-barman-cloud-plugin-migration.md",
     "K8s-GitOps-Infrastruktur-Projektplanung_v2.13.md",
     "K8s-GitOps-Infrastruktur-Projektplanung_v2.12 - Kopie.md"

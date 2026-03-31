@@ -485,19 +485,20 @@ eneg-k8s-infrastructure-v2/
             └── infrastructure/   # PROD: ArgoCD App-Definitionen (39 Apps)
 ```
 
-### Git Workflow: Single Branch + Kustomize
+### Git Workflow: Branch-per-Environment + Pull Requests
 
-**Branch-Strategie:** Alle Aenderungen auf `main`
+**Branch-Strategie:** Drei Branches (`main`, `test`, `prod`), Promotion per PR.
 
-**Promotion-Pfad:** DEV -> TEST -> PROD
+**Promotion-Pfad:** DEV (main) → PR → TEST (test) → PR → PROD (prod)
 
 ### Deployment-Workflow
 
 1. **Aenderung entwickeln:** In `kubernetes/base/` oder `environments/dev/` anpassen
-2. **Nach DEV deployen:** `git commit && git push` -> ArgoCD synct automatisch
+2. **Nach DEV deployen:** `git push` auf `main` -> ArgoCD DEV synct automatisch
 3. **Testen in DEV:** Funktionalitaet und Zertifikate pruefen
-4. **Nach TEST promoten:** Overlay in `environments/test/` anpassen, push
-5. **Nach PROD promoten:** Overlay in `environments/prod/` anpassen, push
+4. **Nach TEST promoten:** PR `main → test` auf GitHub erstellen, Diff pruefen, Merge
+5. **Testen in TEST:** Funktionalitaet pruefen
+6. **Nach PROD promoten:** PR `test → prod` auf GitHub erstellen, Diff pruefen, Merge
 
 ### App-of-Apps Pattern
 
@@ -551,6 +552,24 @@ in `kubernetes/environments/{env}/` ergaenzen umgebungsspezifische Werte (IPs, H
 - Helm-basierte Apps (Traefik, Longhorn): Multi-Source mit base + override valueFiles
 
 **Entscheidungsdokument:** `docs/decisions/ADR-001-kustomize-overlay-pattern.md`
+
+### Branch-Strategie: Branch-per-Environment (ADR-002)
+
+**Entscheidung:** Migration von Single-Branch auf Branch-per-Environment.
+
+| Branch | ArgoCD-Cluster | Zweck |
+|--------|----------------|-------|
+| `main` | DEV | Entwicklung, erste Tests |
+| `test` | TEST | Integrationstests, Abnahme |
+| `prod` | PROD | Produktivbetrieb |
+
+**Promotion:** Per Pull Request auf GitHub (main → test → prod).
+Jede Aenderung durchlaeuft DEV → TEST → PROD. Kein direkter Push auf test/prod.
+Image-Tags sind fest getaggt und pro Umgebung individuell steuerbar.
+Ressourcen (CPU/RAM) sind pro Umgebung unterschiedlich dimensioniert.
+
+**Entscheidungsdokument:** `docs/decisions/ADR-002-branch-per-environment.md`
+**Migrationsplan:** `docs/phases/phase-08e-branch-migration-handoff.md`
 
 ### Ingress-Pattern (Standard fuer alle Apps)
 
@@ -1244,6 +1263,7 @@ docs/
 │   ├── phase-08c-zwischenstand-handoff.md
 │   ├── phase-08c-prod-handoff.md
 │   ├── phase-08c-prod-deployment-handoff.md
+│   ├── phase-08e-branch-migration-handoff.md
 │   └── infrastructure-migration-2026-02-16.md
 ├── architecture/
 ├── guides/
@@ -1254,7 +1274,8 @@ docs/
 │   └── phase-6.*-chat-anweisung-*.md  # Chat-Anweisungen pro App
 ├── runbooks/
 ├── decisions/
-│   └── ADR-001-kustomize-overlay-pattern.md
+│   ├── ADR-001-kustomize-overlay-pattern.md
+│   └── ADR-002-branch-per-environment.md
 ├── SOPS-SECRET-MANAGEMENT.md
 └── SSH-KEY-MANAGEMENT.md
 ```
@@ -1301,7 +1322,7 @@ docs/
 | 26.03.2026 | 2.10 | Post-Deployment TEST: Garage S3 Key+Bucket fuer OpenProject, Keycloak AD/LDAP+OIDC (Realm eNeG), OpenProject SMTP+LDAP, it-info-versand OIDC+Group Mapper, Fix Realm-Name eneg->eNeG |
 | 30.03.2026 | 2.11 | Phase 8c ABGESCHLOSSEN: PROD-Cluster komplett deployed + Post-Deployment-Konfiguration (Garage Keys, Keycloak OIDC, OpenProject LDAP/S3/SMTP/Hocuspocus, Odoo, SSL/DNS, Backups verifiziert) |
 | 30.03.2026 | 2.12 | Headlamp Kubernetes Dashboard (Helm v0.41.0) auf DEV, TEST, PROD deployed, ServiceAccount Token Auth, Split-DNS |
-| 31.03.2026 | 2.13 | Dokumentation gegen Repository abgeglichen: Phase 6+8 Status auf Abgeschlossen, DNS PROD Wildcard durch Einzel-Eintraege ersetzt, Pilot-Apps-Tabelle auf 6 Apps erweitert (Keycloak, i-doit, it-info-versand ergaenzt), Repository-Struktur aktualisiert (docker/, scripts/, prod-Overlays, Ansible Playbooks), Namespace-Struktur vervollstaendigt, Dokumentationsstruktur aktualisiert, cnpg-barman-cloud-plugin-migration.md Guide erstellt, CNPG-Spec auf cnpg-shared + cnpg-erp angepasst, Kustomize-Overlay-Tabellen um DB- und App-Layer erweitert, S3-Bucket-Tabelle mit tatsaechlichen Namenskonventionen aktualisiert, Backup-Uebersicht korrigiert, DEV App-Secrets von base/apps/*/secrets nach environments/dev/apps/*/secrets migriert (7 ArgoCD Apps angepasst), ArgoCD App-of-Apps OutOfSync Fix via resource.customizations.ignoreDifferences in argocd-cm (directory.recurse Default, Ref: #4501) |
+| 31.03.2026 | 2.13 | Dokumentation gegen Repository abgeglichen: Phase 6+8 Status auf Abgeschlossen, DNS PROD Wildcard durch Einzel-Eintraege ersetzt, Pilot-Apps-Tabelle auf 6 Apps erweitert (Keycloak, i-doit, it-info-versand ergaenzt), Repository-Struktur aktualisiert (docker/, scripts/, prod-Overlays, Ansible Playbooks), Namespace-Struktur vervollstaendigt, Dokumentationsstruktur aktualisiert, cnpg-barman-cloud-plugin-migration.md Guide erstellt, CNPG-Spec auf cnpg-shared + cnpg-erp angepasst, Kustomize-Overlay-Tabellen um DB- und App-Layer erweitert, S3-Bucket-Tabelle mit tatsaechlichen Namenskonventionen aktualisiert, Backup-Uebersicht korrigiert, DEV App-Secrets und Infra-Secrets von base/ nach environments/dev/ migriert (11 ArgoCD Apps angepasst), ArgoCD App-of-Apps OutOfSync Fix via resource.customizations.ignoreDifferences in argocd-cm (directory.recurse Default, Ref: #4501), ADR-002 Branch-per-Environment Promotion-Strategie, Phase 8e Migrationsplan erstellt |
 
 ---
 
