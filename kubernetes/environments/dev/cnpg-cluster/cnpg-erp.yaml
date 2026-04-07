@@ -84,8 +84,9 @@ spec:
 
   # Backup via Barman Cloud Plugin (ersetzt in-tree barmanObjectStore)
   plugins:
-    - name: barman-cloud.cloudnative-pg.io
+    - enabled: true
       isWALArchiver: true
+      name: barman-cloud.cloudnative-pg.io
       parameters:
         barmanObjectName: cnpg-erp-objectstore
 
