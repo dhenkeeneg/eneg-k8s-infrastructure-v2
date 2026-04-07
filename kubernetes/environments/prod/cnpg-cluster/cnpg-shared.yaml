@@ -56,19 +56,13 @@ spec:
       memory: "1Gi"
       cpu: "1"
 
-  # Backup auf S3 (WAL-Archivierung) — PROD-Bucket
-  backup:
-    barmanObjectStore:
-      destinationPath: s3://k8s-prod-postgres-wal/cnpg-shared/
-      endpointURL: http://nas10.eneg.de:8010
-      s3Credentials:
-        accessKeyId:
-          name: cnpg-s3-credentials
-          key: ACCESS_KEY_ID
-        secretAccessKey:
-          name: cnpg-s3-credentials
-          key: SECRET_ACCESS_KEY
-    retentionPolicy: "7d"
+  # Backup via Barman Cloud Plugin (ersetzt in-tree barmanObjectStore)
+  plugins:
+    - enabled: true
+      isWALArchiver: true
+      name: barman-cloud.cloudnative-pg.io
+      parameters:
+        barmanObjectName: cnpg-shared-objectstore
 
   # Managed Roles (deklarativ, Passwoerter aus SOPS Secrets)
   managed:

@@ -1,0 +1,23 @@
+---
+# ObjectStore: cnpg-erp Backup-Konfiguration (Barman Cloud Plugin)
+# Ersetzt die in-tree barmanObjectStore-Konfiguration im Cluster-Manifest
+apiVersion: barmancloud.cnpg.io/v1
+kind: ObjectStore
+metadata:
+  name: cnpg-erp-objectstore
+  namespace: databases
+  labels:
+    app.kubernetes.io/part-of: cloudnative-pg
+    app.kubernetes.io/managed-by: argocd
+spec:
+  configuration:
+    destinationPath: s3://k8s-prod-postgres-wal/cnpg-erp/
+    endpointURL: http://nas10.eneg.de:8010
+    s3Credentials:
+      accessKeyId:
+        name: cnpg-s3-credentials
+        key: ACCESS_KEY_ID
+      secretAccessKey:
+        name: cnpg-s3-credentials
+        key: SECRET_ACCESS_KEY
+  retentionPolicy: "7d"

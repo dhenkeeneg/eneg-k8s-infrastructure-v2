@@ -1,6 +1,6 @@
 ---
-# ScheduledBackup: cnpg-shared Full Backup (Barman Physical)
-# Taeglich um 02:00 UTC, 30 Tage Retention
+# ScheduledBackup: cnpg-shared Full Backup (Barman Cloud Plugin)
+# Taeglich um 02:00 UTC
 apiVersion: postgresql.cnpg.io/v1
 kind: ScheduledBackup
 metadata:
@@ -14,11 +14,13 @@ spec:
     name: cnpg-shared
   schedule: "0 2 * * *"
   backupOwnerReference: cluster
-  method: barmanObjectStore
+  method: plugin
+  pluginConfiguration:
+    name: barman-cloud.cloudnative-pg.io
   immediate: true
 ---
-# ScheduledBackup: cnpg-erp Full Backup (Barman Physical)
-# Taeglich um 02:15 UTC, 30 Tage Retention (versetzt zu shared)
+# ScheduledBackup: cnpg-erp Full Backup (Barman Cloud Plugin)
+# Taeglich um 02:15 UTC (versetzt zu shared)
 apiVersion: postgresql.cnpg.io/v1
 kind: ScheduledBackup
 metadata:
@@ -32,5 +34,7 @@ spec:
     name: cnpg-erp
   schedule: "15 2 * * *"
   backupOwnerReference: cluster
-  method: barmanObjectStore
+  method: plugin
+  pluginConfiguration:
+    name: barman-cloud.cloudnative-pg.io
   immediate: true

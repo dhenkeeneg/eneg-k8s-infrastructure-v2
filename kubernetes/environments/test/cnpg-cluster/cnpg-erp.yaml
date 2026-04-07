@@ -76,19 +76,13 @@ spec:
       memory: "2Gi"
       cpu: "2"
 
-  # Backup auf S3 (WAL-Archivierung) — TEST-Bucket
-  backup:
-    barmanObjectStore:
-      destinationPath: s3://k8s-test-postgres-wal/cnpg-erp/
-      endpointURL: http://nas10.eneg.de:8010
-      s3Credentials:
-        accessKeyId:
-          name: cnpg-s3-credentials
-          key: ACCESS_KEY_ID
-        secretAccessKey:
-          name: cnpg-s3-credentials
-          key: SECRET_ACCESS_KEY
-    retentionPolicy: "7d"
+  # Backup via Barman Cloud Plugin (ersetzt in-tree barmanObjectStore)
+  plugins:
+    - enabled: true
+      isWALArchiver: true
+      name: barman-cloud.cloudnative-pg.io
+      parameters:
+        barmanObjectName: cnpg-erp-objectstore
 
   # Monitoring (vorbereitet fuer Phase 7)
   monitoring:
