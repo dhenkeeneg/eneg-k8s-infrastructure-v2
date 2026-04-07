@@ -1,0 +1,33 @@
+---
+# ArgoCD Application: Barman Cloud Plugin fuer CloudNativePG
+# Helm Chart: plugin-barman-cloud v0.5.0 (Plugin v0.11.0)
+# Ersetzt die in-tree Barman Cloud Backup-Funktionalitaet
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: cnpg-barman-plugin
+  namespace: argocd
+  annotations:
+    # Gleiche Sync-Wave wie Operator (Wave 4), vor Clustern (Wave 5)
+    argocd.argoproj.io/sync-wave: "4"
+  finalizers:
+    - resources-finalizer.argocd.argoproj.io
+spec:
+  project: default
+
+  source:
+    repoURL: https://cloudnative-pg.github.io/charts
+    chart: plugin-barman-cloud
+    targetRevision: 0.5.0
+
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: cnpg-system
+
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
+    syncOptions:
+      - CreateNamespace=false
+      - ServerSideApply=true
