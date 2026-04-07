@@ -1,7 +1,7 @@
 # PostgreSQL Minor-Upgrade + Image-Wechsel: 17.8-system → 17.9-standard
 
 **Erstellt:** 07.04.2026
-**Status:** In Durchfuehrung — Dateien geaendert, Commit/Push ausstehend
+**Status:** Abgeschlossen — 07.04.2026, alle 3 Umgebungen (DEV, TEST, PROD)
 **Geschaetzter Aufwand:** 30 Minuten (alle 3 Umgebungen)
 **Risiko:** Niedrig (Minor-Upgrade = Rolling Update, kein Dump/Restore)
 **Reihenfolge:** DEV → TEST → PROD
@@ -38,7 +38,7 @@ PostgreSQL-Image arbeitet.
 - [x] Barman Cloud Plugin Migration abgeschlossen (alle Umgebungen, 07.04.2026)
 - [x] Alle Cluster healthy (3/3 READY)
 - [x] Full-Backups via Plugin erfolgreich (completed)
-- [ ] Image `ghcr.io/cloudnative-pg/postgresql:17.9-standard-bookworm` existiert (vor Start pruefen)
+- [x] Image `ghcr.io/cloudnative-pg/postgresql:17.9-standard-bookworm` existiert (vor Start pruefen)
 
 ---
 
