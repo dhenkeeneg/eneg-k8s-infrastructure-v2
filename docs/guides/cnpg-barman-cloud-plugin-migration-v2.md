@@ -3,7 +3,7 @@
 **Erstellt:** 02.04.2026
 **Aktualisiert:** 07.04.2026
 **Basiert auf:** v1 (02.04.2026), ergaenzt um tatsaechliche Migrationserfahrungen
-**Status:** DEV abgeschlossen (07.04.2026) — TEST und PROD ausstehend
+**Status:** Alle Umgebungen abgeschlossen (07.04.2026)
 **Geschaetzter Aufwand:** 30 Minuten pro Umgebung
 **Risiko:** Niedrig (bestehende Backups bleiben kompatibel)
 
@@ -40,9 +40,9 @@ und wird als offizieller Nachfolger von der CNPG-Community (CNCF Sandbox) gepfle
 
 | Umgebung | Status | Datum | Anmerkungen |
 |----------|--------|-------|-------------|
-| DEV | ✅ Abgeschlossen | 07.04.2026 | WAL-Archivierung funktioniert, Full-Backups durch NAS10-Timeout blockiert (vorbestehendes Problem) |
-| TEST | ⏳ Ausstehend | — | |
-| PROD | ⏳ Ausstehend | — | |
+| DEV | ✅ Abgeschlossen | 07.04.2026 | WAL-Archivierung + Full-Backups funktionieren nach S3-Bucket-Bereinigung |
+| TEST | ✅ Abgeschlossen | 07.04.2026 | Reibungslos, gleicher Ablauf wie DEV |
+| PROD | ✅ Abgeschlossen | 07.04.2026 | Reibungslos, gleicher Ablauf wie DEV |
 
 ---
 
@@ -301,8 +301,8 @@ Pro Umgebung anzupassende `destinationPath`-Werte:
 
 - [ ] NAS10 S3-Timeout-Problem untersuchen und beheben (betrifft Full-Backups und Retention)
 - [ ] Alte fehlgeschlagene Backup-Objekte in S3 aufraeumen
-- [ ] TEST-Migration durchfuehren
-- [ ] PROD-Migration durchfuehren
+- [x] TEST-Migration durchfuehren (07.04.2026)
+- [x] PROD-Migration durchfuehren (07.04.2026)
 - [ ] Optional: Image-Wechsel von `system` auf `standard` nach stabiler Verifikation
 - [ ] Alte v1-Anleitung archivieren
 
