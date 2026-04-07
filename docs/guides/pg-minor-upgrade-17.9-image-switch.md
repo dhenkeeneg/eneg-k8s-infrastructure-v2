@@ -1,7 +1,7 @@
 # PostgreSQL Minor-Upgrade + Image-Wechsel: 17.8-system → 17.9-standard
 
 **Erstellt:** 07.04.2026
-**Status:** Ausstehend — nach erfolgreicher Barman Cloud Plugin Migration durchfuehren
+**Status:** In Durchfuehrung — Dateien geaendert, Commit/Push ausstehend
 **Geschaetzter Aufwand:** 30 Minuten (alle 3 Umgebungen)
 **Risiko:** Niedrig (Minor-Upgrade = Rolling Update, kein Dump/Restore)
 **Reihenfolge:** DEV → TEST → PROD

@@ -1,6 +1,6 @@
 ---
 # CloudNativePG Cluster: cnpg-erp (DEV)
-# PostgreSQL 17.8 HA-Cluster fuer schwergewichtige ERP-Apps
+# PostgreSQL 17.9 HA-Cluster fuer schwergewichtige ERP-Apps
 # Apps: Odoo, OpenProject
 apiVersion: postgresql.cnpg.io/v1
 kind: Cluster
@@ -12,7 +12,7 @@ metadata:
     app.kubernetes.io/managed-by: argocd
 spec:
   description: "ERP PostgreSQL Cluster fuer Odoo und OpenProject"
-  imageName: ghcr.io/cloudnative-pg/postgresql:17.8-system-bookworm
+  imageName: ghcr.io/cloudnative-pg/postgresql:17.9-standard-bookworm
   instances: 3
   primaryUpdateStrategy: unsupervised
 
