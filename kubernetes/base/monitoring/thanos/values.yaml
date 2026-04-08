@@ -105,6 +105,12 @@ ruler:
 receive:
   enabled: false
 
+# --- Metriken: ServiceMonitors fuer Prometheus ---
+metrics:
+  enabled: true
+  serviceMonitor:
+    enabled: true
+
 # --- Bitnami-spezifische Init-Container deaktivieren ---
 # Verhindert Pull von bitnami/os-shell Images
 volumePermissions:

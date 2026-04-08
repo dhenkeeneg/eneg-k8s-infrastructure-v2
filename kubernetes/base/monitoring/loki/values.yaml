@@ -81,6 +81,8 @@ monitoring:
     enabled: false
   lokiCanary:
     enabled: true
+  serviceMonitor:
+    enabled: true
 
 # --- Caches: Groesse an Cluster-Dimensionierung anpassen ---
 # Chart-Default ist allocatedMemory: 8192 (MB) = ~9.8Gi Pod-Request!
