@@ -1,0 +1,4 @@
+# Blackbox Exporter DEV Override
+# Environment: DEV (VLAN 180)
+# Keine DEV-spezifischen Aenderungen noetig.
+# NAS10 S3 Endpoint ist fuer alle Environments identisch.
