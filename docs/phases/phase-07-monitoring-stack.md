@@ -663,11 +663,130 @@ kubernetes/
 
 ## 14. Offene Entscheidungen
 
-- [ ] Exakte Helm Chart Versionen (nach `helm search` auf k8s-mgmt-10)
+- [x] Exakte Helm Chart Versionen (abgestimmt 08.04.2026, siehe Abschnitt 3)
 - [x] Teams Webhook URLs (erledigt, alle 3 Channels getestet)
-- [ ] Grafana Admin-Passwort (Daniel setzt auf k8s-mgmt-10)
-- [ ] Loki Log-Retention Dauer (Vorschlag: 90 Tage auf S3)
-- [ ] Thanos Compaction-Strategie (Vorschlag: 5m fuer 0-48h, 1h fuer 48h-14d, raw fuer >14d)
+- [x] Grafana Admin-Passwort (SOPS-verschluesselt, DEV deployed)
+- [x] Loki Log-Retention Dauer: 90 Tage auf S3
+- [x] Thanos Compaction: 30d raw, 180d 5m-Downsampling, 365d 1h-Downsampling
+
+---
+
+## 15. DEV Implementierung — Ergebnisse (08.04.2026)
+
+### Deployed Components
+
+| Komponente | Chart-Version | App-Version | Status |
+|------------|---------------|-------------|--------|
+| kube-prometheus-stack | 83.0.0 | v0.90.1 | ✅ Synced+Healthy |
+| Thanos (bitnami) | 17.3.1 | v0.39.2 | ✅ Synced+Healthy |
+| Loki (grafana) | 6.55.0 | 3.6.7 | ✅ Synced+Healthy |
+| Grafana Alloy | 1.7.0 | v1.15.0 | ✅ Synced+Healthy |
+| Blackbox Exporter | 11.9.1 | v0.28.0 | ✅ Synced+Healthy |
+
+### ArgoCD Apps (9 neue Apps)
+
+| App | Typ | Status |
+|-----|-----|--------|
+| monitoring | Helm (Multi-Source) | ✅ Synced+Healthy |
+| monitoring-secrets | Kustomize (KSOPS) | ✅ Synced+Healthy |
+| monitoring-ingress | Kustomize | ✅ Synced+Healthy |
+| monitoring-alerts | Kustomize | ✅ Synced+Healthy |
+| thanos | Helm (Multi-Source) | ✅ Synced+Healthy |
+| loki | Helm (Multi-Source) | ✅ Synced+Healthy |
+| loki-secrets | Kustomize (KSOPS) | ✅ Synced+Healthy |
+| alloy | Helm (Multi-Source) | ✅ Synced+Healthy |
+| blackbox-exporter | Helm (Multi-Source) | ✅ Synced+Healthy |
+
+### URLs
+
+| Service | URL |
+|---------|-----|
+| Grafana | https://grafana-dev-v2.eneg.de |
+
+### Grafana Datasources
+
+| Datasource | Typ | URL |
+|------------|-----|-----|
+| Prometheus | prometheus | kube-prometheus-stack-prometheus:9090 (Default) |
+| Thanos | prometheus | thanos-query:9090 |
+| Loki | loki | loki-gateway:80 |
+| Alertmanager | alertmanager | kube-prometheus-stack-alertmanager:9093 |
+
+### Grafana Dashboards
+
+| Dashboard | Quelle | Ordner |
+|-----------|--------|--------|
+| Kubernetes Cluster, Node, Pod, PVC, ... | kube-prometheus-stack Default | Default |
+| CloudNativePG | grafana.com gnetId 20417 | Custom |
+| ArgoCD Operational Overview | grafana.com gnetId 19993 | Custom |
+| Longhorn | grafana.com gnetId 16888 | Custom |
+
+### Custom PrometheusRules (4)
+
+| Rule-Name | Alerts |
+|-----------|--------|
+| cnpg-alerts | WAL-Volume (70%/85%), Cluster NotReady, Replication Lag, WAL-Archivierung |
+| backup-alerts | CronJob Failed, CronJob Overdue, Pod CrashLoop |
+| blackbox-infra-alerts | S3 Endpoint Down, ArgoCD Degraded, Longhorn Degraded/Faulted |
+| thanos-alerts | Sidecar Down, Compaction Failed, Store Gateway S3-Fehler |
+
+### ServiceMonitors (Custom, zusaetzlich zu Chart-Defaults)
+
+| ServiceMonitor | Namespace | Targets |
+|----------------|-----------|---------|
+| argocd-metrics | monitoring | argocd/* (Port: metrics) |
+| longhorn-manager | monitoring | longhorn-system/longhorn-manager |
+
+
+### Kritische Learnings (DEV)
+
+1. **bitnami Thanos Image nicht auf docker.io verfuegbar** (Tag `0.39.2-debian-12-r2` not found).
+   Fix: Offizielles Image `quay.io/thanos/thanos:v0.39.2` + `global.security.allowInsecureImages: true`
+   (bitnami Chart blockiert non-bitnami Images per Default seit 2025).
+
+2. **K3s exponiert kubeControllerManager/Scheduler/Proxy nicht separat.**
+   Fix: `kubeControllerManager.enabled: false`, `kubeScheduler.enabled: false`,
+   `kubeProxy.enabled: false` in kube-prometheus-stack values.
+
+3. **Loki Chart Default chunks-cache: 8192 MB (allocatedMemory)** — zu gross fuer DEV (12GB Nodes).
+   Fix: `chunksCache.allocatedMemory: 512`, `resultsCache.allocatedMemory: 256`.
+   NICHT ueber explizite `resources` setzen — Chart berechnet aus allocatedMemory.
+
+4. **Loki `extraEnvFrom` muss unter `singleBinary` stehen**, nicht Top-Level.
+   Chart ignoriert Top-Level extraEnvFrom/extraArgs im Monolithic Mode.
+   Gleiches gilt fuer `extraArgs: ["-config.expand-env=true"]` (fuer Env-Var-Expansion in Config).
+
+5. **Loki Schema-Datum** (`from` in schemaConfig) muss vor dem aeltesten erwarteten
+   Log-Timestamp liegen. Empfehlung: `from: "2024-01-01"` statt aktuelles Datum.
+
+6. **Loki Canary kann nicht deaktiviert werden** — Chart-Validierung erzwingt
+   `lokiCanary.enabled: true` fuer Helm Tests. Canary-Pods sind minimal (kein Memory-Request).
+
+7. **Grafana `additionalDataSources` darf NICHT `isDefault: true` haben**
+   wenn der Default-Prometheus-Datasource ebenfalls Default ist. Zwei Defaults verursachen
+   500er-Fehler beim Provisioning-Reload. Fix: `isDefault: false` fuer zusaetzliche Datasources.
+
+8. **Blackbox Exporter: S3 Root-URL gibt 404 zurueck** (normal, kein Bucket angegeben).
+   Fix: TCP Probe statt HTTP. TCP prueft ob der S3-Dienst laeuft und Verbindungen akzeptiert.
+   Funktionale S3-Probleme werden durch CNPG WAL-Archivierung-Alerts separat erkannt.
+
+9. **Grafana Datasource-Aenderungen erfordern Pod-Restart** (rollout restart deployment).
+   Der Sidecar erkennt ConfigMap-Updates, aber der initiale Provisioning-Reload kann fehlschlagen.
+
+10. **Thanos bitnami Chart: `global.security.allowInsecureImages: true`** ist sicher —
+    es deaktiviert nur die bitnami-eigene Vendor-Lock-in-Pruefung, keine K8s-Security.
+    Das offizielle quay.io Thanos Image ist vom CNCF-Projekt signiert und maintained.
+
+### Offene Punkte fuer TEST/PROD Rollout
+
+- CNPG PodMonitor in TEST/PROD aktivieren (enablePodMonitor: true)
+- S3 Secrets fuer TEST/PROD verschluesseln (Thanos + Loki pro Env)
+- AlertManager Secrets pro Env (SMTP + Teams Webhook URLs)
+- Grafana Admin Secret pro Env
+- PVC-Groessen anpassen: PROD Prometheus 50Gi, Loki 20Gi
+- Loki chunksCache/resultsCache fuer PROD groesser (2Gi/1Gi)
+- DNS-Eintraege bereits erstellt (grafana-test.eneg.de, grafana-prod.eneg.de)
+- Teams Channels bereits erstellt (eNeG K8s Test/Prod Monitoring)
 
 ---
 
