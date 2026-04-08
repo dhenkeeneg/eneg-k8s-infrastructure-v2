@@ -79,8 +79,7 @@ grafana:
     datasources:
       enabled: true
 
-  # Grafana Datasource: Thanos Query statt Prometheus direkt
-  # Damit werden sowohl aktuelle als auch historische Daten (S3) angezeigt
+  # Grafana Datasources: Thanos + Loki
   additionalDataSources:
     - name: Thanos
       type: prometheus
@@ -89,6 +88,48 @@ grafana:
       isDefault: true
       jsonData:
         timeInterval: 30s
+    - name: Loki
+      type: loki
+      url: http://loki-gateway.monitoring.svc.cluster.local:80
+      access: proxy
+      jsonData:
+        derivedFields:
+          - datasourceUid: thanos
+            matcherRegex: "namespace=\"(.*?)\""
+            name: namespace
+            url: ""
+
+  # Grafana Dashboards von grafana.com per ID laden
+  dashboardProviders:
+    dashboardproviders.yaml:
+      apiVersion: 1
+      providers:
+        - name: custom
+          orgId: 1
+          folder: "Custom"
+          type: file
+          disableDeletion: false
+          editable: true
+          options:
+            path: /var/lib/grafana/dashboards/custom
+
+  dashboards:
+    custom:
+      # CloudNativePG Cluster Dashboard (offiziell)
+      cnpg-dashboard:
+        gnetId: 20417
+        revision: 3
+        datasource: Thanos
+      # ArgoCD Dashboard
+      argocd-dashboard:
+        gnetId: 14584
+        revision: 1
+        datasource: Thanos
+      # Longhorn Dashboard
+      longhorn-dashboard:
+        gnetId: 16888
+        revision: 9
+        datasource: Thanos
 
   # Timezone
   defaultDashboardsTimezone: Europe/Berlin
