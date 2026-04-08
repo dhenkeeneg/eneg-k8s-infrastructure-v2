@@ -21,6 +21,14 @@ singleBinary:
     storageClass: longhorn
     size: 10Gi  # WAL + Cache, Chunks auf S3
 
+  # S3 Credentials aus Secret injizieren
+  # Loki expandiert Env-Vars in Config via -config.expand-env=true
+  extraArgs:
+    - -config.expand-env=true
+  extraEnvFrom:
+    - secretRef:
+        name: loki-s3-credentials
+
 # --- Loki Config ---
 loki:
   auth_enabled: false
@@ -56,16 +64,6 @@ loki:
 
   commonConfig:
     replication_factor: 1
-
-# --- S3 Credentials aus Secret injizieren ---
-# Secret wird via KSOPS in monitoring-loki-secrets erstellt
-# Loki expandiert Env-Vars in Config via -config.expand-env=true
-extraArgs:
-  - -config.expand-env=true
-
-extraEnvFrom:
-  - secretRef:
-      name: loki-s3-credentials
 
 # --- Nicht benoetigte Komponenten deaktivieren ---
 gateway:
