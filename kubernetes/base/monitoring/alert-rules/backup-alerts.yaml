@@ -1,0 +1,47 @@
+---
+# PrometheusRule: Backup Health Alerts
+# CronJob Failures, ScheduledBackup Status
+apiVersion: monitoring.coreos.com/v1
+kind: PrometheusRule
+metadata:
+  name: backup-alerts
+  namespace: monitoring
+  labels:
+    app: kube-prometheus-stack
+    release: kube-prometheus-stack
+spec:
+  groups:
+    - name: backup.rules
+      rules:
+        # CronJob fehlgeschlagen (Warning: 1x)
+        - alert: CronJobFailed
+          expr: |
+            kube_job_status_failed{namespace=~"databases|odoo|garage"} > 0
+          for: 5m
+          labels:
+            severity: warning
+          annotations:
+            summary: "CronJob {{ $labels.job_name }} fehlgeschlagen"
+            description: "Job {{ $labels.job_name }} in Namespace {{ $labels.namespace }} ist fehlgeschlagen."
+
+        # CronJob ueberfaellig (nicht gelaufen)
+        - alert: CronJobOverdue
+          expr: |
+            time() - kube_cronjob_next_schedule_time{namespace=~"databases|odoo|garage"} > 7200
+          for: 10m
+          labels:
+            severity: warning
+          annotations:
+            summary: "CronJob {{ $labels.cronjob }} ueberfaellig"
+            description: "CronJob {{ $labels.cronjob }} in Namespace {{ $labels.namespace }} haette vor mehr als 2 Stunden laufen sollen."
+
+        # Pod CrashLoopBackOff in DB/Backup Namespaces
+        - alert: BackupPodCrashLoop
+          expr: |
+            increase(kube_pod_container_status_restarts_total{namespace=~"databases|odoo|garage"}[10m]) > 3
+          for: 5m
+          labels:
+            severity: critical
+          annotations:
+            summary: "Pod {{ $labels.pod }} in CrashLoop"
+            description: "Pod {{ $labels.pod }} in Namespace {{ $labels.namespace }} hat {{ $value | printf \"%.0f\" }} Restarts in 10 Minuten."

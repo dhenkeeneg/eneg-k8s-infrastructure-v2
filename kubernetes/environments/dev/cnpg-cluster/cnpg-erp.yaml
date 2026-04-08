@@ -90,6 +90,6 @@ spec:
       parameters:
         barmanObjectName: cnpg-erp-objectstore
 
-  # Monitoring (vorbereitet fuer Phase 7)
+  # Monitoring (Phase 7 - aktiviert)
   monitoring:
-    enablePodMonitor: false
+    enablePodMonitor: true

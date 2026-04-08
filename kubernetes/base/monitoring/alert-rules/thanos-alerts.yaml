@@ -1,0 +1,46 @@
+---
+# PrometheusRule: Thanos Component Health Alerts
+apiVersion: monitoring.coreos.com/v1
+kind: PrometheusRule
+metadata:
+  name: thanos-alerts
+  namespace: monitoring
+  labels:
+    app: kube-prometheus-stack
+    release: kube-prometheus-stack
+spec:
+  groups:
+    - name: thanos.rules
+      rules:
+        # Thanos Sidecar nicht verbunden
+        - alert: ThanosSidecarDown
+          expr: |
+            thanos_sidecar_prometheus_up == 0
+          for: 5m
+          labels:
+            severity: critical
+          annotations:
+            summary: "Thanos Sidecar nicht mit Prometheus verbunden"
+            description: "Thanos Sidecar kann Prometheus nicht erreichen. Long-Term-Storage Upload gestoppt!"
+
+        # Thanos Compaction fehlgeschlagen
+        - alert: ThanosCompactionFailed
+          expr: |
+            increase(thanos_compact_group_compactions_failures_total[1h]) > 3
+          for: 5m
+          labels:
+            severity: warning
+          annotations:
+            summary: "Thanos Compaction Fehler"
+            description: "Thanos Compactor hat {{ $value | printf \"%.0f\" }} fehlgeschlagene Compactions in der letzten Stunde."
+
+        # Thanos Store Gateway S3-Fehler
+        - alert: ThanosStoreGatewayErrors
+          expr: |
+            increase(thanos_objstore_bucket_operation_failures_total{component="store.bucket"}[15m]) > 0
+          for: 10m
+          labels:
+            severity: warning
+          annotations:
+            summary: "Thanos Store Gateway S3-Fehler"
+            description: "Thanos Store Gateway hat Fehler beim S3-Zugriff. NAS10-Verbindung pruefen."

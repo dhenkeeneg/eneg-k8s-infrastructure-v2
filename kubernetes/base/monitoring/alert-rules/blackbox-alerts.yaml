@@ -1,0 +1,58 @@
+---
+# PrometheusRule: S3 Endpoint + Infrastruktur Alerts
+# Blackbox Exporter Probes, ArgoCD Health, Longhorn
+apiVersion: monitoring.coreos.com/v1
+kind: PrometheusRule
+metadata:
+  name: blackbox-infra-alerts
+  namespace: monitoring
+  labels:
+    app: kube-prometheus-stack
+    release: kube-prometheus-stack
+spec:
+  groups:
+    - name: blackbox-infra.rules
+      rules:
+        # S3 Endpoint (NAS10) nicht erreichbar
+        - alert: S3EndpointDown
+          expr: |
+            probe_success{job=~".*blackbox.*"} == 0
+          for: 5m
+          labels:
+            severity: critical
+          annotations:
+            summary: "S3 Endpoint {{ $labels.target }} nicht erreichbar"
+            description: "Blackbox Probe fuer {{ $labels.target }} schlaegt seit 5 Minuten fehl. Backups und WAL-Archivierung betroffen!"
+
+        # ArgoCD App Degraded
+        - alert: ArgoCdAppDegraded
+          expr: |
+            argocd_app_info{health_status!~"Healthy|Progressing"} == 1
+          for: 15m
+          labels:
+            severity: critical
+          annotations:
+            summary: "ArgoCD App {{ $labels.name }} nicht healthy"
+            description: "ArgoCD Application {{ $labels.name }} ist seit 15 Minuten im Status {{ $labels.health_status }}."
+
+        # Longhorn Volume Degraded
+        - alert: LonghornVolumeDegraded
+          expr: |
+            longhorn_volume_robustness == 2
+          for: 10m
+          labels:
+            severity: warning
+          annotations:
+            summary: "Longhorn Volume {{ $labels.volume }} degraded"
+            description: "Longhorn Volume {{ $labels.volume }} ist seit 10 Minuten degraded. Replica-Check erforderlich."
+
+        # Longhorn Volume Faulted
+        - alert: LonghornVolumeFaulted
+          expr: |
+            longhorn_volume_robustness == 3
+          for: 2m
+          labels:
+            severity: critical
+          annotations:
+            summary: "Longhorn Volume {{ $labels.volume }} FAULTED"
+            description: "Longhorn Volume {{ $labels.volume }} ist faulted. Datenverlust moeglich!"

@@ -1,0 +1,83 @@
+---
+# PrometheusRule: CloudNativePG Database Health Alerts
+apiVersion: monitoring.coreos.com/v1
+kind: PrometheusRule
+metadata:
+  name: cnpg-alerts
+  namespace: monitoring
+  labels:
+    app: kube-prometheus-stack
+    release: kube-prometheus-stack
+spec:
+  groups:
+    - name: cnpg.rules
+      rules:
+        # CNPG WAL-Volume Fuellstand (Warning >= 70%)
+        - alert: CnpgWalVolumeWarning
+          expr: |
+            (kubelet_volume_stats_used_bytes{namespace="databases", persistentvolumeclaim=~".*-wal"}
+            / kubelet_volume_stats_capacity_bytes{namespace="databases", persistentvolumeclaim=~".*-wal"})
+            * 100 >= 70
+          for: 5m
+          labels:
+            severity: warning
+          annotations:
+            summary: "CNPG WAL-Volume {{ $labels.persistentvolumeclaim }} bei {{ $value | printf \"%.0f\" }}%"
+            description: "WAL-Volume {{ $labels.persistentvolumeclaim }} in Namespace {{ $labels.namespace }} ist zu {{ $value | printf \"%.0f\" }}% voll."
+
+        # CNPG WAL-Volume Fuellstand (Critical >= 85%)
+        - alert: CnpgWalVolumeCritical
+          expr: |
+            (kubelet_volume_stats_used_bytes{namespace="databases", persistentvolumeclaim=~".*-wal"}
+            / kubelet_volume_stats_capacity_bytes{namespace="databases", persistentvolumeclaim=~".*-wal"})
+            * 100 >= 85
+          for: 5m
+          labels:
+            severity: critical
+          annotations:
+            summary: "CNPG WAL-Volume {{ $labels.persistentvolumeclaim }} KRITISCH bei {{ $value | printf \"%.0f\" }}%"
+            description: "WAL-Volume {{ $labels.persistentvolumeclaim }} in Namespace {{ $labels.namespace }} ist zu {{ $value | printf \"%.0f\" }}% voll. Sofortige Aktion erforderlich!"
+
+        # CNPG Cluster Not Ready
+        - alert: CnpgClusterNotReady
+          expr: |
+            cnpg_collector_up{namespace="databases"} == 0
+          for: 5m
+          labels:
+            severity: critical
+          annotations:
+            summary: "CNPG Cluster {{ $labels.cluster }} nicht erreichbar"
+            description: "CloudNativePG Cluster {{ $labels.cluster }} in Namespace {{ $labels.namespace }} ist seit 5 Minuten nicht erreichbar."
+
+        # CNPG Replication Lag Warning (> 30s)
+        - alert: CnpgReplicationLagWarning
+          expr: |
+            cnpg_pg_replication_lag{namespace="databases"} > 30
+          for: 5m
+          labels:
+            severity: warning
+          annotations:
+            summary: "CNPG Replication Lag {{ $labels.cluster }} bei {{ $value | printf \"%.0f\" }}s"
+            description: "Replication Lag fuer Cluster {{ $labels.cluster }} Pod {{ $labels.pod }} ist {{ $value | printf \"%.0f\" }} Sekunden."
+
+        # CNPG Replication Lag Critical (> 120s)
+        - alert: CnpgReplicationLagCritical
+          expr: |
+            cnpg_pg_replication_lag{namespace="databases"} > 120
+          for: 5m
+          labels:
+            severity: critical
+          annotations:
+            summary: "CNPG Replication Lag {{ $labels.cluster }} KRITISCH bei {{ $value | printf \"%.0f\" }}s"
+            description: "Replication Lag fuer Cluster {{ $labels.cluster }} Pod {{ $labels.pod }} ist {{ $value | printf \"%.0f\" }} Sekunden. Moeglicher Datenverlust!"
+
+        # CNPG WAL-Archivierung fehlgeschlagen (> 5 min)
+        - alert: CnpgWalArchivingFailed
+          expr: |
+            increase(cnpg_pg_stat_archiver_failed_count{namespace="databases"}[5m]) > 0
+          for: 5m
+          labels:
+            severity: warning
+          annotations:
+            summary: "CNPG WAL-Archivierung fehlgeschlagen fuer {{ $labels.cluster }}"
+            description: "WAL-Archivierung fuer Cluster {{ $labels.cluster }} hat in den letzten 5 Minuten Fehler. S3-Endpoint pruefen!"
