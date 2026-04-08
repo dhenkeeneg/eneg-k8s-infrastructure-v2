@@ -17,6 +17,11 @@ image:
   repository: thanos/thanos
   tag: v0.39.2
 
+# bitnami Chart blockiert non-bitnami Images ohne dieses Flag
+global:
+  security:
+    allowInsecureImages: true
+
 # --- Objstore Secret ---
 # Referenz auf bestehendes Secret (erstellt via KSOPS in monitoring-secrets)
 existingObjstoreSecret: thanos-objstore-config
