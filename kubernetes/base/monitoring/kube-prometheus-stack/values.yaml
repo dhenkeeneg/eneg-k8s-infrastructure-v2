@@ -116,17 +116,17 @@ grafana:
       cnpg-dashboard:
         gnetId: 20417
         revision: 3
-        datasource: Thanos
+        datasource: Prometheus
       # ArgoCD Dashboard
       argocd-dashboard:
-        gnetId: 14584
-        revision: 1
-        datasource: Thanos
+        gnetId: 19993
+        revision: 2
+        datasource: Prometheus
       # Longhorn Dashboard
       longhorn-dashboard:
         gnetId: 16888
         revision: 9
-        datasource: Thanos
+        datasource: Prometheus
 
   # Timezone
   defaultDashboardsTimezone: Europe/Berlin
