@@ -1,0 +1,8 @@
+# Loki DEV Override
+# Environment: DEV (VLAN 180)
+# Minimales Override - base values sind bereits DEV-dimensioniert.
+
+# PVC-Groesse (gleich wie base, explizit fuer Konsistenz)
+singleBinary:
+  persistence:
+    size: 10Gi

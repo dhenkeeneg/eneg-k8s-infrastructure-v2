@@ -1,0 +1,74 @@
+# Grafana Alloy Helm Chart Values - Basis-Konfiguration
+# Chart: grafana/alloy v1.7.0
+# Alloy v1.15.0 - Ersetzt Promtail (EOL 02.03.2026)
+#
+# DaemonSet fuer Kubernetes Container-Log-Forwarding an Loki.
+
+alloy:
+  # Container-Logs vom Host mounten
+  mounts:
+    varlog: true
+
+  # Alloy Konfiguration (River-Syntax)
+  configMap:
+    content: |
+      // Kubernetes Pod Discovery
+      discovery.kubernetes "pods" {
+        role = "pod"
+      }
+
+      // Pod-Log-Relabeling
+      discovery.relabel "pods" {
+        targets = discovery.kubernetes.pods.targets
+
+        rule {
+          source_labels = ["__meta_kubernetes_namespace"]
+          target_label  = "namespace"
+        }
+        rule {
+          source_labels = ["__meta_kubernetes_pod_name"]
+          target_label  = "pod"
+        }
+
+        rule {
+          source_labels = ["__meta_kubernetes_pod_container_name"]
+          target_label  = "container"
+        }
+
+        rule {
+          source_labels = ["__meta_kubernetes_pod_node_name"]
+          target_label  = "node"
+        }
+
+        rule {
+          source_labels = ["__meta_kubernetes_pod_label_app_kubernetes_io_name"]
+          target_label  = "app"
+        }
+      }
+
+      // Container-Logs lesen
+      loki.source.kubernetes "pods" {
+        targets    = discovery.relabel.pods.output
+        forward_to = [loki.write.default.receiver]
+      }
+
+      // An Loki senden
+      loki.write "default" {
+        endpoint {
+          url = "http://loki-gateway.monitoring.svc.cluster.local:80/loki/api/v1/push"
+        }
+      }
+
+# --- Controller: DaemonSet ---
+controller:
+  type: daemonset
+
+  resources:
+    requests:
+      cpu: 50m
+      memory: 64Mi
+    limits:
+      memory: 256Mi
+
+  tolerations:
+    - operator: Exists

@@ -1,0 +1,85 @@
+# Loki Helm Chart Values - Basis-Konfiguration
+# Chart: grafana/loki v6.55.0
+# Loki v3.6.7 - Monolithic Mode mit S3-Backend auf NAS10
+#
+# HINWEIS: S3-Credentials werden als existingSecret referenziert.
+# Umgebungsspezifische Werte per values-override.yaml.
+
+# --- Deployment Mode: Monolithic (SingleBinary) ---
+deploymentMode: SingleBinary
+
+singleBinary:
+  replicas: 1
+  resources:
+    requests:
+      cpu: 100m
+      memory: 256Mi
+    limits:
+      memory: 1Gi
+  persistence:
+    enabled: true
+    storageClass: longhorn
+    size: 10Gi  # WAL + Cache, Chunks auf S3
+
+# --- Loki Config ---
+loki:
+  auth_enabled: false
+
+  # S3 Storage Backend (NAS10)
+  storage:
+    type: s3
+    bucketNames:
+      chunks: k8s-dev-loki
+      ruler: k8s-dev-loki
+    s3:
+      endpoint: http://nas10.eneg.de:8010
+      region: us-east-1
+      secretAccessKey: ${S3_SECRET_KEY}
+      accessKeyId: ${S3_ACCESS_KEY}
+      s3ForcePathStyle: true
+      insecure: true
+
+  # Schema: TSDB + S3
+  schemaConfig:
+    configs:
+      - from: "2026-04-08"
+        store: tsdb
+        object_store: s3
+        schema: v13
+        index:
+          prefix: loki_index_
+          period: 24h
+
+  # Retention: 90 Tage
+  limits_config:
+    retention_period: 2160h  # 90 Tage
+
+  commonConfig:
+    replication_factor: 1
+
+# --- S3 Credentials aus Secret injizieren ---
+# Secret wird via KSOPS in monitoring-loki-secrets erstellt
+# Loki expandiert Env-Vars in Config via -config.expand-env=true
+extraArgs:
+  - -config.expand-env=true
+
+extraEnvFrom:
+  - secretRef:
+      name: loki-s3-credentials
+
+# --- Nicht benoetigte Komponenten deaktivieren ---
+gateway:
+  enabled: true
+read:
+  replicas: 0
+write:
+  replicas: 0
+backend:
+  replicas: 0
+
+# --- Monitoring ---
+monitoring:
+  selfMonitoring:
+    enabled: false
+  lokiCanary:
+    enabled: false
