@@ -136,9 +136,12 @@ Spaeter: Weitere E-Mail-Verteiler pro Environment.
 
 | Environment | E-Mail-Empfaenger | Teams-Channel |
 |-------------|-------------------|---------------|
-| DEV | d.henke@eneg.de | #k8s-alerts-dev |
-| TEST | d.henke@eneg.de | #k8s-alerts-test |
-| PROD | d.henke@eneg.de | #k8s-alerts-prod |
+| DEV | d.henke@eneg.de | eNeG K8s Dev v2 Monitoring |
+| TEST | d.henke@eneg.de | eNeG K8s Test Monitoring |
+| PROD | d.henke@eneg.de | eNeG K8s Prod Monitoring |
+
+**Teams Webhook-Typ:** "Webhookwarnungen an Kanal senden" (Workflows/Power Automate).
+Payload-Format: Adaptive Cards (nicht das alte MessageCard-Format).
 
 ### Alert-Regeln (PrometheusRule CRDs)
 
@@ -220,18 +223,18 @@ bevor die Overlays fuer TEST und PROD erstellt werden.
 
 ### Schritt 1: Vorbereitung (NAS10 + Helm Repos + Namespace)
 
-**1a. S3 Buckets auf NAS10 anlegen**
-- Daniel: Buckets `k8s-dev-thanos`, `k8s-dev-loki` auf NAS10 anlegen
-- Spaeter: `k8s-test-thanos`, `k8s-test-loki`, `k8s-prod-thanos`, `k8s-prod-loki`
-- S3-Credentials fuer bestehende Accounts `s3-k8s-dev/test/prod` notieren
+**1a. S3 Buckets auf NAS10 anlegen** ✅
+- Buckets fuer alle Umgebungen angelegt:
+  k8s-dev-thanos, k8s-dev-loki, k8s-test-thanos, k8s-test-loki, k8s-prod-thanos, k8s-prod-loki
 
-**1b. DNS-Eintraege anlegen**
-- `grafana-dev-v2.eneg.de` → CNAME → `traefik-dev.eneg.de`
-- Spaeter: `grafana-test.eneg.de`, `grafana-prod.eneg.de`
+**1b. DNS-Eintraege anlegen** ✅
+- grafana-dev-v2.eneg.de, grafana-test.eneg.de, grafana-prod.eneg.de
+- Alle als CNAME auf traefik-{env}.eneg.de
 
-**1c. Teams Incoming Webhooks einrichten**
-- Daniel: 3 Teams-Channels (#k8s-alerts-dev, -test, -prod) anlegen
-- Incoming Webhook Connector pro Channel, URLs notieren
+**1c. Teams Incoming Webhooks einrichten** ✅
+- Teams-Channels: eNeG K8s Dev v2 Monitoring, eNeG K8s Test Monitoring, eNeG K8s Prod Monitoring
+- Webhook-Typ: "Webhookwarnungen an Kanal senden" (Power Automate Workflows)
+- Alle 3 Webhook-URLs getestet und funktionsfaehig
 
 **1d. Helm Repos auf k8s-mgmt-10 hinzufuegen**
 ```bash
@@ -635,9 +638,9 @@ kubernetes/
 
 | Voraussetzung | Status | Verantwortlich |
 |---------------|--------|----------------|
-| S3 Buckets auf NAS10 | Offen | Daniel |
-| DNS-Eintraege (Grafana) | Offen | Daniel |
-| Teams Incoming Webhooks | Offen | Daniel |
+| S3 Buckets auf NAS10 | ✅ Erledigt (alle Envs) | Daniel |
+| DNS-Eintraege (Grafana) | ✅ Erledigt (alle Envs) | Daniel |
+| Teams Incoming Webhooks | ✅ Erledigt + getestet | Daniel |
 | Helm Repos auf k8s-mgmt-10 | Offen | Daniel (CLI) |
 | CNPG Barman Cloud Plugin Migration | ✅ Abgeschlossen | - |
 | PostgreSQL Image-Wechsel 17.9 | ✅ Abgeschlossen | - |
@@ -660,7 +663,7 @@ kubernetes/
 ## 14. Offene Entscheidungen
 
 - [ ] Exakte Helm Chart Versionen (nach `helm search` auf k8s-mgmt-10)
-- [ ] Teams Webhook URLs (nach Channel-Erstellung)
+- [x] Teams Webhook URLs (erledigt, alle 3 Channels getestet)
 - [ ] Grafana Admin-Passwort (Daniel setzt auf k8s-mgmt-10)
 - [ ] Loki Log-Retention Dauer (Vorschlag: 90 Tage auf S3)
 - [ ] Thanos Compaction-Strategie (Vorschlag: 5m fuer 0-48h, 1h fuer 48h-14d, raw fuer >14d)
