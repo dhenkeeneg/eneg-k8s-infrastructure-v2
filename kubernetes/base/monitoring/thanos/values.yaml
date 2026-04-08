@@ -1,0 +1,93 @@
+# Thanos Helm Chart Values - Basis-Konfiguration
+# Chart: bitnami/thanos v17.3.1
+# Thanos v0.39.2
+#
+# HINWEIS: Nur Query, Store Gateway und Compactor werden installiert.
+# Der Thanos Sidecar laeuft bereits im Prometheus Pod
+# (aktiviert via kube-prometheus-stack thanos.enabled).
+#
+# Umgebungsspezifische Werte (S3-Bucket, PVC-Groessen)
+# werden per values-override.yaml definiert.
+
+# --- Objstore Secret ---
+# Referenz auf bestehendes Secret (erstellt via KSOPS in monitoring-secrets)
+existingObjstoreSecret: thanos-objstore-config
+existingObjstoreSecretItems:
+  - key: objstore.yml
+    path: objstore.yml
+
+# --- Query (Gateway fuer Grafana) ---
+query:
+  enabled: true
+  replicaCount: 1
+
+  # Thanos Sidecar im Prometheus Pod als Store-Endpunkt
+  stores:
+    - dnssrv+_grpc._tcp.kube-prometheus-stack-thanos-discovery.monitoring.svc.cluster.local
+
+  dnsDiscovery:
+    enabled: true
+    sidecarsService: kube-prometheus-stack-thanos-discovery
+    sidecarsNamespace: monitoring
+
+  resources:
+    requests:
+      cpu: 100m
+      memory: 128Mi
+    limits:
+      memory: 512Mi
+
+# --- Query Frontend (Caching-Layer vor Query, optional) ---
+queryFrontend:
+  enabled: false
+
+# --- Store Gateway (liest historische Daten von S3) ---
+storegateway:
+  enabled: true
+  replicaCount: 1
+
+  persistence:
+    enabled: true
+    storageClass: longhorn
+    size: 10Gi  # Default, Override pro Env
+
+  resources:
+    requests:
+      cpu: 100m
+      memory: 256Mi
+    limits:
+      memory: 1Gi
+
+# --- Compactor (Downsampling + Retention auf S3) ---
+compactor:
+  enabled: true
+
+  # Compactor ist ein Singleton - nur eine Instanz
+  persistence:
+    enabled: true
+    storageClass: longhorn
+    size: 10Gi  # Default, Override pro Env
+
+  # Retention-Konfiguration fuer Downsampling
+  retentionResolutionRaw: 30d
+  retentionResolution5m: 180d
+  retentionResolution1h: 365d
+
+  # NAS10 Rate-Limiting: Concurrency begrenzen
+  consistencyDelay: 30m
+
+  resources:
+    requests:
+      cpu: 100m
+      memory: 256Mi
+    limits:
+      memory: 1Gi
+
+# --- Nicht benoetigte Komponenten deaktivieren ---
+# Sidecar laeuft bereits in kube-prometheus-stack
+bucketweb:
+  enabled: false
+ruler:
+  enabled: false
+receive:
+  enabled: false

@@ -1,0 +1,7 @@
+# Thanos DEV Override
+# Environment: DEV (VLAN 180)
+# Minimales Override - base values sind bereits DEV-dimensioniert.
+# In TEST/PROD ggf. andere PVC-Groessen oder Ressourcen.
+
+# Keine Aenderungen noetig fuer DEV - base values gelten.
+# Datei existiert fuer Konsistenz und spaetere Anpassungen.

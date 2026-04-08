@@ -79,6 +79,16 @@ grafana:
     datasources:
       enabled: true
 
+  # Grafana Datasource: Thanos Query statt Prometheus direkt
+  # Damit werden sowohl aktuelle als auch historische Daten (S3) angezeigt
+  additionalDataSources:
+    - name: Thanos
+      type: prometheus
+      url: http://thanos-query.monitoring.svc.cluster.local:9090
+      access: proxy
+      isDefault: true
+      jsonData:
+        timeInterval: 30s
 
   # Timezone
   defaultDashboardsTimezone: Europe/Berlin

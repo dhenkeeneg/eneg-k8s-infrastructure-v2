@@ -1,0 +1,43 @@
+---
+# ArgoCD Application: Thanos (DEV)
+# Multi-Source: Helm Chart v17.3.1 + Base Values + DEV Override
+# Query, Store Gateway, Compactor fuer Long-Term-Storage auf S3
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: thanos
+  namespace: argocd
+  annotations:
+    argocd.argoproj.io/sync-wave: "3"
+  finalizers:
+    - resources-finalizer.argocd.argoproj.io
+spec:
+  project: default
+
+  sources:
+    # Source 1: Helm Chart
+    - repoURL: https://charts.bitnami.com/bitnami
+      chart: thanos
+      targetRevision: 17.3.1
+      helm:
+        releaseName: thanos
+        valueFiles:
+          - $values/kubernetes/base/monitoring/thanos/values.yaml
+          - $values/kubernetes/environments/dev/monitoring-thanos/values-override.yaml
+
+    # Source 2: Git Repository Referenz fuer Values
+    - repoURL: git@github.com:dhenkeeneg/eneg-k8s-infrastructure-v2.git
+      targetRevision: main
+      ref: values
+
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: monitoring
+
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
+    syncOptions:
+      - CreateNamespace=true
+      - ServerSideApply=true
