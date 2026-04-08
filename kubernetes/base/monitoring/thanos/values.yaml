@@ -9,6 +9,14 @@
 # Umgebungsspezifische Werte (S3-Bucket, PVC-Groessen)
 # werden per values-override.yaml definiert.
 
+# --- Image: Offizielles Thanos Image statt bitnami ---
+# bitnami Image-Tag existiert nicht auf Docker Hub (0.39.2-debian-12-r2: not found)
+# Offizielles Image von quay.io - gleiche Version wie Thanos Sidecar in Prometheus
+image:
+  registry: quay.io
+  repository: thanos/thanos
+  tag: v0.39.2
+
 # --- Objstore Secret ---
 # Referenz auf bestehendes Secret (erstellt via KSOPS in monitoring-secrets)
 existingObjstoreSecret: thanos-objstore-config
@@ -90,4 +98,9 @@ bucketweb:
 ruler:
   enabled: false
 receive:
+  enabled: false
+
+# --- Bitnami-spezifische Init-Container deaktivieren ---
+# Verhindert Pull von bitnami/os-shell Images
+volumePermissions:
   enabled: false
