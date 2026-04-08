@@ -1,0 +1,140 @@
+---
+# ConfigMap: Backup Overview Dashboard (Custom)
+# Zeigt CronJob-Status, letzte Laufzeit, Erfolg/Fehler
+# Label grafana_dashboard: "1" fuer automatisches Laden durch Sidecar
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: backup-overview-dashboard
+  namespace: monitoring
+  labels:
+    grafana_dashboard: "1"
+  annotations:
+    grafana_folder: "Custom"
+data:
+  backup-overview.json: |
+    {
+      "annotations": {"list": []},
+      "editable": true,
+      "fiscalYearStartMonth": 0,
+      "graphTooltip": 0,
+      "id": null,
+      "links": [],
+      "panels": [
+        {
+          "title": "Fehlgeschlagene Jobs (24h)",
+          "type": "stat",
+          "gridPos": {"h": 4, "w": 6, "x": 0, "y": 0},
+          "datasource": {"type": "prometheus", "uid": "prometheus"},
+          "fieldConfig": {
+            "defaults": {
+              "thresholds": {"mode": "absolute", "steps": [
+                {"color": "green", "value": null},
+                {"color": "red", "value": 1}
+              ]}
+            }
+          },
+          "targets": [{
+            "expr": "sum(increase(kube_job_status_failed{namespace=~\"databases|odoo|garage\"}[24h])) or vector(0)",
+            "legendFormat": "Failed"
+          }]
+        },
+        {
+          "title": "Erfolgreiche Jobs (24h)",
+          "type": "stat",
+          "gridPos": {"h": 4, "w": 6, "x": 6, "y": 0},
+          "datasource": {"type": "prometheus", "uid": "prometheus"},
+          "fieldConfig": {
+            "defaults": {
+              "thresholds": {"mode": "absolute", "steps": [
+                {"color": "red", "value": null},
+                {"color": "green", "value": 1}
+              ]}
+            }
+          },
+          "targets": [{
+            "expr": "sum(increase(kube_job_status_succeeded{namespace=~\"databases|odoo|garage\"}[24h])) or vector(0)",
+            "legendFormat": "Succeeded"
+          }]
+        },
+        {
+          "title": "CronJob Naechster Lauf",
+          "type": "stat",
+          "gridPos": {"h": 4, "w": 12, "x": 12, "y": 0},
+          "datasource": {"type": "prometheus", "uid": "prometheus"},
+          "fieldConfig": {
+            "defaults": {
+              "unit": "dateTimeFromNow",
+              "thresholds": {"mode": "absolute", "steps": [
+                {"color": "green", "value": null}
+              ]}
+            }
+          },
+          "targets": [{
+            "expr": "kube_cronjob_next_schedule_time{namespace=~\"databases|odoo|garage\"} * 1000",
+            "legendFormat": "{{ namespace }}/{{ cronjob }}"
+          }],
+          "options": {"reduceOptions": {"calcs": ["lastNotNull"]}}
+        },
+        {
+          "title": "Backup CronJobs - Letzte Ausfuehrung",
+          "type": "table",
+          "gridPos": {"h": 8, "w": 24, "x": 0, "y": 4},
+          "datasource": {"type": "prometheus", "uid": "prometheus"},
+          "fieldConfig": {
+            "defaults": {"unit": "dateTimeFromNow"},
+            "overrides": [
+              {"matcher": {"id": "byName", "options": "Active"}, "properties": [{"id": "unit", "value": "short"}]},
+              {"matcher": {"id": "byName", "options": "Suspended"}, "properties": [{"id": "unit", "value": "short"}]}
+            ]
+          },
+          "targets": [
+            {
+              "expr": "kube_cronjob_status_last_schedule_time{namespace=~\"databases|odoo|garage\"} * 1000",
+              "legendFormat": "{{ namespace }}/{{ cronjob }}",
+              "format": "table",
+              "instant": true
+            }
+          ],
+          "transformations": [
+            {"id": "organize", "options": {
+              "excludeByName": {"Time": true, "__name__": true, "endpoint": true, "instance": true, "job": true, "service": true},
+              "renameByName": {"cronjob": "CronJob", "namespace": "Namespace", "Value": "Letzte Ausfuehrung"}
+            }}
+          ]
+        },
+        {
+          "title": "Job Erfolge/Fehler (7 Tage)",
+          "type": "timeseries",
+          "gridPos": {"h": 8, "w": 24, "x": 0, "y": 12},
+          "datasource": {"type": "prometheus", "uid": "prometheus"},
+          "fieldConfig": {
+            "defaults": {"custom": {"drawStyle": "bars", "stacking": {"mode": "normal"}}},
+            "overrides": [
+              {"matcher": {"id": "byRegexp", "options": ".*failed.*"}, "properties": [{"id": "color", "value": {"fixedColor": "red", "mode": "fixed"}}]},
+              {"matcher": {"id": "byRegexp", "options": ".*succeeded.*"}, "properties": [{"id": "color", "value": {"fixedColor": "green", "mode": "fixed"}}]}
+            ]
+          },
+          "targets": [
+            {
+              "expr": "sum by (cronjob) (increase(kube_job_status_succeeded{namespace=~\"databases|odoo|garage\"}[1d]))",
+              "legendFormat": "{{ cronjob }} succeeded"
+            },
+            {
+              "expr": "sum by (cronjob) (increase(kube_job_status_failed{namespace=~\"databases|odoo|garage\"}[1d]))",
+              "legendFormat": "{{ cronjob }} failed"
+            }
+          ],
+          "options": {"tooltip": {"mode": "multi"}}
+        }
+      ],
+      "schemaVersion": 39,
+      "tags": ["backup", "cronjob", "custom"],
+      "templating": {"list": []},
+      "time": {"from": "now-7d", "to": "now"},
+      "timepicker": {},
+      "timezone": "Europe/Berlin",
+      "title": "Backup Uebersicht",
+      "uid": "backup-overview-custom",
+      "version": 1
+    }

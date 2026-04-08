@@ -4,3 +4,4 @@ kind: Kustomization
 resources:
   - ../../../base/monitoring/alert-rules
   - ../../../base/monitoring/servicemonitors
+  - ../../../base/monitoring/dashboards
