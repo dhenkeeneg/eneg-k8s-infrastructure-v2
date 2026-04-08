@@ -42,7 +42,7 @@ loki:
   # Schema: TSDB + S3
   schemaConfig:
     configs:
-      - from: "2026-04-08"
+      - from: "2024-01-01"
         store: tsdb
         object_store: s3
         schema: v13
