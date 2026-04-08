@@ -1,0 +1,168 @@
+# kube-prometheus-stack Helm Chart Values - Basis-Konfiguration
+# Chart: prometheus-community/kube-prometheus-stack v83.0.0
+# Prometheus Operator v0.90.1
+#
+# HINWEIS: Umgebungsspezifische Werte (PVC-Groessen, SMTP, Teams Webhook,
+# Thanos objstore) werden per values-override.yaml im jeweiligen
+# Environment-Overlay definiert.
+
+# --- Global ---
+global:
+  rbac:
+    create: true
+
+# --- Prometheus ---
+prometheus:
+  prometheusSpec:
+    # Retention: 15 Tage lokal (aeltere Daten via Thanos auf S3)
+    retention: 15d
+    retentionSize: ""
+
+    # Thanos Sidecar aktivieren (fuer Long-Term-Storage auf S3)
+    thanos:
+      objectStorageConfig:
+        existingSecret:
+          name: thanos-objstore-config
+          key: objstore.yml
+
+    # Storage: Longhorn PVC (Groesse per Override)
+    storageSpec:
+      volumeClaimTemplate:
+        spec:
+          storageClassName: longhorn
+          accessModes: ["ReadWriteOnce"]
+          resources:
+            requests:
+              storage: 20Gi  # Default, Override pro Env
+
+    # Alle ServiceMonitors und PodMonitors aus allen Namespaces scrapen
+    serviceMonitorSelectorNilUsesHelmValues: false
+    podMonitorSelectorNilUsesHelmValues: false
+    ruleSelectorNilUsesHelmValues: false
+    serviceMonitorSelector: {}
+    podMonitorSelector: {}
+    ruleSelector: {}
+
+    # Resources (konservativ fuer DEV/TEST)
+    resources:
+      requests:
+        cpu: 250m
+        memory: 512Mi
+      limits:
+        memory: 2Gi
+
+# --- Grafana ---
+grafana:
+  # Admin-Passwort aus bestehendem Secret
+  admin:
+    existingSecret: grafana-admin-secret
+    userKey: admin-user
+    passwordKey: admin-password
+
+  # Kein Ingress via Chart (eigene IngressRoute in Schritt 8)
+  ingress:
+    enabled: false
+
+  # Persistence fuer Grafana DB (Dashboards, Users, etc.)
+  persistence:
+    enabled: true
+    storageClassName: longhorn
+    size: 5Gi
+
+  # Sidecar fuer automatisches Dashboard-Loading aus ConfigMaps
+  sidecar:
+    dashboards:
+      enabled: true
+      label: grafana_dashboard
+      labelValue: "1"
+      searchNamespace: ALL
+    datasources:
+      enabled: true
+
+
+  # Timezone
+  defaultDashboardsTimezone: Europe/Berlin
+
+  # Resources
+  resources:
+    requests:
+      cpu: 100m
+      memory: 128Mi
+    limits:
+      memory: 512Mi
+
+# --- AlertManager ---
+alertmanager:
+  enabled: true
+
+  alertmanagerSpec:
+    # Secret mit SMTP-Passwort und Teams Webhook URL mounten
+    secrets:
+      - alertmanager-credentials
+
+    resources:
+      requests:
+        cpu: 50m
+        memory: 64Mi
+      limits:
+        memory: 256Mi
+
+  # AlertManager Config wird per Environment-Override definiert
+  # (SMTP, Teams Webhook URLs sind umgebungsspezifisch)
+  # Siehe: environments/{env}/monitoring/values-override.yaml
+
+# --- Node Exporter ---
+nodeExporter:
+  enabled: true
+
+# --- Kube State Metrics ---
+kubeStateMetrics:
+  enabled: true
+
+# --- Prometheus Operator ---
+prometheusOperator:
+  resources:
+    requests:
+      cpu: 100m
+      memory: 128Mi
+    limits:
+      memory: 512Mi
+
+# --- Default Rules ---
+# Standard Kubernetes Alert-Regeln aktivieren
+defaultRules:
+  create: true
+  rules:
+    alertmanager: true
+    etcd: false  # K3s embedded etcd - separate Konfiguration
+    general: true
+    k8sContainerCpuUsageSecondsTotal: true
+    k8sContainerMemoryWorkingSetBytes: true
+    k8sPodOwner: true
+    kubeApiserverAvailability: true
+    kubeApiserverBurnrate: true
+    kubeApiserverHistogram: true
+    kubeApiserverSlos: true
+    kubeControllerManager: false  # K3s: nicht separat exponiert
+    kubePrometheusGeneral: true
+    kubePrometheusNodeRecording: true
+    kubeSchedulerAlerting: false  # K3s: nicht separat exponiert
+    kubeSchedulerRecording: false
+    kubeStateMetrics: true
+    kubelet: true
+    network: true
+    node: true
+    nodeExporterAlerting: true
+    nodeExporterRecording: true
+    prometheus: true
+    prometheusOperator: true
+
+# --- K3s-spezifisch ---
+# K3s exponiert kubeControllerManager und kubeScheduler
+# nicht als separate Endpunkte
+kubeControllerManager:
+  enabled: false
+kubeScheduler:
+  enabled: false
+kubeProxy:
+  enabled: false

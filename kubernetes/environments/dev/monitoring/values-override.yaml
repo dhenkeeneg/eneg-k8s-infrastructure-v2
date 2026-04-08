@@ -1,0 +1,54 @@
+# kube-prometheus-stack DEV Override
+# Environment: DEV (VLAN 180)
+# PVC-Groessen, AlertManager-Config (SMTP + Teams)
+
+# --- Prometheus DEV ---
+prometheus:
+  prometheusSpec:
+    storageSpec:
+      volumeClaimTemplate:
+        spec:
+          resources:
+            requests:
+              storage: 20Gi
+
+# --- AlertManager Config ---
+alertmanager:
+  config:
+    global:
+      resolve_timeout: 5m
+      smtp_from: "alertmanager-dev@eneg.de"
+      smtp_smarthost: "smtpout1.eneg.customers.hosting.zone:587"
+      smtp_auth_username: "d.henke@eneg.de"
+      smtp_auth_password_file: "/etc/alertmanager/secrets/alertmanager-credentials/smtp-password"
+      smtp_require_tls: true
+
+    route:
+      group_by: ['namespace', 'alertname']
+      group_wait: 30s
+      group_interval: 5m
+      repeat_interval: 4h
+      receiver: 'email-and-teams'
+      routes:
+        # Critical Alerts: kuerzeres Repeat-Intervall
+        - match:
+            severity: critical
+          receiver: 'email-and-teams'
+          repeat_interval: 1h
+
+    receivers:
+      - name: 'email-and-teams'
+        email_configs:
+          - to: 'd.henke@eneg.de'
+            send_resolved: true
+        webhook_configs:
+          - url_file: "/etc/alertmanager/secrets/alertmanager-credentials/teams-webhook-url"
+            send_resolved: true
+
+    inhibit_rules:
+      - source_matchers:
+          - severity = critical
+        target_matchers:
+          - severity = warning
+        equal: ['namespace', 'alertname']
+
