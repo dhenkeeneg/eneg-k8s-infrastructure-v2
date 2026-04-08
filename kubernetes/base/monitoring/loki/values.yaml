@@ -83,3 +83,27 @@ monitoring:
     enabled: false
   lokiCanary:
     enabled: false
+
+# --- Caches: Groesse an Cluster-Dimensionierung anpassen ---
+# Chart-Default ist 9.8Gi chunks-cache - viel zu gross fuer DEV/TEST!
+# Groessen per Environment-Override steuerbar.
+chunksCache:
+  enabled: true
+  allocatedMemory: 512
+  resources:
+    requests:
+      memory: 614Mi
+    limits:
+      memory: 614Mi
+resultsCache:
+  enabled: true
+  allocatedMemory: 256
+  resources:
+    requests:
+      memory: 307Mi
+    limits:
+      memory: 307Mi
+
+# Canary auch auf Top-Level deaktivieren (Chart-Struktur variiert)
+lokiCanary:
+  enabled: false
