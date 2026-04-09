@@ -326,7 +326,7 @@ spec:
               mountPath: /tmp
           resources:
             requests:
-              cpu: 500m
+              cpu: 200m
               memory: 1Gi
             limits:
               cpu: "2"
@@ -432,7 +432,7 @@ spec:
               value: "Europe/Berlin"
           resources:
             requests:
-              cpu: 250m
+              cpu: 100m
               memory: 512Mi
             limits:
               cpu: "1"

@@ -90,9 +90,15 @@ monitoring:
 chunksCache:
   enabled: true
   allocatedMemory: 512
+  resources:
+    requests:
+      cpu: 100m
 resultsCache:
   enabled: true
   allocatedMemory: 256
+  resources:
+    requests:
+      cpu: 100m
 
 # Canary bleibt aktiviert (Chart-Validierung erzwingt es fuer Helm Tests)
 lokiCanary:

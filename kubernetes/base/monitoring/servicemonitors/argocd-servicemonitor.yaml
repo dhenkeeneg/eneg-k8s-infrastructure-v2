@@ -16,6 +16,11 @@ spec:
   selector:
     matchLabels:
       app.kubernetes.io/part-of: argocd
+    matchExpressions:
+      - key: app.kubernetes.io/component
+        operator: NotIn
+        values:
+          - dex-server
   endpoints:
     - port: metrics
       interval: 30s
