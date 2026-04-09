@@ -792,16 +792,34 @@ kubernetes/
     Alte gnetId-Dateien bleiben auf dem PVC auch wenn der gnetId-Eintrag entfernt wird
     (manuell loeschen mit `kubectl exec ... rm`).
 
+13. **Thanos und Loki ServiceMonitors muessen explizit aktiviert werden:**
+    Thanos: `metrics.enabled: true` + `metrics.serviceMonitor.enabled: true`
+    Loki: `monitoring.serviceMonitor.enabled: true`
+    Ohne diese Einstellungen exportieren die Komponenten keine Metriken an Prometheus
+    und die zugehoerigen Dashboards bleiben leer.
+
+14. **Teams Webhook-Typ: "Webhookwarnungen an Kanal senden" (Power Automate Workflows).**
+    Der klassische "Incoming Webhook Connector" wurde Ende 2025 durch Power Automate ersetzt.
+    Payload-Format: Adaptive Cards (nicht das alte MessageCard-Format).
+    AlertManager config nutzt `webhook_configs` mit `url_file` fuer die Webhook-URL.
+
 ### Offene Punkte fuer TEST/PROD Rollout
 
-- CNPG PodMonitor in TEST/PROD aktivieren (enablePodMonitor: true)
-- S3 Secrets fuer TEST/PROD verschluesseln (Thanos + Loki pro Env)
-- AlertManager Secrets pro Env (SMTP + Teams Webhook URLs)
-- Grafana Admin Secret pro Env
-- PVC-Groessen anpassen: PROD Prometheus 50Gi, Loki 20Gi
-- Loki chunksCache/resultsCache fuer PROD groesser (2Gi/1Gi)
-- DNS-Eintraege bereits erstellt (grafana-test.eneg.de, grafana-prod.eneg.de)
-- Teams Channels bereits erstellt (eNeG K8s Test/Prod Monitoring)
+- CNPG PodMonitor in TEST/PROD aktivieren (enablePodMonitor: true in cnpg-shared + cnpg-erp)
+- S3 Secrets fuer TEST/PROD verschluesseln (Thanos + Loki + AlertManager + Grafana pro Env)
+- AlertManager config pro Env: SMTP-Absender (alertmanager-test@/alertmanager-prod@) + Teams Webhook URL
+- Grafana Admin Secret pro Env (eigenes Passwort)
+- Thanos objstore Secret pro Env (Bucket: k8s-test-thanos / k8s-prod-thanos)
+- Loki S3 Credentials pro Env (Bucket: k8s-test-loki / k8s-prod-loki)
+- **WICHTIG:** Loki base values enthalten DEV-spezifische S3-Bucket-Namen (`k8s-dev-loki`).
+  Fuer TEST/PROD muessen diese per values-override.yaml ueberschrieben werden.
+- PVC-Groessen: TEST gleich wie DEV (20Gi Prometheus, 10Gi Loki, 512MB/256MB Cache);
+  PROD groesser (50Gi Prometheus, 20Gi Loki, 2Gi/1Gi Cache)
+- Grafana Ingress pro Env: Certificate + IngressRoute (grafana-test.eneg.de / grafana-prod.eneg.de)
+- DNS-Eintraege bereits erstellt (alle 3 Envs)
+- Teams Channels bereits erstellt (eNeG K8s Test/Prod Monitoring) mit Webhook-URLs
+- Pro Env ~10 ArgoCD App-Definitionen erstellen (kopieren+anpassen von DEV)
+- Deployment-Reihenfolge: Secrets zuerst, dann Monitoring-Stack, dann Thanos/Loki/Alloy/Blackbox/Alerts/Ingress
 
 ---
 
