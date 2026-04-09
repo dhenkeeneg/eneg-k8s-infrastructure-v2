@@ -97,8 +97,21 @@ grafana:
       jsonData: {}
 
   # Grafana Dashboards von grafana.com per ID laden
-  # dashboardProviders wird NICHT ueberschrieben - Chart-Default
-  # nutzt Sidecar-Pfad /tmp/dashboards automatisch
+  # Provider zeigt auf Sidecar-Pfad /tmp/dashboards wo ALLE
+  # ConfigMap-Dashboards (gnetId + Custom) abgelegt werden
+  dashboardProviders:
+    dashboardproviders.yaml:
+      apiVersion: 1
+      providers:
+        - name: sidecar
+          orgId: 1
+          folder: "Custom"
+          type: file
+          disableDeletion: false
+          editable: true
+          options:
+            path: /tmp/dashboards
+
   dashboards:
     custom:
       # CloudNativePG Cluster Dashboard (offiziell)
