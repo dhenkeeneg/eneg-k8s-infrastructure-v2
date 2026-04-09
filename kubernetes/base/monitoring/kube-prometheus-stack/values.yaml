@@ -137,16 +137,13 @@ grafana:
         gnetId: 16888
         revision: 9
         datasource: Prometheus
-      # Thanos Overview Dashboard
-      thanos-overview:
-        gnetId: 12937
-        revision: 1
-        datasource: Prometheus
       # Loki Logs Dashboard
       loki-dashboard:
         gnetId: 13407
         revision: 1
         datasource: Prometheus
+      # Thanos Overview: gnetId 12937 entfernt (Job-Labels passen nicht zu bitnami Chart)
+      # TODO: Custom Thanos Dashboard erstellen oder alternatives gnetId finden
 
   # Timezone
   defaultDashboardsTimezone: Europe/Berlin
