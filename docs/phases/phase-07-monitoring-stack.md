@@ -714,12 +714,15 @@ kubernetes/
 
 ### Grafana Dashboards
 
-| Dashboard | Quelle | Ordner |
-|-----------|--------|--------|
-| Kubernetes Cluster, Node, Pod, PVC, ... | kube-prometheus-stack Default | Default |
-| CloudNativePG | grafana.com gnetId 20417 | Custom |
-| ArgoCD Operational Overview | grafana.com gnetId 19993 | Custom |
-| Longhorn | grafana.com gnetId 16888 | Custom |
+| Dashboard | Quelle | Ordner | Daten |
+|-----------|--------|--------|-------|
+| Kubernetes Cluster, Node, Pod, PVC, ... | kube-prometheus-stack Default | Default | ✅ |
+| CloudNativePG | grafana.com gnetId 20417 | Custom | ✅ |
+| ArgoCD Operational Overview | grafana.com gnetId 19993 | Custom | ✅ |
+| Longhorn | grafana.com gnetId 16888 | Custom | ✅ |
+| Loki 2.0 | grafana.com gnetId 13407 | Custom | ✅ |
+| Backup Uebersicht | Custom ConfigMap (backup-overview-dashboard-cm) | General | ✅ |
+| Thanos Overview | Custom ConfigMap (thanos-overview-dashboard-cm) | General | ✅ |
 
 ### Custom PrometheusRules (4)
 
@@ -777,6 +780,18 @@ kubernetes/
     es deaktiviert nur die bitnami-eigene Vendor-Lock-in-Pruefung, keine K8s-Security.
     Das offizielle quay.io Thanos Image ist vom CNCF-Projekt signiert und maintained.
 
+11. **Thanos Dashboard gnetId 12937 funktioniert nicht mit bitnami Chart** —
+    nutzt veraltetes Grafana `rows`-Format (2176 Zeilen, 70KB) und inkompatible Variable-Selektoren.
+    Fix: Kompaktes Custom-Dashboard (160 Zeilen) als ConfigMap mit angepassten Job-Labels
+    und Queries direkt aus dem offiziellen Thanos-Dashboard-Repository.
+
+12. **gnetId-Dashboards und Sidecar-ConfigMap-Dashboards nutzen unterschiedliche Pfade:**
+    gnetId → `/var/lib/grafana/dashboards/custom/` (download-dashboards init-container),
+    ConfigMap → `/tmp/dashboards/` (grafana-sc-dashboard Sidecar).
+    Beide Pfade muessen als separate dashboardProviders konfiguriert werden.
+    Alte gnetId-Dateien bleiben auf dem PVC auch wenn der gnetId-Eintrag entfernt wird
+    (manuell loeschen mit `kubectl exec ... rm`).
+
 ### Offene Punkte fuer TEST/PROD Rollout
 
 - CNPG PodMonitor in TEST/PROD aktivieren (enablePodMonitor: true)
@@ -791,4 +806,4 @@ kubernetes/
 ---
 
 *Erstellt: 08.04.2026*
-*Letzte Aktualisierung: 08.04.2026*
+*Letzte Aktualisierung: 09.04.2026*
