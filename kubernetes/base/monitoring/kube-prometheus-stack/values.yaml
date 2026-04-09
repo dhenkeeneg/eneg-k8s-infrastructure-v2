@@ -142,8 +142,8 @@ grafana:
         gnetId: 13407
         revision: 1
         datasource: Prometheus
-      # Thanos Overview: gnetId 12937 entfernt (Job-Labels passen nicht zu bitnami Chart)
-      # TODO: Custom Thanos Dashboard erstellen oder alternatives gnetId finden
+      # Thanos Overview: Als Custom ConfigMap Dashboard deployed
+      # (offizielles gnetId 12937 nutzt veraltetes Grafana rows-Format)
 
   # Timezone
   defaultDashboardsTimezone: Europe/Berlin

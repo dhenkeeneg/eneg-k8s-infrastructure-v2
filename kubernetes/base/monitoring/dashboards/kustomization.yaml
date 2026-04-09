@@ -3,3 +3,4 @@ kind: Kustomization
 
 resources:
   - backup-overview-dashboard-cm.yaml
+  - thanos-overview-dashboard-cm.yaml

@@ -1,0 +1,160 @@
+---
+# ConfigMap: Thanos Overview Dashboard (Custom)
+# Basiert auf offiziellen Thanos-Queries, angepasst an bitnami Chart
+# Panels: Query Rate/Errors/Latency, Store, Compactor, S3 Operations
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: thanos-overview-dashboard
+  namespace: monitoring
+  labels:
+    grafana_dashboard: "1"
+  annotations:
+    grafana_folder: "Custom"
+data:
+  thanos-overview.json: |
+    {
+      "annotations": {"list": []},
+      "editable": true,
+      "id": null,
+      "links": [],
+      "panels": [
+        {
+          "title": "Thanos Component Status",
+          "type": "stat",
+          "gridPos": {"h": 4, "w": 24, "x": 0, "y": 0},
+          "datasource": {"type": "prometheus", "uid": "prometheus"},
+          "fieldConfig": {
+            "defaults": {
+              "mappings": [{"options": {"0": {"text": "DOWN", "color": "red"}, "1": {"text": "UP", "color": "green"}}, "type": "value"}],
+              "thresholds": {"mode": "absolute", "steps": [{"color": "red", "value": null}, {"color": "green", "value": 1}]}
+            }
+          },
+          "targets": [{
+            "expr": "up{job=~\"thanos-query|thanos-compactor|thanos-storegateway\"}",
+            "legendFormat": "{{ job }}"
+          }],
+          "options": {"reduceOptions": {"calcs": ["lastNotNull"]}, "colorMode": "background"}
+        },
+        {
+          "title": "Query - HTTP Request Rate",
+          "type": "timeseries",
+          "gridPos": {"h": 7, "w": 8, "x": 0, "y": 4},
+          "datasource": {"type": "prometheus", "uid": "prometheus"},
+          "targets": [{
+            "expr": "sum by (handler, code) (rate(http_requests_total{job=\"thanos-query\"}[5m]))",
+            "legendFormat": "{{ handler }} {{ code }}"
+          }],
+          "fieldConfig": {"defaults": {"custom": {"drawStyle": "line", "fillOpacity": 10, "stacking": {"mode": "normal"}}}}
+        },
+        {
+          "title": "Query - Error Rate %",
+          "type": "timeseries",
+          "gridPos": {"h": 7, "w": 8, "x": 8, "y": 4},
+          "datasource": {"type": "prometheus", "uid": "prometheus"},
+          "targets": [{
+            "expr": "sum(rate(http_requests_total{job=\"thanos-query\",code=~\"5..\"}[5m])) / sum(rate(http_requests_total{job=\"thanos-query\"}[5m])) * 100 OR vector(0)",
+            "legendFormat": "Error %"
+          }],
+          "fieldConfig": {"defaults": {"unit": "percent", "custom": {"drawStyle": "line", "fillOpacity": 10}, "thresholds": {"mode": "absolute", "steps": [{"color": "green", "value": null}, {"color": "red", "value": 5}]}}}
+        },
+        {
+          "title": "Query - Latency P99",
+          "type": "timeseries",
+          "gridPos": {"h": 7, "w": 8, "x": 16, "y": 4},
+          "datasource": {"type": "prometheus", "uid": "prometheus"},
+          "targets": [{
+            "expr": "histogram_quantile(0.99, sum by (le) (rate(http_request_duration_seconds_bucket{job=\"thanos-query\",handler=\"query\"}[5m])))",
+            "legendFormat": "query P99"
+          },
+          {
+            "expr": "histogram_quantile(0.99, sum by (le) (rate(http_request_duration_seconds_bucket{job=\"thanos-query\",handler=\"query_range\"}[5m])))",
+            "legendFormat": "query_range P99"
+          }],
+          "fieldConfig": {"defaults": {"unit": "s", "custom": {"drawStyle": "line", "fillOpacity": 5}}}
+        },
+        {
+          "title": "Store Gateway - gRPC Request Rate",
+          "type": "timeseries",
+          "gridPos": {"h": 7, "w": 8, "x": 0, "y": 11},
+          "datasource": {"type": "prometheus", "uid": "prometheus"},
+          "targets": [{
+            "expr": "sum by (grpc_method, grpc_code) (rate(grpc_server_handled_total{job=\"thanos-storegateway\"}[5m]))",
+            "legendFormat": "{{ grpc_method }} {{ grpc_code }}"
+          }],
+          "fieldConfig": {"defaults": {"custom": {"drawStyle": "line", "fillOpacity": 10, "stacking": {"mode": "normal"}}}}
+        },
+        {
+          "title": "Store Gateway - Blocks Loaded",
+          "type": "stat",
+          "gridPos": {"h": 7, "w": 8, "x": 8, "y": 11},
+          "datasource": {"type": "prometheus", "uid": "prometheus"},
+          "targets": [{
+            "expr": "thanos_bucket_store_blocks_loaded{job=\"thanos-storegateway\"}",
+            "legendFormat": "Blocks"
+          }],
+          "fieldConfig": {"defaults": {"thresholds": {"mode": "absolute", "steps": [{"color": "blue", "value": null}]}}},
+          "options": {"reduceOptions": {"calcs": ["lastNotNull"]}}
+        },
+        {
+          "title": "Store Gateway - Series Fetched/s",
+          "type": "timeseries",
+          "gridPos": {"h": 7, "w": 8, "x": 16, "y": 11},
+          "datasource": {"type": "prometheus", "uid": "prometheus"},
+          "targets": [{
+            "expr": "rate(thanos_bucket_store_series_data_fetched_sum{job=\"thanos-storegateway\"}[5m])",
+            "legendFormat": "series/s"
+          }],
+          "fieldConfig": {"defaults": {"custom": {"drawStyle": "line", "fillOpacity": 10}}}
+        },
+        {
+          "title": "Compactor - Compactions",
+          "type": "timeseries",
+          "gridPos": {"h": 7, "w": 8, "x": 0, "y": 18},
+          "datasource": {"type": "prometheus", "uid": "prometheus"},
+          "targets": [
+            {
+              "expr": "sum(rate(thanos_compact_group_compactions_total{job=\"thanos-compactor\"}[5m]))",
+              "legendFormat": "compactions/s"
+            },
+            {
+              "expr": "sum(rate(thanos_compact_group_compactions_failures_total{job=\"thanos-compactor\"}[5m]))",
+              "legendFormat": "failures/s"
+            }
+          ],
+          "fieldConfig": {"defaults": {"custom": {"drawStyle": "line", "fillOpacity": 10}},
+            "overrides": [{"matcher": {"id": "byName", "options": "failures/s"}, "properties": [{"id": "color", "value": {"fixedColor": "red", "mode": "fixed"}}]}]}
+        },
+        {
+          "title": "S3 Object Store - Operations/s",
+          "type": "timeseries",
+          "gridPos": {"h": 7, "w": 8, "x": 8, "y": 18},
+          "datasource": {"type": "prometheus", "uid": "prometheus"},
+          "targets": [{
+            "expr": "sum by (operation) (rate(thanos_objstore_bucket_operations_total[5m]))",
+            "legendFormat": "{{ operation }}"
+          }],
+          "fieldConfig": {"defaults": {"custom": {"drawStyle": "line", "fillOpacity": 10, "stacking": {"mode": "normal"}}}}
+        },
+        {
+          "title": "S3 Object Store - Failures/s",
+          "type": "timeseries",
+          "gridPos": {"h": 7, "w": 8, "x": 16, "y": 18},
+          "datasource": {"type": "prometheus", "uid": "prometheus"},
+          "targets": [{
+            "expr": "sum by (operation) (rate(thanos_objstore_bucket_operation_failures_total[5m]))",
+            "legendFormat": "{{ operation }} failures"
+          }],
+          "fieldConfig": {"defaults": {"custom": {"drawStyle": "line", "fillOpacity": 10}, "color": {"fixedColor": "red", "mode": "fixed"}}}
+        }
+      ],
+      "schemaVersion": 39,
+      "tags": ["thanos", "s3", "custom"],
+      "templating": {"list": []},
+      "time": {"from": "now-6h", "to": "now"},
+      "timepicker": {},
+      "timezone": "Europe/Berlin",
+      "title": "Thanos Overview",
+      "uid": "thanos-overview-custom",
+      "version": 1
+    }
