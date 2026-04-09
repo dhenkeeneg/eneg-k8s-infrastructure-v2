@@ -2,6 +2,13 @@
 # Environment: DEV (VLAN 180)
 # PVC-Groessen, AlertManager-Config (SMTP + Teams)
 
+# --- Default Rules: DEV-spezifische Anpassungen ---
+# KubeCPUOvercommit Default deaktiviert, Custom-Version mit hoeherem Threshold
+# in alert-rules (erlaubt 0.5 CPU Overcommit fuer DEV mit 3x4 vCPU Nodes)
+defaultRules:
+  disabled:
+    KubeCPUOvercommit: true
+
 # --- Prometheus DEV ---
 prometheus:
   prometheusSpec:

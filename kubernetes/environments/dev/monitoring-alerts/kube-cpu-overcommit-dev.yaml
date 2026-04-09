@@ -1,0 +1,33 @@
+---
+# PrometheusRule: KubeCPUOvercommit (DEV-Anpassung)
+# Ersetzt die Default-Rule mit hoeherem Threshold fuer DEV (3x4 vCPU Nodes)
+# Erlaubt 0.5 CPU Overcommit statt 0 (Default)
+apiVersion: monitoring.coreos.com/v1
+kind: PrometheusRule
+metadata:
+  name: kube-cpu-overcommit-dev
+  namespace: monitoring
+  labels:
+    app: kube-prometheus-stack
+    release: kube-prometheus-stack
+spec:
+  groups:
+    - name: kube-cpu-overcommit-dev.rules
+      rules:
+        - alert: KubeCPUOvercommit
+          expr: |
+            (
+              (sum(namespace_cpu:kube_pod_container_resource_requests:sum)
+              - sum(kube_node_status_allocatable{resource="cpu"}))
+              > 0.5
+            )
+            and
+            (
+              count(kube_node_info) < 4
+            )
+          for: 10m
+          labels:
+            severity: warning
+          annotations:
+            summary: "Cluster CPU Requests uebersteigen Node-Failure-Toleranz um mehr als 0.5 vCPU"
+            description: "CPU Requests uebersteigen die verfuegbare Kapazitaet bei Ausfall eines Nodes um {{ $value | printf \"%.2f\" }} vCPU."
