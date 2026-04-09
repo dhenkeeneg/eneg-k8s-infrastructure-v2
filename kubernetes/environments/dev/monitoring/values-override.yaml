@@ -19,7 +19,7 @@ alertmanager:
       resolve_timeout: 5m
       smtp_from: "alertmanager-dev@eneg.de"
       smtp_smarthost: "smtpout1.eneg.customers.hosting.zone:587"
-      smtp_auth_username: "d.henke@eneg.de"
+      smtp_auth_username: "smtpenge1"
       smtp_auth_password_file: "/etc/alertmanager/secrets/alertmanager-credentials/smtp-password"
       smtp_require_tls: true
 
