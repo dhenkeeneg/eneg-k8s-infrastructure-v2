@@ -1,0 +1,19 @@
+---
+# Service: prometheus-msteams
+# AlertManager sendet Webhooks an http://prometheus-msteams:2000/alertmanager
+apiVersion: v1
+kind: Service
+metadata:
+  name: prometheus-msteams
+  namespace: monitoring
+  labels:
+    app: prometheus-msteams
+spec:
+  type: ClusterIP
+  ports:
+    - port: 2000
+      targetPort: http
+      protocol: TCP
+      name: http
+  selector:
+    app: prometheus-msteams

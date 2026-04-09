@@ -1,0 +1,53 @@
+---
+# Deployment: prometheus-msteams
+# Konvertiert AlertManager Webhooks zu Microsoft Teams Adaptive Cards
+# Unterstuetzt Power Automate Workflow Webhooks
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: prometheus-msteams
+  namespace: monitoring
+  labels:
+    app: prometheus-msteams
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: prometheus-msteams
+  template:
+    metadata:
+      labels:
+        app: prometheus-msteams
+    spec:
+      containers:
+        - name: prometheus-msteams
+          image: ghcr.io/stakater/prometheus-msteams:v1.5.4
+          ports:
+            - containerPort: 2000
+              name: http
+          env:
+            - name: TEAMS_INCOMING_WEBHOOK_URL
+              valueFrom:
+                secretKeyRef:
+                  name: alertmanager-credentials
+                  key: teams-webhook-url
+            - name: TEAMS_REQUEST_URI
+              value: "alertmanager"
+          resources:
+            requests:
+              cpu: 10m
+              memory: 32Mi
+            limits:
+              memory: 64Mi
+          livenessProbe:
+            httpGet:
+              path: /healthz
+              port: http
+            initialDelaySeconds: 5
+            periodSeconds: 30
+          readinessProbe:
+            httpGet:
+              path: /healthz
+              port: http
+            initialDelaySeconds: 5
+            periodSeconds: 10
