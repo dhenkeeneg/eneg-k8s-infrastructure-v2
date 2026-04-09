@@ -10,8 +10,8 @@
 
 | Kanal | Empfaenger | Typ |
 |-------|-----------|-----|
-| E-Mail | d.henke@eneg.de | SMTP via smtpout1.eneg.customers.hosting.zone:587 |
-| Teams | eNeG K8s Dev v2 Monitoring | Power Automate Webhook (Adaptive Cards) |
+| E-Mail | d.henke@eneg.de | SMTP via smtpout1.eneg.customers.hosting.zone:587 (User: smtpenge1) |
+| Teams | eNeG K8s Dev v2 Monitoring | Power Automate Webhook via prometheus-msteams Adapter (Adaptive Cards) |
 
 ### Routing-Regeln
 

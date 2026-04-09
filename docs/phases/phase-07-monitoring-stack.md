@@ -690,7 +690,7 @@ kubernetes/
 | monitoring | Helm (Multi-Source) | ✅ Synced+Healthy |
 | monitoring-secrets | Kustomize (KSOPS) | ✅ Synced+Healthy |
 | monitoring-ingress | Kustomize | ✅ Synced+Healthy |
-| monitoring-alerts | Kustomize | ✅ Synced+Healthy |
+| monitoring-alerts | Kustomize (Alert Rules + ServiceMonitors + Dashboards + prometheus-msteams) | ✅ Synced+Healthy |
 | thanos | Helm (Multi-Source) | ✅ Synced+Healthy |
 | loki | Helm (Multi-Source) | ✅ Synced+Healthy |
 | loki-secrets | Kustomize (KSOPS) | ✅ Synced+Healthy |
@@ -801,7 +801,16 @@ kubernetes/
 14. **Teams Webhook-Typ: "Webhookwarnungen an Kanal senden" (Power Automate Workflows).**
     Der klassische "Incoming Webhook Connector" wurde Ende 2025 durch Power Automate ersetzt.
     Payload-Format: Adaptive Cards (nicht das alte MessageCard-Format).
-    AlertManager config nutzt `webhook_configs` mit `url_file` fuer die Webhook-URL.
+    AlertManager kann NICHT direkt an Power Automate Webhooks senden — es braucht einen Adapter.
+
+15. **prometheus-msteams Adapter noetig fuer Teams-Alerts.**
+    AlertManager → prometheus-msteams:2000/alertmanager → Teams Webhook (Adaptive Card).
+    stakater/prometheus-msteams (v1.5.4) unterstuetzt Power Automate nativ.
+    GHCR-Package ist privat (401) — Image muss selbst gebaut werden:
+    `git clone github.com/stakater/prometheus-msteams`, `docker buildx build --platform linux/amd64`,
+    Push nach `ghcr.io/dhenkeeneg/prometheus-msteams:v1.5.4`.
+    Deployment braucht `imagePullSecrets: ghcr-pull-secret` im monitoring Namespace.
+    Health-Probes: tcpSocket statt httpGet (kein /healthz Endpoint im stakater Build).
 
 ### Offene Punkte fuer TEST/PROD Rollout
 

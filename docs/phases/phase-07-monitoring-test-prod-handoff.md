@@ -49,7 +49,8 @@ kubernetes/environments/{test|prod}/
 │   ├── secret-generator.yaml
 │   ├── alertmanager-credentials.enc.yaml   # SOPS (SMTP-PW + Teams-URL)
 │   ├── grafana-admin-secret.enc.yaml       # SOPS (Admin-PW)
-│   └── thanos-objstore-config.enc.yaml     # SOPS (S3 Bucket + Keys)
+│   ├── thanos-objstore-config.enc.yaml     # SOPS (S3 Bucket + Keys)
+│   └── ghcr-pull-secret.enc.yaml           # SOPS (GHCR Pull Secret fuer prometheus-msteams)
 ├── monitoring-loki/
 │   └── values-override.yaml          # S3-Bucket-Name + PVC-Groesse
 ├── monitoring-loki-secrets/
@@ -233,6 +234,10 @@ Alle DEV-Dateien koennen 1:1 kopiert und angepasst werden:
 - **StatefulSet Pods** (Thanos Store Gateway, Loki) brauchen `kubectl delete pod` fuer Spec-Updates
 - **git pull --rebase** noetig wenn von k8s-mgmt-10 und lokalem Rechner parallel gepusht wird
 - **ArgoCD synct alle 3 Minuten** — fuer schnellere Updates: ArgoCD UI → App → Refresh → Sync
+- **prometheus-msteams:** Image muss als `ghcr.io/dhenkeeneg/prometheus-msteams:v1.5.4` referenziert werden
+  (stakater GHCR-Package ist privat). Braucht `imagePullSecrets: ghcr-pull-secret` pro Env.
+  GHCR Pull Secret muss im monitoring Namespace pro Env erstellt werden (gleicher PAT wie idoit).
+- **SMTP auth_username:** `smtpenge1` (NICHT d.henke@eneg.de)
 
 ---
 
