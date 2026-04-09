@@ -812,6 +812,18 @@ kubernetes/
     Deployment braucht `imagePullSecrets: ghcr-pull-secret` im monitoring Namespace.
     Health-Probes: tcpSocket statt httpGet (kein /healthz Endpoint im stakater Build).
 
+16. **DEV App-Deployments sind eigenstaendige Kopien, keine Kustomize-Overlays.**
+    `environments/dev/apps/*/deployment.yaml` sind vollstaendige Dateien, nicht Overlays auf base.
+    Aenderungen in `base/apps/*/` haben KEINE Wirkung — ArgoCD liest nur die Env-Dateien.
+    base-Dateien dienen nur als Kopiervorlage fuer neue Environments.
+    Gleiches Muster fuer TEST und PROD.
+
+17. **KubeCPUOvercommit Threshold in DEV angepasst.**
+    Default-Alert (> 0 CPU Overcommit) deaktiviert fuer DEV.
+    Custom DEV-Version feuert erst bei > 0.5 CPU Overcommit.
+    DEV hat 3x4 vCPU = 12 total, ~8.1 Requests nach Reduktion.
+    TEST/PROD behalten den Default-Alert.
+
 ### Offene Punkte fuer TEST/PROD Rollout
 
 - CNPG PodMonitor in TEST/PROD aktivieren (enablePodMonitor: true in cnpg-shared + cnpg-erp)
