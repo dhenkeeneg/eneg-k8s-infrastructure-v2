@@ -879,19 +879,19 @@ extraArgs:
 
 ### Phasen-Uebersicht
 
-| Phase | Beschreibung | Dauer | Status |
-|-------|--------------|-------|--------|
-| 0 | Vorbereitung & Workstation Setup | 1-2 Tage | ✅ Abgeschlossen (04.02.2026) |
-| 1 | Ubuntu-Template & VM-Automatisierung | 2-3 Tage | ✅ Abgeschlossen (06.02.2026) |
-| 2 | K3s DEV-Cluster | 1-2 Tage | ✅ Abgeschlossen (09.02.2026) |
-| 3 | GitOps-Fundament (ArgoCD, SOPS, GitHub) | 2-3 Tage | ✅ Abgeschlossen (10.02.2026) |
-| 4 | Kubernetes-Basis (MetalLB, Traefik, Cert-Manager, Longhorn) | 2-3 Tage | ✅ Abgeschlossen (18.02.2026) |
-| 5 | Datenbank-Cluster (CloudNativePG, MariaDB Galera) | 2-3 Tage | ✅ Abgeschlossen (25.02.2026) |
-| 6 | Pilot-Apps (Garage S3, n8n, Keycloak, i-doit, it-info-versand, OpenProject, Odoo) | 3-5 Tage | ✅ Abgeschlossen (26.03.2026) |
-| 7 | Monitoring-Stack (inkl. Backup-Health, WAL-Volume, S3-Endpoint Alerting) | 2-3 Tage | 🔲 Offen |
-| 8 | TEST & PROD Rollout | 2-3 Tage | ✅ Abgeschlossen (30.03.2026) |
-| 9 | Security & Haertung | 3-5 Tage | 🔲 Offen |
-| 10 | Backup & Dokumentation | 2-3 Tage | 🔲 Offen |
+| Phase | Beschreibung                                                                      | Dauer    | Status                       |
+| ----- | --------------------------------------------------------------------------------- | -------- | ---------------------------- |
+| 0     | Vorbereitung & Workstation Setup                                                  | 1-2 Tage | ✅ Abgeschlossen (04.02.2026) |
+| 1     | Ubuntu-Template & VM-Automatisierung                                              | 2-3 Tage | ✅ Abgeschlossen (06.02.2026) |
+| 2     | K3s DEV-Cluster                                                                   | 1-2 Tage | ✅ Abgeschlossen (09.02.2026) |
+| 3     | GitOps-Fundament (ArgoCD, SOPS, GitHub)                                           | 2-3 Tage | ✅ Abgeschlossen (10.02.2026) |
+| 4     | Kubernetes-Basis (MetalLB, Traefik, Cert-Manager, Longhorn)                       | 2-3 Tage | ✅ Abgeschlossen (18.02.2026) |
+| 5     | Datenbank-Cluster (CloudNativePG, MariaDB Galera)                                 | 2-3 Tage | ✅ Abgeschlossen (25.02.2026) |
+| 6     | Pilot-Apps (Garage S3, n8n, Keycloak, i-doit, it-info-versand, OpenProject, Odoo) | 3-5 Tage | ✅ Abgeschlossen (26.03.2026) |
+| 7     | Monitoring-Stack (inkl. Backup-Health, WAL-Volume, S3-Endpoint Alerting)          | 2-3 Tage | 🔲 Offen                     |
+| 8     | TEST & PROD Rollout                                                               | 2-3 Tage | ✅ Abgeschlossen (30.03.2026) |
+| 9     | Security & Haertung                                                               | 3-5 Tage | 🔲 Offen                     |
+| 10    | Backup & Dokumentation                                                            | 2-3 Tage | 🔲 Offen                     |
 
 ---
 

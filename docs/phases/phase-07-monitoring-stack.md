@@ -66,14 +66,13 @@ Aufbau eines vollstaendigen Monitoring- und Alerting-Stacks fuer alle drei Umgeb
 
 | Komponente | Helm Chart | Chart-Version | App-Version | Quelle |
 |------------|------------|---------------|-------------|--------|
-| Prometheus + Grafana + AlertManager | kube-prometheus-stack | ~82.x (latest stable) | Prometheus 3.x, Grafana 11.x | prometheus-community |
-| Thanos | bitnami/thanos | latest stable | Thanos 0.37.x | bitnami |
-| Loki | grafana/loki | ~6.55.x | Loki 3.7.x | grafana (community) |
-| Grafana Alloy | grafana/alloy | latest stable | Alloy 1.x | grafana |
-| Blackbox Exporter | prometheus-blackbox-exporter | ~11.x | 0.26.x | prometheus-community |
+| Prometheus + Grafana + AlertManager | kube-prometheus-stack | **83.0.0** | v0.90.1 | prometheus-community |
+| Thanos | bitnami/thanos | **17.3.1** | 0.39.2 | bitnami |
+| Loki | grafana/loki | **6.55.0** | 3.6.7 | grafana |
+| Grafana Alloy | grafana/alloy | **1.7.0** | v1.15.0 | grafana |
+| Blackbox Exporter | prometheus-blackbox-exporter | **11.9.1** | v0.28.0 | prometheus-community |
 
-**Versionsabstimmung:** Exakte Versionen werden vor Implementierung per `helm search` auf
-k8s-mgmt-10 ermittelt und hier dokumentiert.
+**Versionen abgestimmt am 08.04.2026** auf k8s-mgmt-10 via `helm search repo`.
 
 ---
 
