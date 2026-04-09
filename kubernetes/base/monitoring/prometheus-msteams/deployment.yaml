@@ -21,7 +21,7 @@ spec:
     spec:
       containers:
         - name: prometheus-msteams
-          image: ghcr.io/stakater/prometheus-msteams:v1.5.4
+          image: ghcr.io/dhenkeeneg/prometheus-msteams:v1.5.4
           ports:
             - containerPort: 2000
               name: http
