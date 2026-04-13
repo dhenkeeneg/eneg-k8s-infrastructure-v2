@@ -1,0 +1,4 @@
+# Blackbox Exporter TEST Override
+# Environment: TEST (VLAN 179)
+# Keine TEST-spezifischen Aenderungen noetig.
+# NAS10 S3 Endpoint ist fuer alle Environments identisch.

@@ -1,0 +1,7 @@
+# Thanos TEST Override
+# Environment: TEST (VLAN 179)
+# Minimales Override - base values sind bereits passend dimensioniert.
+# In PROD ggf. andere PVC-Groessen oder Ressourcen.
+
+# Keine Aenderungen noetig fuer TEST - base values gelten.
+# Datei existiert fuer Konsistenz und spaetere Anpassungen.
