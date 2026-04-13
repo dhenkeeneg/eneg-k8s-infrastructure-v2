@@ -37,11 +37,27 @@ alertmanager:
       repeat_interval: 4h
       receiver: 'email-and-teams'
       routes:
+        # Watchdog: Nur 1x taeglich um 07:00 MESZ (DeadMansSwitch)
+        - match:
+            alertname: Watchdog
+          receiver: 'email-and-teams'
+          repeat_interval: 24h
+          active_time_intervals:
+            - morning-report
         # Critical Alerts: kuerzeres Repeat-Intervall
         - match:
             severity: critical
           receiver: 'email-and-teams'
           repeat_interval: 1h
+
+    # Zeitfenster: 07:00-07:10 Uhr deutscher Zeit
+    time_intervals:
+      - name: morning-report
+        time_intervals:
+          - times:
+              - start_time: '07:00'
+                end_time: '07:10'
+            location: 'Europe/Berlin'
 
     receivers:
       - name: 'email-and-teams'
