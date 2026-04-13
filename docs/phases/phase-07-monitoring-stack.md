@@ -1,8 +1,9 @@
 # Phase 7: Monitoring-Stack
 
-**Status:** In Bearbeitung (DEV abgeschlossen)
+**Status:** In Bearbeitung (DEV + TEST abgeschlossen, PROD offen)
 **Beginn:** 08.04.2026
 **DEV fertig:** 08.04.2026
+**TEST fertig:** 13.04.2026
 **Voraussetzung:** Phase 8c (PROD Rollout) abgeschlossen
 
 ---
@@ -838,25 +839,82 @@ kubernetes/
     `repeat_interval: 24h` verhindert mehrfaches Senden am Tag.
     Alle anderen Alerts (Warning/Critical) bleiben unveraendert.
 
-### Offene Punkte fuer TEST/PROD Rollout
+20. **CNPG `enablePodMonitor` + ServerSideApply: Operator ueberschreibt Feldwert.**
+    Wenn der CNPG-Operator die `monitoring`-Sektion initial mit Defaults erstellt hat
+    (bevor das Feld im Git-Manifest stand), behaelt der Operator die SSA Field Ownership.
+    ArgoCD setzt `enablePodMonitor: true`, der Operator ueberschreibt sofort auf `false`.
+    In DEV war das Feld von Anfang an im Manifest (mit `false`), daher hatte ArgoCD
+    die Ownership und der Wechsel auf `true` funktionierte.
+    **Workaround:** Eigenstaendige PodMonitor-CRDs in
+    `environments/{env}/monitoring-alerts/cnpg-podmonitors.yaml` erstellen,
+    deployed ueber die monitoring-alerts ArgoCD App.
+    Betrifft: TEST und PROD (DEV nutzt die Operator-Funktion).
 
-- CNPG PodMonitor in TEST/PROD aktivieren (enablePodMonitor: true in cnpg-shared + cnpg-erp)
-- S3 Secrets fuer TEST/PROD verschluesseln (Thanos + Loki + AlertManager + Grafana pro Env)
-- AlertManager config pro Env: SMTP-Absender (alertmanager-test@/alertmanager-prod@) + Teams Webhook URL
-- Grafana Admin Secret pro Env (eigenes Passwort)
-- Thanos objstore Secret pro Env (Bucket: k8s-test-thanos / k8s-prod-thanos)
-- Loki S3 Credentials pro Env (Bucket: k8s-test-loki / k8s-prod-loki)
-- **WICHTIG:** Loki base values enthalten DEV-spezifische S3-Bucket-Namen (`k8s-dev-loki`).
-  Fuer TEST/PROD muessen diese per values-override.yaml ueberschrieben werden.
-- PVC-Groessen: TEST gleich wie DEV (20Gi Prometheus, 10Gi Loki, 512MB/256MB Cache);
-  PROD groesser (50Gi Prometheus, 20Gi Loki, 2Gi/1Gi Cache)
-- Grafana Ingress pro Env: Certificate + IngressRoute (grafana-test.eneg.de / grafana-prod.eneg.de)
-- DNS-Eintraege bereits erstellt (alle 3 Envs)
-- Teams Channels bereits erstellt (eNeG K8s Test/Prod Monitoring) mit Webhook-URLs
-- Pro Env ~10 ArgoCD App-Definitionen erstellen (kopieren+anpassen von DEV)
-- Deployment-Reihenfolge: Secrets zuerst, dann Monitoring-Stack, dann Thanos/Loki/Alloy/Blackbox/Alerts/Ingress
+### Offene Punkte fuer PROD Rollout
+
+- PROD Monitoring-Stack Overlays erstellen (gleiche Struktur wie TEST)
+- PROD-spezifisch: Groessere PVC (50Gi Prometheus, 20Gi Loki, 2Gi/1Gi Cache)
+- S3 Secrets fuer PROD verschluesseln (s3-k8s-prod Account)
+- AlertManager SMTP-From: alertmanager-prod@eneg.de + Prod Teams Webhook URL
+- Grafana Admin Secret (eigenes PROD-Passwort)
+- Grafana Ingress: grafana-prod.eneg.de
+- CNPG PodMonitors als eigenstaendige CRDs (SSA-Workaround, wie TEST)
+- Deployment-Reihenfolge: Dateien erstellen → Commit → Secrets → Verify
+
+---
+
+## 16. TEST Implementierung — Ergebnisse (13.04.2026)
+
+### Deployed Components (identisch zu DEV)
+
+| Komponente | Chart-Version | App-Version | Status |
+|------------|---------------|-------------|--------|
+| kube-prometheus-stack | 83.0.0 | v0.90.1 | Synced+Healthy |
+| Thanos (bitnami) | 17.3.1 | v0.39.2 | Synced+Healthy |
+| Loki (grafana) | 6.55.0 | 3.6.7 | Synced+Healthy |
+| Grafana Alloy | 1.7.0 | v1.15.0 | Synced+Healthy |
+| Blackbox Exporter | 11.9.1 | v0.28.0 | Synced+Healthy |
+
+### ArgoCD Apps (9 neue Apps)
+
+| App | Typ | Status |
+|-----|-----|--------|
+| monitoring | Helm (Multi-Source) | Synced+Healthy |
+| monitoring-secrets | Kustomize (KSOPS) | Synced+Healthy |
+| monitoring-ingress | Kustomize | Synced+Healthy |
+| monitoring-alerts | Kustomize (Alert Rules + ServiceMonitors + Dashboards + prometheus-msteams + CNPG PodMonitors) | Synced+Healthy |
+| thanos | Helm (Multi-Source) | Synced+Healthy |
+| loki | Helm (Multi-Source) | Synced+Healthy |
+| loki-secrets | Kustomize (KSOPS) | Synced+Healthy |
+| alloy | Helm (Multi-Source) | Synced+Healthy |
+| blackbox-exporter | Helm (Multi-Source) | Synced+Healthy |
+
+### URLs
+
+| Service | URL |
+|---------|-----|
+| Grafana | https://grafana-test.eneg.de |
+
+### Verifizierung
+
+| Pruefpunkt | Status |
+|------------|--------|
+| 51 ArgoCD Apps Healthy + Synced | OK |
+| 23 Monitoring-Pods Running | OK |
+| TLS-Zertifikat grafana-test.eneg.de (bis 12.07.2026) | OK |
+| CNPG Metriken: cnpg-shared 3/3, cnpg-erp 3/3 | OK |
+| Blackbox Probe NAS10 S3: probe_success = 1 | OK |
+| Loki Labels: namespace, pod, container, node | OK |
+| Alloy DaemonSet auf 3 Nodes | OK |
+
+### TEST-spezifische Abweichungen von DEV
+
+- Kein `defaultRules.disabled.KubeCPUOvercommit` (TEST hat 8 vCPU pro Node)
+- monitoring-alerts ohne `kube-cpu-overcommit-dev.yaml`
+- CNPG PodMonitors als eigenstaendige CRDs in `cnpg-podmonitors.yaml` (SSA-Workaround)
+- Loki S3-Bucket ueberschrieben in values-override.yaml (base enthaelt DEV-Bucket)
 
 ---
 
 *Erstellt: 08.04.2026*
-*Letzte Aktualisierung: 13.04.2026*
+*Letzte Aktualisierung: 13.04.2026 (TEST komplett)*

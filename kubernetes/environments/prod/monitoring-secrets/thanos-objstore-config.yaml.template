@@ -1,0 +1,22 @@
+# TEMPLATE - Nicht committen! Auf k8s-mgmt-10 ausfuellen und mit SOPS verschluesseln:
+# sops --encrypt --encrypted-regex '^(data|stringData)$' \
+#   --age age1fdqtcha9jnzqafe5t6hed6v5sv858x2tt6nwuw00u3luyxuaqcxqh5mcrm \
+#   thanos-objstore-config.yaml > thanos-objstore-config.enc.yaml
+---
+apiVersion: v1
+kind: Secret
+metadata:
+  name: thanos-objstore-config
+  namespace: monitoring
+type: Opaque
+stringData:
+  objstore.yml: |
+    type: S3
+    config:
+      bucket: k8s-prod-thanos
+      endpoint: nas10.eneg.de:8010
+      access_key: S3_ACCESS_KEY_HIER
+      secret_key: S3_SECRET_KEY_HIER
+      insecure: true
+      http_config:
+        idle_conn_timeout: 90s

@@ -1,0 +1,23 @@
+# Loki PROD Override
+# Environment: PROD (VLAN 178)
+# S3-Bucket-Name ueberschreiben (base enthaelt DEV-Bucket!)
+# Groessere PVC und Caches als DEV/TEST.
+
+# S3 Bucket fuer PROD
+loki:
+  storage:
+    bucketNames:
+      chunks: k8s-prod-loki
+      ruler: k8s-prod-loki
+
+# PVC-Groesse (groesser als DEV/TEST)
+singleBinary:
+  persistence:
+    size: 20Gi
+
+# Groessere Caches fuer PROD (8 vCPU / 24 GB Nodes)
+chunksCache:
+  allocatedMemory: 2048
+
+resultsCache:
+  allocatedMemory: 1024

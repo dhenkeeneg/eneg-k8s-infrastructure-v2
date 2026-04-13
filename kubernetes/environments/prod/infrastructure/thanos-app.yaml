@@ -1,0 +1,36 @@
+---
+# ArgoCD Application: Thanos (PROD)
+# Multi-Source: Helm Chart v17.3.1 + Base Values + PROD Override
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: thanos
+  namespace: argocd
+  annotations:
+    argocd.argoproj.io/sync-wave: "3"
+  finalizers:
+    - resources-finalizer.argocd.argoproj.io
+spec:
+  project: default
+  sources:
+    - repoURL: https://charts.bitnami.com/bitnami
+      chart: thanos
+      targetRevision: 17.3.1
+      helm:
+        releaseName: thanos
+        valueFiles:
+          - $values/kubernetes/base/monitoring/thanos/values.yaml
+          - $values/kubernetes/environments/prod/monitoring-thanos/values-override.yaml
+    - repoURL: git@github.com:dhenkeeneg/eneg-k8s-infrastructure-v2.git
+      targetRevision: main
+      ref: values
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: monitoring
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
+    syncOptions:
+      - CreateNamespace=true
+      - ServerSideApply=true

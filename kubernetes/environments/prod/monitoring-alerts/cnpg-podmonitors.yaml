@@ -1,0 +1,42 @@
+---
+# PodMonitor fuer CloudNativePG cnpg-shared Cluster (PROD)
+# Manuell erstellt weil enablePodMonitor in Cluster-Spec
+# durch CNPG Operator + ServerSideApply ueberschrieben wird
+apiVersion: monitoring.coreos.com/v1
+kind: PodMonitor
+metadata:
+  name: cnpg-shared
+  namespace: databases
+  labels:
+    app.kubernetes.io/component: database
+    app.kubernetes.io/instance: cnpg-shared
+    app.kubernetes.io/name: postgresql
+    cnpg.io/cluster: cnpg-shared
+spec:
+  namespaceSelector: {}
+  podMetricsEndpoints:
+    - port: metrics
+  selector:
+    matchLabels:
+      cnpg.io/cluster: cnpg-shared
+      cnpg.io/podRole: instance
+---
+# PodMonitor fuer CloudNativePG cnpg-erp Cluster (PROD)
+apiVersion: monitoring.coreos.com/v1
+kind: PodMonitor
+metadata:
+  name: cnpg-erp
+  namespace: databases
+  labels:
+    app.kubernetes.io/component: database
+    app.kubernetes.io/instance: cnpg-erp
+    app.kubernetes.io/name: postgresql
+    cnpg.io/cluster: cnpg-erp
+spec:
+  namespaceSelector: {}
+  podMetricsEndpoints:
+    - port: metrics
+  selector:
+    matchLabels:
+      cnpg.io/cluster: cnpg-erp
+      cnpg.io/podRole: instance

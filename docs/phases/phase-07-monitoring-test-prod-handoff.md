@@ -2,7 +2,7 @@
 
 **Erstellt:** 09.04.2026
 **Vorgaenger-Chat:** Phase 7 DEV Monitoring-Stack (08-13.04.2026)
-**Status:** DEV komplett, TEST + PROD offen
+**Status:** TEST komplett (13.04.2026), PROD offen
 
 ---
 
@@ -239,6 +239,9 @@ Alle DEV-Dateien koennen 1:1 kopiert und angepasst werden:
   (stakater GHCR-Package ist privat). Braucht `imagePullSecrets: ghcr-pull-secret` pro Env.
   GHCR Pull Secret muss im monitoring Namespace pro Env erstellt werden (gleicher PAT wie idoit).
 - **SMTP auth_username:** `smtpenge1` (NICHT d.henke@eneg.de)
+- **CNPG enablePodMonitor + ServerSideApply:** Operator ueberschreibt `enablePodMonitor: true`
+  auf `false` durch SSA Field Ownership. Workaround: Eigenstaendige PodMonitor-CRDs in
+  `monitoring-alerts/cnpg-podmonitors.yaml` erstellen. Fuer PROD das gleiche Pattern verwenden.
 
 ---
 
@@ -297,4 +300,4 @@ in UTC statt lokaler Zeit, was zu falschen CronJobOverdue-Alerts fuehrt.
 ---
 
 *Erstellt: 09.04.2026*
-*Letzte Aktualisierung: 13.04.2026*
+*Letzte Aktualisierung: 13.04.2026 (TEST komplett)*

@@ -1,0 +1,26 @@
+---
+# ArgoCD Application: Custom Monitoring Alert Rules (PROD)
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: monitoring-alerts
+  namespace: argocd
+  annotations:
+    argocd.argoproj.io/sync-wave: "4"
+  finalizers:
+    - resources-finalizer.argocd.argoproj.io
+spec:
+  project: default
+  source:
+    repoURL: git@github.com:dhenkeeneg/eneg-k8s-infrastructure-v2.git
+    targetRevision: main
+    path: kubernetes/environments/prod/monitoring-alerts
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: monitoring
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
+    syncOptions:
+      - ServerSideApply=true

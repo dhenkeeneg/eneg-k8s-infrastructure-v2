@@ -1,0 +1,7 @@
+# Thanos PROD Override
+# Environment: PROD (VLAN 178)
+# Minimales Override - base values sind bereits passend dimensioniert.
+# Store Gateway und Compactor PVCs (je 10Gi) aus base reichen fuer PROD.
+
+# Keine Aenderungen noetig - base values gelten.
+# Datei existiert fuer Konsistenz und spaetere Anpassungen.

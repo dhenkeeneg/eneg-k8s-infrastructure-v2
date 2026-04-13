@@ -1,0 +1,4 @@
+# Blackbox Exporter PROD Override
+# Environment: PROD (VLAN 178)
+# Keine PROD-spezifischen Aenderungen noetig.
+# NAS10 S3 Endpoint ist fuer alle Environments identisch.
