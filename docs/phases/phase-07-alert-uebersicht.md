@@ -19,6 +19,7 @@
 |----------|-----------|-------------------|----------------------|
 | **warning** | E-Mail + Teams | 4 Stunden | Ja (send_resolved: true) |
 | **critical** | E-Mail + Teams | 1 Stunde | Ja (send_resolved: true) |
+| **Watchdog (none)** | E-Mail + Teams | 24 Stunden, nur 07:00-07:10 MESZ | Nein (feuert permanent) |
 
 ### Inhibit-Regel
 Wenn ein **critical** Alert feuert, wird der zugehoerige **warning** Alert
@@ -92,7 +93,7 @@ Diese Alerts kommen aus den Standard-Rules des kube-prometheus-stack Charts:
 | KubePersistentVolumeFillingUp | 🔴 critical | PVC < 3% frei | ✅ | ✅ |
 | KubeNodeNotReady | ⚠️ warning | Node NotReady > 15min | ✅ | ✅ |
 | KubeNodeUnreachable | ⚠️ warning | Node Unreachable > 5min | ✅ | ✅ |
-| Watchdog | none | Heartbeat (feuert immer, beweist dass Alerting funktioniert) | ✅ | ✅ |
+| Watchdog | none | Heartbeat (feuert immer, 1x/Tag um 07:00 MESZ benachrichtigt) | ✅ | ✅ |
 
 **Hinweis:** Dies ist eine Auswahl der wichtigsten Default-Alerts. kube-prometheus-stack
 installiert ~100 Default-Rules. Vollstaendige Liste in Grafana unter Alerting → Alert Rules.
@@ -224,3 +225,4 @@ Critical Alerts werden **stuendlich** wiederholt, Warning Alerts alle **4 Stunde
 ---
 
 *Erstellt: 09.04.2026*
+*Letzte Aktualisierung: 13.04.2026*

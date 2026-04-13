@@ -1,7 +1,7 @@
 # Phase 7 - Monitoring TEST/PROD Rollout Handoff
 
 **Erstellt:** 09.04.2026
-**Vorgaenger-Chat:** Phase 7 DEV Monitoring-Stack (08-09.04.2026)
+**Vorgaenger-Chat:** Phase 7 DEV Monitoring-Stack (08-13.04.2026)
 **Status:** DEV komplett, TEST + PROD offen
 
 ---
@@ -33,6 +33,7 @@ Phase 7 Monitoring-Stack ist in DEV komplett deployed und verifiziert:
 | Loki | grafana/loki | 6.55.0 | Chart-Default |
 | Alloy | grafana/alloy | 1.7.0 | Chart-Default |
 | Blackbox Exporter | prometheus-community | 11.9.1 | Chart-Default |
+| prometheus-msteams | - (plain Deployment) | v1.5.4 | ghcr.io/dhenkeeneg/prometheus-msteams:v1.5.4 |
 
 ---
 
@@ -209,15 +210,15 @@ Alle DEV-Dateien koennen 1:1 kopiert und angepasst werden:
 
 | DEV-Datei | Aenderungen fuer TEST/PROD |
 |-----------|---------------------------|
-| `environments/dev/monitoring/values-override.yaml` | SMTP-From, Teams-Webhook-URL, PVC-Groesse (PROD) |
+| `environments/dev/monitoring/values-override.yaml` | SMTP-From, Teams-Webhook-URL, PVC-Groesse (PROD), KubeCPUOvercommit Config (s. Abschnitt 10a) |
 | `environments/dev/monitoring-secrets/kustomization.yaml` | Namespace bleibt `monitoring` |
-| `environments/dev/monitoring-secrets/secret-generator.yaml` | Identisch |
+| `environments/dev/monitoring-secrets/secret-generator.yaml` | Identisch (inkl. ghcr-pull-secret-generator) |
 | `environments/dev/monitoring-secrets/*.yaml.template` | S3-Bucket-Namen, Teams-URL, Grafana-PW |
 | `environments/dev/monitoring-loki/values-override.yaml` | S3-Bucket-Name, PVC-Groesse (PROD) |
 | `environments/dev/monitoring-loki-secrets/*` | S3-Credentials |
 | `environments/dev/monitoring-thanos/values-override.yaml` | ggf. PVC-Groessen (PROD) |
 | `environments/dev/monitoring-blackbox/values-override.yaml` | Identisch (NAS10 gleich fuer alle) |
-| `environments/dev/monitoring-alerts/kustomization.yaml` | Identisch (base-Referenz) |
+| `environments/dev/monitoring-alerts/kustomization.yaml` | base-Referenz identisch, ABER `kube-cpu-overcommit-dev.yaml` ist NUR fuer DEV (s. Abschnitt 10a) |
 | `environments/dev/monitoring-ingress/ingress.yaml` | Hostname anpassen |
 | `environments/dev/infrastructure/monitoring-*.yaml` | Pfade: dev→test/prod, ggf. targetRevision |
 | `environments/dev/infrastructure/thanos-app.yaml` | Pfade: dev→test/prod |
@@ -241,4 +242,59 @@ Alle DEV-Dateien koennen 1:1 kopiert und angepasst werden:
 
 ---
 
+## 10a. Wichtige Config-Unterschiede DEV vs TEST/PROD
+
+### values-override.yaml: Watchdog Routing (alle Envs identisch)
+Die `values-override.yaml` fuer TEST/PROD MUSS folgende Abschnitte enthalten:
+
+```yaml
+# Watchdog Route (1x taeglich um 07:00 MESZ)
+route:
+  routes:
+    - match:
+        alertname: Watchdog
+      receiver: 'email-and-teams'
+      repeat_interval: 24h
+      active_time_intervals:
+        - morning-report
+    - match:
+        severity: critical
+      receiver: 'email-and-teams'
+      repeat_interval: 1h
+
+# Zeitfenster fuer Watchdog
+time_intervals:
+  - name: morning-report
+    time_intervals:
+      - times:
+          - start_time: '07:00'
+            end_time: '07:10'
+        location: 'Europe/Berlin'
+```
+
+### values-override.yaml: KubeCPUOvercommit
+- **DEV:** Default-Alert deaktiviert (`defaultRules.disabled.KubeCPUOvercommit: true`),
+  Custom-Version mit 0.5 CPU Toleranz in `monitoring-alerts/kube-cpu-overcommit-dev.yaml`
+- **TEST/PROD:** Default-Alert BEIBEHALTEN (NICHT deaktivieren, keine Custom-Version).
+  TEST/PROD haben 8 vCPU pro Node (statt 4 in DEV), daher ausreichend Headroom.
+
+### monitoring-alerts Kustomization
+- **DEV:** Referenziert `kube-cpu-overcommit-dev.yaml` (nur DEV)
+- **TEST/PROD:** Diese Datei NICHT einbinden. Kustomization nur mit base-Referenzen:
+  ```yaml
+  resources:
+    - ../../../base/monitoring/alert-rules
+    - ../../../base/monitoring/servicemonitors
+    - ../../../base/monitoring/dashboards
+    - ../../../base/monitoring/prometheus-msteams
+  ```
+
+### CronJob timeZone (bereits erledigt)
+CNPG Logical Backup CronJobs in TEST/PROD haben bereits `timeZone: Europe/Berlin`
+(gefixt am 13.04.2026). Ohne timeZone berechnet kube-state-metrics die next_schedule_time
+in UTC statt lokaler Zeit, was zu falschen CronJobOverdue-Alerts fuehrt.
+
+---
+
 *Erstellt: 09.04.2026*
+*Letzte Aktualisierung: 13.04.2026*

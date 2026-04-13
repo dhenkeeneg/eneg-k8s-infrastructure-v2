@@ -823,6 +823,21 @@ kubernetes/
     DEV hat 3x4 vCPU = 12 total, ~8.1 Requests nach Reduktion.
     TEST/PROD behalten den Default-Alert.
 
+18. **CronJob timeZone explizit setzen (Europe/Berlin).**
+    Ohne `timeZone` berechnet kube-state-metrics `next_schedule_time` in UTC.
+    K3s fuehrt CronJobs aber in lokaler Zeit aus (MESZ = UTC+2).
+    Ab 07:00 MESZ ist die berechnete naechste Ausfuehrung (z.B. 03:00 UTC)
+    bereits 2h in der Vergangenheit → falscher CronJobOverdue Alert.
+    Fix: `timeZone: "Europe/Berlin"` in allen CronJob-Specs.
+    Betrifft: cnpg-shared-logical-backup, cnpg-erp-logical-backup (alle 3 Envs).
+    garage-backup hatte timeZone bereits korrekt gesetzt.
+
+19. **Watchdog Alert-Routing: 1x taeglich um 07:00 MESZ.**
+    AlertManager `time_intervals` mit `active_time_intervals` begrenzt
+    Watchdog-Benachrichtigungen auf 07:00-07:10 Europe/Berlin.
+    `repeat_interval: 24h` verhindert mehrfaches Senden am Tag.
+    Alle anderen Alerts (Warning/Critical) bleiben unveraendert.
+
 ### Offene Punkte fuer TEST/PROD Rollout
 
 - CNPG PodMonitor in TEST/PROD aktivieren (enablePodMonitor: true in cnpg-shared + cnpg-erp)
@@ -844,4 +859,4 @@ kubernetes/
 ---
 
 *Erstellt: 08.04.2026*
-*Letzte Aktualisierung: 09.04.2026*
+*Letzte Aktualisierung: 13.04.2026*
