@@ -1,9 +1,10 @@
 # Phase 7: Monitoring-Stack
 
-**Status:** In Bearbeitung (DEV + TEST abgeschlossen, PROD offen)
+**Status:** Abgeschlossen (DEV + TEST + PROD)
 **Beginn:** 08.04.2026
 **DEV fertig:** 08.04.2026
 **TEST fertig:** 13.04.2026
+**PROD fertig:** 13.04.2026
 **Voraussetzung:** Phase 8c (PROD Rollout) abgeschlossen
 
 ---
@@ -850,16 +851,50 @@ kubernetes/
     deployed ueber die monitoring-alerts ArgoCD App.
     Betrifft: TEST und PROD (DEV nutzt die Operator-Funktion).
 
-### Offene Punkte fuer PROD Rollout
+### Offene Punkte
 
-- PROD Monitoring-Stack Overlays erstellen (gleiche Struktur wie TEST)
-- PROD-spezifisch: Groessere PVC (50Gi Prometheus, 20Gi Loki, 2Gi/1Gi Cache)
-- S3 Secrets fuer PROD verschluesseln (s3-k8s-prod Account)
-- AlertManager SMTP-From: alertmanager-prod@eneg.de + Prod Teams Webhook URL
-- Grafana Admin Secret (eigenes PROD-Passwort)
-- Grafana Ingress: grafana-prod.eneg.de
+Phase 7 Monitoring-Stack ist vollstaendig abgeschlossen (DEV + TEST + PROD).
+Keine offenen Punkte.
+
+---
+
+## 17. PROD Implementierung — Ergebnisse (13.04.2026)
+
+### Deployed Components (identisch zu DEV/TEST, groessere PVCs)
+
+| Komponente | Chart-Version | PVC-Groesse | Status |
+|------------|---------------|-------------|--------|
+| kube-prometheus-stack | 83.0.0 | 50Gi Prometheus | Synced+Healthy |
+| Thanos (bitnami) | 17.3.1 | 10Gi Store+Compactor | Synced+Healthy |
+| Loki (grafana) | 6.55.0 | 20Gi + 2048/1024 MB Cache | Synced+Healthy |
+| Grafana Alloy | 1.7.0 | - | Synced+Healthy |
+| Blackbox Exporter | 11.9.1 | - | Synced+Healthy |
+
+### URLs
+
+| Service | URL |
+|---------|-----|
+| Grafana | https://grafana-prod.eneg.de |
+
+### Verifizierung
+
+| Pruefpunkt | Status |
+|------------|--------|
+| 51 ArgoCD Apps Healthy + Synced | OK |
+| 23 Monitoring-Pods Running | OK |
+| TLS-Zertifikat grafana-prod.eneg.de (bis 12.07.2026) | OK |
+| CNPG Metriken: cnpg-shared 3/3, cnpg-erp 3/3 | OK |
+| Blackbox Probe NAS10 S3: probe_success = 1 | OK |
+| Loki Labels: namespace, pod, container, node | OK |
+| Alloy DaemonSet auf 3 Nodes | OK |
+
+### PROD-spezifische Konfiguration
+
+- Prometheus PVC: 50Gi (statt 20Gi in DEV/TEST)
+- Loki PVC: 20Gi (statt 10Gi in DEV/TEST)
+- Loki chunksCache: 2048 MB, resultsCache: 1024 MB (statt 512/256 in DEV/TEST)
 - CNPG PodMonitors als eigenstaendige CRDs (SSA-Workaround, wie TEST)
-- Deployment-Reihenfolge: Dateien erstellen → Commit → Secrets → Verify
+- Kein `defaultRules.disabled.KubeCPUOvercommit` (PROD hat 8 vCPU pro Node)
 
 ---
 
@@ -917,4 +952,4 @@ kubernetes/
 ---
 
 *Erstellt: 08.04.2026*
-*Letzte Aktualisierung: 13.04.2026 (TEST komplett)*
+*Letzte Aktualisierung: 13.04.2026 (Phase 7 abgeschlossen — DEV + TEST + PROD)*

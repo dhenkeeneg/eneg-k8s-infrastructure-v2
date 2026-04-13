@@ -342,12 +342,12 @@ namespaces:
 
 | Komponente | Version | Status |
 |------------|---------|--------|
-| Prometheus | - | Phase 7 |
-| Thanos | - | Phase 7 |
-| Grafana | - | Phase 7 |
-| AlertManager | - | Phase 7 |
-| Loki | - | Phase 7 |
-| Promtail | - | Phase 7 |
+| kube-prometheus-stack (Prometheus + Grafana + AlertManager) | Helm 83.0.0 | ✅ DEV/TEST/PROD |
+| Thanos (bitnami) | Helm 17.3.1 | ✅ DEV/TEST/PROD |
+| Loki (grafana) | Helm 6.55.0 | ✅ DEV/TEST/PROD |
+| Grafana Alloy (ersetzt Promtail) | Helm 1.7.0 | ✅ DEV/TEST/PROD |
+| Blackbox Exporter | Helm 11.9.1 | ✅ DEV/TEST/PROD |
+| prometheus-msteams (Teams Adapter) | v1.5.4 | ✅ DEV/TEST/PROD |
 
 ### Layer 5: Security
 
@@ -1020,9 +1020,9 @@ k8s-dev-23   Ready   control-plane,etcd   v1.35.1+k3s1
 
 ---
 
-### Phase 7: Monitoring-Stack 🔲
+### Phase 7: Monitoring-Stack ✅
 
-**Status:** Offen
+**Status:** Abgeschlossen (DEV 08.04.2026, TEST + PROD 13.04.2026)
 
 **Vorbereitende Aufgabe: CNPG Barman Cloud Plugin Migration**
 
