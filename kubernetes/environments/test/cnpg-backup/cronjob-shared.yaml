@@ -1,7 +1,7 @@
 ---
 # CronJob: Logical Backup cnpg-shared (TEST)
 # pg_dumpall aller Datenbanken, Upload auf S3, 32 Tage Retention
-# Taeglich 03:00 UTC (nach Physical Backups um 02:00)
+# Taeglich 03:00 MESZ (nach Physical Backups um 02:00)
 apiVersion: batch/v1
 kind: CronJob
 metadata:
@@ -12,6 +12,7 @@ metadata:
     app.kubernetes.io/managed-by: argocd
 spec:
   schedule: "0 3 * * *"
+  timeZone: "Europe/Berlin"
   concurrencyPolicy: Forbid
   successfulJobsHistoryLimit: 3
   failedJobsHistoryLimit: 3
