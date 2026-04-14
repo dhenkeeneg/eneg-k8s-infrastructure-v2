@@ -1,0 +1,24 @@
+# Kyverno Policies Base Values (generisch, alle Environments)
+# Helm Chart: kyverno/kyverno-policies v3.7.1
+# Implementiert Kubernetes Pod Security Standards
+# Docs: https://kyverno.io/policies/pod-security/
+
+# -- Alle Policies im Audit-Modus starten
+# Audit = nur melden, nicht blockieren
+# Spaeter auf Enforce umstellen nach Pruefung der Reports
+validationFailureAction: Audit
+
+# -- Pod Security Standard Level: Baseline
+# Baseline: Grundlegende Sicherheitsregeln (z.B. kein privilegierter Modus)
+# Restricted: Strenger (z.B. readOnlyRootFilesystem, non-root)
+podSecurityStandard: baseline
+
+# -- Pod Security Severity
+podSecuritySeverity: medium
+
+# -- Hintergrund-Scans aktivieren
+# Scannt bestehende Ressourcen (nicht nur neue)
+background: true
+
+# -- Autogen fuer Deployments, DaemonSets, StatefulSets, Jobs, CronJobs
+autogenControllers: none

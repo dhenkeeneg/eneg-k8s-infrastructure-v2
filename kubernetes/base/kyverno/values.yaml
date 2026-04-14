@@ -1,0 +1,84 @@
+# Kyverno Base Values (generisch, alle Environments)
+# Helm Chart: kyverno/kyverno v3.7.1 (App v1.17.1)
+# Docs: https://kyverno.io/docs/installation/
+
+# -- CRDs via Helm installieren
+crds:
+  install: true
+
+# -- Admission Controller (Haupt-Komponente)
+admissionController:
+  replicas: 1
+  resources:
+    requests:
+      cpu: 100m
+      memory: 128Mi
+    limits:
+      cpu: 500m
+      memory: 384Mi
+  # ServiceMonitor fuer Prometheus
+  metricsService:
+    create: true
+    type: ClusterIP
+    port: 8000
+
+# -- Background Controller
+backgroundController:
+  replicas: 1
+  resources:
+    requests:
+      cpu: 50m
+      memory: 64Mi
+    limits:
+      cpu: 250m
+      memory: 256Mi
+  metricsService:
+    create: true
+
+# -- Reports Controller
+reportsController:
+  replicas: 1
+  resources:
+    requests:
+      cpu: 50m
+      memory: 64Mi
+    limits:
+      cpu: 250m
+      memory: 256Mi
+  metricsService:
+    create: true
+
+# -- Cleanup Controller
+cleanupController:
+  replicas: 1
+  resources:
+    requests:
+      cpu: 50m
+      memory: 64Mi
+    limits:
+      cpu: 200m
+      memory: 128Mi
+  metricsService:
+    create: true
+
+# -- Kyverno Config
+config:
+  # Namespaces die von Policies ausgeschlossen werden
+  # (System-Namespaces sollen nicht von Kyverno blockiert werden)
+  resourceFiltersExcludeNamespaces:
+    - kube-system
+    - kube-public
+    - kube-node-lease
+    - kyverno
+
+  # -- Webhook-Konfiguration
+  # failurePolicy Ignore: Wenn Kyverno nicht erreichbar ist, werden Requests durchgelassen
+  # (verhindert Cluster-Lockout bei Kyverno-Ausfall)
+  webhooks:
+    - failurePolicy: Ignore
+
+# -- Features
+features:
+  policyExceptions:
+    enabled: true
+    namespace: "kyverno"

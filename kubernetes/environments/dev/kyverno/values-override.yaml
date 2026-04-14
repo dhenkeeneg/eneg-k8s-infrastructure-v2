@@ -1,0 +1,27 @@
+# Kyverno DEV Override Values
+# Environment: DEV (VLAN 180)
+# Modus: Audit-only (keine Blockierung)
+
+# -- DEV: Zusaetzliche Namespace-Ausschluesse
+# ArgoCD und andere Infra-Namespaces sollen nicht blockiert werden
+config:
+  resourceFiltersExcludeNamespaces:
+    - kube-system
+    - kube-public
+    - kube-node-lease
+    - kyverno
+    - argocd
+    - cert-manager
+    - metallb-system
+    - traefik
+    - longhorn-system
+    - cnpg-system
+    - mariadb-operator
+    - velero
+    - monitoring
+
+# -- DEV: Logging erhoehen fuer besseres Debugging
+admissionController:
+  container:
+    extraArgs:
+      v: "2"
