@@ -37,14 +37,13 @@ data:
       - .spec.rules[]?.skipBackgroundRequests
       - .spec.rules[]?.validate?.allowExistingViolations
 
-  # Kyverno CRDs (policies.kyverno.io): Kubernetes API-Server fuegt Defaults
-  # hinzu (spec.conversion, storedVersions). Diese CRDs sind extrem gross
-  # (v1+v1alpha1+v1beta1 Schemas) und erzeugen SSA-Diffs.
-  # managedFieldsManagers ignoriert alle Aenderungen vom kube-apiserver.
+  # Kyverno CRDs (policies.kyverno.io): Helm generiert leere metadata.annotations
+  # und metadata.labels ({}) die Kubernetes beim Erstellen wegstreicht.
+  # ArgoCD sieht den Diff zwischen "leere Map" vs "Feld nicht vorhanden".
   resource.customizations.ignoreDifferences.apiextensions.k8s.io_CustomResourceDefinition: |
-    managedFieldsManagers:
-      - kube-apiserver
     jqPathExpressions:
+      - .metadata.annotations
+      - .metadata.labels
       - .spec.conversion
       - .status
 
