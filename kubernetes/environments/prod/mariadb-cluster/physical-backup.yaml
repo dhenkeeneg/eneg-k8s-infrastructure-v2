@@ -14,7 +14,7 @@ spec:
     name: mariadb-galera
 
   schedule:
-    cron: "30 2 * * *"
+    cron: "1 0 * * *"
 
   target: PreferReplica
   compression: gzip

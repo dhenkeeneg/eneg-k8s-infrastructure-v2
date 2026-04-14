@@ -12,7 +12,7 @@ metadata:
 spec:
   cluster:
     name: cnpg-shared
-  schedule: "0 2 * * *"
+  schedule: "15 0 * * *"
   backupOwnerReference: cluster
   method: plugin
   pluginConfiguration:
@@ -32,7 +32,7 @@ metadata:
 spec:
   cluster:
     name: cnpg-erp
-  schedule: "15 2 * * *"
+  schedule: "20 0 * * *"
   backupOwnerReference: cluster
   method: plugin
   pluginConfiguration:

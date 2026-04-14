@@ -102,7 +102,7 @@ metadata:
     app.kubernetes.io/part-of: infrastructure
     app.kubernetes.io/managed-by: argocd
 spec:
-  schedule: "0 4 * * *"
+  schedule: "15 3 * * *"
   timeZone: "Europe/Berlin"
   concurrencyPolicy: Forbid
   successfulJobsHistoryLimit: 3

@@ -23,7 +23,7 @@ configuration:
 schedules:
   daily-backup:
     disabled: false
-    schedule: "30 4 * * *"
+    schedule: "45 5 * * *"
     useOwnerReferencesInBackup: false
     template:
       ttl: "336h0m0s"
