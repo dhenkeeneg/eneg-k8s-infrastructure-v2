@@ -1,0 +1,44 @@
+---
+# ArgoCD Application: Trivy Operator (DEV)
+# Helm Chart aqua/trivy-operator v0.32.1 (App v0.30.1)
+# Multi-Source: Helm Chart + Base Values + DEV Override
+# Kubernetes Vulnerability Scanner (CVEs, Fehlkonfigurationen, Secrets)
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: trivy-operator
+  namespace: argocd
+  annotations:
+    argocd.argoproj.io/sync-wave: "3"
+  finalizers:
+    - resources-finalizer.argocd.argoproj.io
+spec:
+  project: default
+
+  sources:
+    # Source 1: Trivy Operator Helm Chart
+    - repoURL: https://aquasecurity.github.io/helm-charts/
+      chart: trivy-operator
+      targetRevision: 0.32.1
+      helm:
+        releaseName: trivy-operator
+        valueFiles:
+          - $values/kubernetes/base/trivy-operator/values.yaml
+          - $values/kubernetes/environments/dev/trivy-operator/values-override.yaml
+
+    # Source 2: Git Repository Referenz fuer Values
+    - repoURL: git@github.com:dhenkeeneg/eneg-k8s-infrastructure-v2.git
+      targetRevision: main
+      ref: values
+
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: trivy-system
+
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
+    syncOptions:
+      - CreateNamespace=true
+      - ServerSideApply=true

@@ -307,7 +307,28 @@ kubernetes/
 
 ## 12. Learnings (DEV)
 
-_Wird waehrend der Implementierung ergaenzt._
+1. **Kyverno `config.webhooks` Helm-Format:** Das Kyverno Helm Chart erwartet unter
+   `config.webhooks` eine Liste von Webhook-Objekten mit `namespaceSelector` — nicht
+   einfache `failurePolicy`-Eintraege. Die `failurePolicy` fuer den Admission-Webhook
+   muss unter `admissionController.webhookConfiguration.failurePolicy` gesetzt werden.
+   Falsches Format fuehrt zu `helm template` Fehler:
+   `cannot overwrite table with non table for kyverno.config.webhooks`.
+
+2. **Kyverno ClusterPolicy ArgoCD OutOfSync:** Kyvernos Admission Controller fuegt
+   Default-Werte in ClusterPolicies ein (`spec.admission`, `spec.emitWarning`,
+   `spec.failurePolicy` auf Top-Level; `skipBackgroundRequests` und
+   `allowExistingViolations` in Rules). Diese Felder existieren nicht im Helm-Template
+   und erzeugen permanentes OutOfSync. Fix: `resource.customizations.ignoreDifferences`
+   in `argocd-cm` fuer `kyverno.io_ClusterPolicy` mit `managedFieldsManagers: [kyverno]`
+   + `jsonPointers` + `jqPathExpressions`.
+
+3. **Kyverno CRD leere Metadata-Maps:** Helm generiert `metadata.annotations: {}` und
+   `metadata.labels: {}` als leere Maps in den `policies.kyverno.io` CRDs. Kubernetes
+   normalisiert diese leeren Maps weg (Feld existiert nicht). ArgoCD sieht den Diff
+   zwischen "leeres Objekt" vs "Feld nicht vorhanden". Fix: `ignoreDifferences` fuer
+   `apiextensions.k8s.io_CustomResourceDefinition` mit
+   `jqPathExpressions: [.metadata.annotations, .metadata.labels]` in `argocd-cm`.
+   Dieser Fix ist global und betrifft alle CRDs — fuer TEST/PROD bereits vorbereitet.
 
 ---
 

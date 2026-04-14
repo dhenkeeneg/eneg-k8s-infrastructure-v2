@@ -1,0 +1,12 @@
+# Trivy Operator DEV Override Values
+# Environment: DEV (VLAN 180)
+
+# -- DEV: Scan-Intervall (alle 24h statt Default 6h, DEV braucht weniger)
+operator:
+  scanJobsConcurrentLimit: 2
+
+# -- DEV: ServiceMonitor Labels fuer Prometheus Discovery
+serviceMonitor:
+  enabled: true
+  labels:
+    release: kube-prometheus-stack

@@ -1,0 +1,57 @@
+# Trivy Operator Base Values (generisch, alle Environments)
+# Helm Chart: aqua/trivy-operator v0.32.1 (App v0.30.1)
+# Docs: https://aquasecurity.github.io/trivy-operator/
+
+# -- Operator Deployment
+operator:
+  # Alle Namespaces scannen (ausser Excludes)
+  scanJobsConcurrentLimit: 3
+  # Scan-Timeout fuer einzelne Jobs
+  scanJobTimeout: 5m
+
+# -- Trivy Scanner Konfiguration
+trivy:
+  # Built-in Trivy Server im Cluster (vermeidet DB-Download pro Scan)
+  mode: ClientServer
+  severity: UNKNOWN,LOW,MEDIUM,HIGH,CRITICAL
+  # Nur fixbare Schwachstellen anzeigen (optionale Verschaerfung)
+  ignoreUnfixed: false
+  # Timeout fuer einzelne Scans
+  timeout: 5m0s
+
+# -- Built-in Trivy Server (laeuft als Deployment im Cluster)
+# Cached die Vulnerability-DB lokal → schnellere Scans, weniger Traffic
+trivyServer:
+  enabled: true
+  resources:
+    requests:
+      cpu: 100m
+      memory: 256Mi
+    limits:
+      cpu: 500m
+      memory: 512Mi
+
+# -- Scan-Typen aktivieren
+vulnerabilityReportsScanner: Trivy
+configAuditReportsScanner: Trivy
+exposedSecretReportsScanner: Trivy
+
+# -- Operator Ressourcen
+resources:
+  requests:
+    cpu: 50m
+    memory: 128Mi
+  limits:
+    cpu: 300m
+    memory: 256Mi
+
+# -- Prometheus ServiceMonitor
+serviceMonitor:
+  enabled: true
+  interval: 60s
+
+# -- Namespaces die vom Scanning ausgeschlossen werden
+excludeNamespaces: ""
+
+# -- Automatische Scans bei neuen Workloads
+scanJobsRetryDelay: 30s
