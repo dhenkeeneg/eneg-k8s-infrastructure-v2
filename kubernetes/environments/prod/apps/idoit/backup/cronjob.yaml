@@ -1,0 +1,182 @@
+---
+# ConfigMap: rclone Konfiguration fuer i-doit Backup (PROD)
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: idoit-backup-config
+  namespace: idoit
+  labels:
+    app.kubernetes.io/name: idoit-backup
+    app.kubernetes.io/part-of: pilot-apps
+    app.kubernetes.io/managed-by: argocd
+data:
+  rclone.conf: |
+    [nas10]
+    type = s3
+    provider = Other
+    env_auth = true
+    endpoint = http://nas10.eneg.de:8010
+    region = us-east-1
+    force_path_style = true
+    no_check_bucket = true
+
+  backup.sh: |
+    #!/bin/sh
+    set -e
+
+    echo "=== i-doit Backup gestartet: $(date -Iseconds) ==="
+
+    # rclone ENV-Variablen fuer Destination (NAS10)
+    export RCLONE_CONFIG_NAS10_ACCESS_KEY_ID="${NAS10_ACCESS_KEY_ID}"
+    export RCLONE_CONFIG_NAS10_SECRET_ACCESS_KEY="${NAS10_SECRET_ACCESS_KEY}"
+
+    # Datum fuer Backup-Dir (geloeschte/geaenderte Dateien)
+    BACKUP_DATE=$(date +%Y-%m-%d)
+
+    echo "--- Sichere i-doit Upload-Verzeichnis ---"
+    rclone sync \
+      "/data/upload/" \
+      "nas10:k8s-prod-idoit/upload" \
+      --backup-dir "nas10:k8s-prod-idoit/_backups/${BACKUP_DATE}/upload" \
+      --config /config/rclone.conf \
+      --checksum \
+      --fast-list \
+      --transfers 4 \
+      --checkers 8 \
+      --stats 30s \
+      --stats-one-line \
+      --log-level INFO
+    echo "--- Upload-Verzeichnis gesichert ---"
+
+    echo ""
+    echo "--- Sichere i-doit src (Konfiguration) ---"
+    rclone sync \
+      "/data/src/" \
+      "nas10:k8s-prod-idoit/src" \
+      --backup-dir "nas10:k8s-prod-idoit/_backups/${BACKUP_DATE}/src" \
+      --config /config/rclone.conf \
+      --checksum \
+      --fast-list \
+      --transfers 4 \
+      --checkers 8 \
+      --stats 30s \
+      --stats-one-line \
+      --log-level INFO
+    echo "--- src gesichert ---"
+
+    # Alte Backup-Dirs aufraemen (aelter als 32 Tage)
+    echo ""
+    echo "--- Alte Backups aufraemen (>32 Tage) ---"
+    CUTOFF_DATE=$(date -d "@$(($(date +%s) - 32*86400))" +%Y-%m-%d)
+
+    if [ -n "$CUTOFF_DATE" ]; then
+      rclone lsd "nas10:k8s-prod-idoit/_backups/" --config /config/rclone.conf 2>/dev/null | awk '{print $NF}' | while read DIR; do
+        if [ "$DIR" \< "$CUTOFF_DATE" ] || [ "$DIR" = "$CUTOFF_DATE" ]; then
+          echo "Loesche altes Backup: _backups/${DIR}"
+          rclone purge "nas10:k8s-prod-idoit/_backups/${DIR}" \
+            --config /config/rclone.conf
+        fi
+      done
+    else
+      echo "WARNUNG: Konnte Cutoff-Datum nicht berechnen, ueberspringe Cleanup"
+    fi
+
+    echo ""
+    echo "=== i-doit Backup abgeschlossen: $(date -Iseconds) ==="
+---
+# CronJob: i-doit Backup auf NAS10 (PROD)
+# Taegliche Sicherung von Upload + src auf NAS10 QuObject S3
+# Retention: 32 Tage via --backup-dir Pattern
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: idoit-backup
+  namespace: idoit
+  labels:
+    app.kubernetes.io/name: idoit-backup
+    app.kubernetes.io/part-of: pilot-apps
+    app.kubernetes.io/managed-by: argocd
+spec:
+  schedule: "30 5 * * *"
+  timeZone: "Europe/Berlin"
+  concurrencyPolicy: Forbid
+  successfulJobsHistoryLimit: 3
+  failedJobsHistoryLimit: 5
+  startingDeadlineSeconds: 3600
+  jobTemplate:
+    spec:
+      backoffLimit: 2
+      activeDeadlineSeconds: 7200
+      ttlSecondsAfterFinished: 3600
+      template:
+        metadata:
+          labels:
+            app.kubernetes.io/name: idoit-backup
+        spec:
+          restartPolicy: OnFailure
+          affinity:
+            podAffinity:
+              requiredDuringSchedulingIgnoredDuringExecution:
+                - labelSelector:
+                    matchLabels:
+                      app.kubernetes.io/name: idoit
+                  topologyKey: kubernetes.io/hostname
+          containers:
+            - name: rclone
+              image: rclone/rclone:1.73.1
+              command:
+                - /bin/sh
+                - /scripts/backup.sh
+              env:
+                - name: NAS10_ACCESS_KEY_ID
+                  valueFrom:
+                    secretKeyRef:
+                      name: idoit-backup-credentials
+                      key: NAS10_ACCESS_KEY_ID
+                - name: NAS10_SECRET_ACCESS_KEY
+                  valueFrom:
+                    secretKeyRef:
+                      name: idoit-backup-credentials
+                      key: NAS10_SECRET_ACCESS_KEY
+              volumeMounts:
+                - name: config
+                  mountPath: /config/rclone.conf
+                  subPath: rclone.conf
+                  readOnly: true
+                - name: scripts
+                  mountPath: /scripts/backup.sh
+                  subPath: backup.sh
+                  readOnly: true
+                - name: idoit-data
+                  mountPath: /data/upload
+                  subPath: upload
+                  readOnly: true
+                - name: idoit-data
+                  mountPath: /data/src
+                  subPath: src
+                  readOnly: true
+              resources:
+                requests:
+                  cpu: 100m
+                  memory: 128Mi
+                limits:
+                  cpu: 500m
+                  memory: 256Mi
+          volumes:
+            - name: config
+              configMap:
+                name: idoit-backup-config
+                items:
+                  - key: rclone.conf
+                    path: rclone.conf
+            - name: scripts
+              configMap:
+                name: idoit-backup-config
+                defaultMode: 0755
+                items:
+                  - key: backup.sh
+                    path: backup.sh
+            - name: idoit-data
+              persistentVolumeClaim:
+                claimName: idoit-data
+                readOnly: true
