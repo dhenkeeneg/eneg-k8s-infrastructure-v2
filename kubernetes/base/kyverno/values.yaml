@@ -7,6 +7,7 @@ crds:
   install: true
 
 # -- Admission Controller (Haupt-Komponente)
+# failurePolicy Ignore: Bei Kyverno-Ausfall werden Requests durchgelassen (kein Cluster-Lockout)
 admissionController:
   replicas: 1
   resources:
@@ -16,11 +17,12 @@ admissionController:
     limits:
       cpu: 500m
       memory: 384Mi
-  # ServiceMonitor fuer Prometheus
   metricsService:
     create: true
     type: ClusterIP
     port: 8000
+  webhookConfiguration:
+    failurePolicy: Ignore
 
 # -- Background Controller
 backgroundController:
@@ -70,12 +72,6 @@ config:
     - kube-public
     - kube-node-lease
     - kyverno
-
-  # -- Webhook-Konfiguration
-  # failurePolicy Ignore: Wenn Kyverno nicht erreichbar ist, werden Requests durchgelassen
-  # (verhindert Cluster-Lockout bei Kyverno-Ausfall)
-  webhooks:
-    - failurePolicy: Ignore
 
 # -- Features
 features:
