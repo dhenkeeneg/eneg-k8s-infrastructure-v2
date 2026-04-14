@@ -34,6 +34,13 @@ spec:
     server: https://kubernetes.default.svc
     namespace: kyverno
 
+  # Kyverno Admission Controller modifiziert ClusterPolicies nach dem Apply
+  # (fuegt Status-Conditions und Webhook-Registrierungen hinzu)
+  ignoreDifferences:
+    - group: kyverno.io
+      kind: ClusterPolicy
+      jqPathExpression: .spec.webhookConfiguration
+
   syncPolicy:
     automated:
       prune: true
@@ -41,3 +48,4 @@ spec:
     syncOptions:
       - CreateNamespace=true
       - ServerSideApply=true
+      - RespectIgnoreDifferences=true

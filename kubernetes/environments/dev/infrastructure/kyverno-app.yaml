@@ -35,6 +35,13 @@ spec:
     server: https://kubernetes.default.svc
     namespace: kyverno
 
+  # Kyverno modifiziert seine eigenen CRDs nach dem Apply (Webhook-Config, Conversion)
+  # ArgoCD sieht diese Aenderungen als Diff → permanentes OutOfSync ohne ignoreDifferences
+  ignoreDifferences:
+    - group: apiextensions.k8s.io
+      kind: CustomResourceDefinition
+      jqPathExpression: .spec.conversion
+
   syncPolicy:
     automated:
       prune: true
@@ -42,3 +49,4 @@ spec:
     syncOptions:
       - CreateNamespace=true
       - ServerSideApply=true
+      - RespectIgnoreDifferences=true
