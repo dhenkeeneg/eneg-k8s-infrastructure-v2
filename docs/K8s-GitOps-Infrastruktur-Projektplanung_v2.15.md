@@ -741,17 +741,22 @@ Grafana (Dashboards) + Loki (Logs)
 
 ### Uebersicht
 
-| Was | Wohin | Frequenz | Retention | Tool |
-|-----|-------|----------|-----------|------|
-| PostgreSQL (WAL) | NAS10 S3 (k8s-{env}-postgres-wal) | Kontinuierlich | 7 Tage | CloudNativePG/Barman |
-| PostgreSQL (Dump) | NAS10 S3 (k8s-{env}-postgres-backup) | Taeglich 03:00/03:15 | 32 Tage | pg_dumpall CronJob |
-| MariaDB (Physical) | NAS10 S3 (k8s-{env}-mariadb-backup) | Taeglich 02:30 | 7 Tage (168h) | MariaDB Operator |
-| Garage S3-Inhalte | NAS10 S3 (k8s-{env}-garage-backup) | Taeglich 04:00 | 32 Tage | rclone CronJob |
-| Odoo Filestore | NAS10 S3 (k8s-{env}-odoo-backup) | Taeglich 05:00 | 32 Tage | rclone CronJob |
-| i-doit Upload + src | NAS10 S3 (k8s-{env}-idoit) | Taeglich 05:30 | 32 Tage | rclone CronJob |
-| Kubernetes Resources + PVs | NAS10 S3 (k8s-{env}-velero) | Taeglich 04:30 | 14 Tage | Velero v1.17.1 (kopia) |
-| OpenTofu State | S3 (k8s-terraform-state, geplant) | Bei jedem Apply | Versioniert | S3 Backend |
-| VMs | Veeam | Bestehend | Bestehend | Veeam |
+Backup-Zeitplaene gestaffelt: PROD → TEST → DEV (keine NAS10-Ueberlappung).
+
+| Was | Wohin | PROD | TEST | DEV | Retention | Tool |
+|-----|-------|------|------|-----|-----------|------|
+| PostgreSQL (WAL) | NAS10 S3 (k8s-{env}-postgres-wal) | laufend | laufend | laufend | 7 Tage | CloudNativePG/Barman |
+| MariaDB (Physical) | NAS10 S3 (k8s-{env}-mariadb-backup) | 00:01 | 02:15 | 04:30 | 7 Tage (168h) | MariaDB Operator |
+| PostgreSQL (Barman) | NAS10 S3 (k8s-{env}-postgres-wal) | 00:15/00:20 | 02:30/02:35 | 04:45/04:50 | 30 Tage | CNPG ScheduledBackup |
+| PostgreSQL (Dump) | NAS10 S3 (k8s-{env}-postgres-backup) | 00:30/00:45 | 02:45/03:00 | 05:00/05:15 | 32 Tage | pg_dumpall CronJob |
+| Garage S3-Inhalte | NAS10 S3 (k8s-{env}-garage-backup) | 01:00 | 03:15 | 05:30 | 32 Tage | rclone CronJob |
+| Kubernetes + PVs | NAS10 S3 (k8s-{env}-velero) | 01:15 | 03:30 | 05:45 | 14 Tage | Velero v1.17.1 (kopia) |
+| Odoo Filestore | NAS10 S3 (k8s-{env}-odoo-backup) | 01:45 | 04:00 | 06:15 | 32 Tage | rclone CronJob |
+| i-doit Upload + src | NAS10 S3 (k8s-{env}-idoit) | 02:00 | 04:15 | 06:30 | 32 Tage | rclone CronJob |
+| OpenTofu State | S3 (k8s-terraform-state, geplant) | Bei jedem Apply | - | - | Versioniert | S3 Backend |
+| VMs | Veeam | Bestehend | Bestehend | Bestehend | Bestehend | Veeam |
+
+**Zeitfenster:** PROD 00:01–02:00, TEST 02:15–04:15, DEV 04:30–06:30 (alle vor 07:00 fertig).
 
 ### Backup-Ziele
 
@@ -1355,7 +1360,7 @@ docs/
 | 30.03.2026 | 2.12    | Headlamp Kubernetes Dashboard (Helm v0.41.0) auf DEV, TEST, PROD deployed, ServiceAccount Token Auth, Split-DNS                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                  |
 | 31.03.2026 | 2.13    | Dokumentation gegen Repository abgeglichen: Phase 6+8 Status auf Abgeschlossen, DNS PROD Wildcard durch Einzel-Eintraege ersetzt, Pilot-Apps-Tabelle auf 6 Apps erweitert (Keycloak, i-doit, it-info-versand ergaenzt), Repository-Struktur aktualisiert (docker/, scripts/, prod-Overlays, Ansible Playbooks), Namespace-Struktur vervollstaendigt, Dokumentationsstruktur aktualisiert, cnpg-barman-cloud-plugin-migration.md Guide erstellt, CNPG-Spec auf cnpg-shared + cnpg-erp angepasst, Kustomize-Overlay-Tabellen um DB- und App-Layer erweitert, S3-Bucket-Tabelle mit tatsaechlichen Namenskonventionen aktualisiert, Backup-Uebersicht korrigiert, DEV App-Secrets und Infra-Secrets von base/ nach environments/dev/ migriert (11 ArgoCD Apps angepasst), ArgoCD App-of-Apps OutOfSync Fix via resource.customizations.ignoreDifferences in argocd-cm (directory.recurse Default, Ref: #4501), ADR-002 Branch-per-Environment Promotion-Strategie, Phase 8e Migrationsplan erstellt |
 | 13.04.2026 | 2.14    | Phase 7 Monitoring-Stack ABGESCHLOSSEN (DEV+TEST+PROD): kube-prometheus-stack 83.0.0, Thanos 17.3.1, Loki 6.55.0, Alloy 1.7.0, Blackbox Exporter 11.9.1, prometheus-msteams v1.5.4. 9 ArgoCD Apps + 23 Pods pro Env, Grafana Dashboards (7x), Custom PrometheusRules (4x), AlertManager E-Mail+Teams, Watchdog 07:00 MESZ. Layer 4 Monitoring-Tabelle aktualisiert. Learning #20: CNPG enablePodMonitor SSA-Workaround (eigenstaendige PodMonitor-CRDs statt Operator-Funktion fuer TEST/PROD)                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                   |
-| 14.04.2026 | 2.15    | Phase 10 Velero Backup + i-doit rclone Backup ABGESCHLOSSEN (DEV+TEST+PROD): Velero v1.17.1 (Helm 11.3.2) mit AWS Plugin v1.13.0, node-agent DaemonSet (kopia fs-backup), taeglich 04:30 auf NAS10 S3 (k8s-{env}-velero). i-doit Upload+src rclone Backup taeglich 05:30 auf NAS10 S3 (k8s-{env}-idoit). 4 neue ArgoCD Apps pro Env. Backup-Strategie-Tabelle aktualisiert, Layer 6 Velero-Status auf Installiert, Namespace velero hinzugefuegt |
+| 14.04.2026 | 2.15    | Phase 10 Velero Backup + i-doit rclone Backup ABGESCHLOSSEN (DEV+TEST+PROD): Velero v1.17.1 (Helm 11.3.2) mit AWS Plugin v1.13.0, node-agent DaemonSet (kopia fs-backup) auf NAS10 S3 (k8s-{env}-velero). i-doit Upload+src rclone Backup auf NAS10 S3 (k8s-{env}-idoit). 4 neue ArgoCD Apps pro Env. Backup-Zeitplaene gestaffelt: PROD 00:01-02:00, TEST 02:15-04:15, DEV 04:30-06:30 (keine NAS10-Ueberlappung). MariaDB PhysicalBackup schedule.cron ist immutable (Learning #6). Layer 6 Velero auf Installiert, Namespace velero hinzugefuegt |
 
 ---
 

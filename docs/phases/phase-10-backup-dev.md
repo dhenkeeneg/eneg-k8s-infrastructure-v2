@@ -99,19 +99,55 @@ Velero v1.18 ist noch RC (v1.18.0-rc.1) — wir nutzen die stabile v1.17.1.
 
 ---
 
-## 4. Backup-Zeitplan (Ziel-Zustand)
+## 4. Backup-Zeitplan (Gestaffelt, alle Zeiten Europe/Berlin)
 
-| Zeit | Backup | Tool | Ziel |
-|------|--------|------|------|
-| 02:00 | MariaDB Physical Backup | MariaDB Operator | NAS10 S3 |
-| 02:30 | CNPG Barman (Physical) | CNPG/Barman | NAS10 S3 |
-| 03:00 | CNPG pg_dumpall (cnpg-shared) | CronJob | NAS10 S3 |
-| 03:15 | CNPG pg_dumpall (cnpg-erp) | CronJob | NAS10 S3 |
-| 04:00 | Garage S3 rclone | CronJob | NAS10 S3 |
-| **04:30** | **Velero (K8s-Objekte + PV-Daten)** | **Velero Schedule** | **NAS10 S3** |
-| 05:00 | Odoo Filestore rclone | CronJob | NAS10 S3 |
-| **05:30** | **i-doit Upload rclone** | **CronJob** | **NAS10 S3** |
-| laufend | CNPG WAL-Archivierung | CNPG/Barman | NAS10 S3 |
+Umgebungen zeitlich gestaffelt um NAS10 S3 Rate-Limiting zu vermeiden.
+PROD hat Prioritaet (fruehestes Fenster).
+
+### PROD (00:01 – 02:00)
+
+| Zeit | Backup | Tool |
+|------|--------|------|
+| 00:01 | MariaDB Physical Backup | MariaDB Operator |
+| 00:15 | CNPG Barman shared (Physical) | CNPG/Barman |
+| 00:20 | CNPG Barman erp (Physical) | CNPG/Barman |
+| 00:30 | CNPG pg_dumpall (cnpg-shared) | CronJob |
+| 00:45 | CNPG pg_dumpall (cnpg-erp) | CronJob |
+| 01:00 | Garage S3 rclone | CronJob |
+| 01:15 | Velero (K8s-Objekte + PV-Daten) | Velero Schedule |
+| 01:45 | Odoo Filestore rclone | CronJob |
+| 02:00 | i-doit Upload+src rclone | CronJob |
+
+### TEST (02:15 – 04:15)
+
+| Zeit | Backup | Tool |
+|------|--------|------|
+| 02:15 | MariaDB Physical Backup | MariaDB Operator |
+| 02:30 | CNPG Barman shared (Physical) | CNPG/Barman |
+| 02:35 | CNPG Barman erp (Physical) | CNPG/Barman |
+| 02:45 | CNPG pg_dumpall (cnpg-shared) | CronJob |
+| 03:00 | CNPG pg_dumpall (cnpg-erp) | CronJob |
+| 03:15 | Garage S3 rclone | CronJob |
+| 03:30 | Velero (K8s-Objekte + PV-Daten) | Velero Schedule |
+| 04:00 | Odoo Filestore rclone | CronJob |
+| 04:15 | i-doit Upload+src rclone | CronJob |
+
+### DEV (04:30 – 06:30)
+
+| Zeit | Backup | Tool |
+|------|--------|------|
+| 04:30 | MariaDB Physical Backup | MariaDB Operator |
+| 04:45 | CNPG Barman shared (Physical) | CNPG/Barman |
+| 04:50 | CNPG Barman erp (Physical) | CNPG/Barman |
+| 05:00 | CNPG pg_dumpall (cnpg-shared) | CronJob |
+| 05:15 | CNPG pg_dumpall (cnpg-erp) | CronJob |
+| 05:30 | Garage S3 rclone | CronJob |
+| 05:45 | Velero (K8s-Objekte + PV-Daten) | Velero Schedule |
+| 06:15 | Odoo Filestore rclone | CronJob |
+| 06:30 | i-doit Upload+src rclone | CronJob |
+
+Alle Backups → NAS10 S3 (nas10.eneg.de:8010, HTTP).
+CNPG WAL-Archivierung laeuft zusaetzlich kontinuierlich (alle Umgebungen).
 
 
 ---
@@ -511,6 +547,15 @@ Detailliertes Restore-Verfahren wird nach DEV-Implementierung als Runbook erstel
    wird das Volume einmal deklariert und in den volumeMounts mehrfach mit verschiedenen
    subPaths gemountet. Nicht mehrere Volume-Eintraege fuer dieselbe PVC verwenden.
 
+6. **MariaDB PhysicalBackup `schedule.cron` ist immutable.** Der MariaDB Operator
+   erlaubt keine Aenderung des Cron-Schedules ueber ein Update. Die PhysicalBackup-Ressource
+   muss geloescht werden (`kubectl delete physicalbackup mariadb-galera-backup -n databases`),
+   damit ArgoCD sie mit dem neuen Schedule neu erstellt.
+
+7. **Backup-Zeitplaene umgebungsweise staffeln.** Alle Umgebungen gleichzeitig auf NAS10 S3
+   schreiben zu lassen fuehrt zu Rate-Limiting (bekannt von CNPG). Loesung: PROD 00:01,
+   TEST 02:15, DEV 04:30 — jeweils ~2h15min Fenster ohne Ueberlappung.
+
 ---
 
 ## 17. DEV Implementierung — Ergebnisse (14.04.2026)
@@ -586,5 +631,5 @@ Identische Konfiguration wie DEV/TEST, Bucket-Namen auf `k8s-prod-*` angepasst.
 ---
 
 *Erstellt: 14.04.2026*
-*Letzte Aktualisierung: 14.04.2026 (DEV + TEST + PROD abgeschlossen)*
+*Letzte Aktualisierung: 14.04.2026 (DEV+TEST+PROD abgeschlossen, Zeitplaene gestaffelt)*
 
