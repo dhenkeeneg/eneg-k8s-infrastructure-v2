@@ -359,12 +359,12 @@ namespaces:
 
 | Komponente | Version | Status |
 |------------|---------|--------|
-| Kyverno | v1.17.1 (Helm 3.7.1) | 🔧 Phase 9 (In Arbeit) |
-| Kyverno Policies (PSS) | Helm 3.7.1 | 🔧 Phase 9 (In Arbeit) |
-| Trivy Operator | v0.30.1 (Helm 0.32.1) | 🔧 Phase 9 (In Arbeit) |
-| CrowdSec Security Engine | Helm (latest stable) | 🔧 Phase 9 (In Arbeit) |
-| CrowdSec Traefik Bouncer | Plugin v1.3.3 | 🔧 Phase 9 (In Arbeit) |
-| Falco | v0.42.x (Helm 8.0.1) | 🔧 Phase 9 (In Arbeit) |
+| Kyverno | v1.17.1 (Helm 3.7.1) | ✅ DEV |
+| Kyverno Policies (PSS) | Helm 3.7.1 | ✅ DEV |
+| Trivy Operator | v0.30.1 (Helm 0.32.1) | ✅ DEV |
+| CrowdSec Security Engine | Helm (latest stable) | 🔧 Phase 9 (Ausstehend) |
+| CrowdSec Traefik Bouncer | Plugin v1.3.3 | 🔧 Phase 9 (Ausstehend) |
+| Falco | v0.42.x (Helm 8.0.1) | 🔧 Phase 9 (Ausstehend) |
 
 ### Layer 6: Identity und Backup
 

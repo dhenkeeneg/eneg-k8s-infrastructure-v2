@@ -330,13 +330,53 @@ kubernetes/
    `jqPathExpressions: [.metadata.annotations, .metadata.labels]` in `argocd-cm`.
    Dieser Fix ist global und betrifft alle CRDs — fuer TEST/PROD bereits vorbereitet.
 
+4. **ArgoCD Application `ignoreDifferences` Schema:** Das Application CRD erwartet
+   `jqPathExpressions` (Plural, Array), nicht `jqPathExpression` (Singular). Die
+   `argocd-cm` ConfigMap verwendet dagegen die Singular-Form als YAML-Key-Suffix.
+   App-level ignoreDifferences sind redundant wenn der globale Fix in argocd-cm greift
+   → entfernt zugunsten der globalen Loesung.
+
+5. **Trivy Operator OOMKilled bei 256Mi:** Der Operator watcht alle Workloads in allen
+   Namespaces gleichzeitig. 256Mi Memory-Limit reicht nicht fuer einen Cluster mit
+   ~50 Apps. Fix: Memory-Limit auf 512Mi erhoeht (Requests 256Mi).
+
+6. **Trivy Operator `builtInTrivyServer`:** Statt manuell `trivy.mode: ClientServer`
+   und `trivy.serverURL` zu setzen, genuegt `trivy.builtInTrivyServer: true`. Das
+   Chart setzt automatisch mode=ClientServer und die korrekte interne Service-URL.
+
 ---
 
 ## 13. DEV Implementierung — Ergebnisse
 
-_Wird nach Abschluss der DEV-Implementierung ergaenzt._
+### Schritt 1: Kyverno (14.04.2026) ✅
+
+| Komponente | Version | Pods | Status |
+|------------|---------|------|--------|
+| Admission Controller | v1.17.1 (Chart 3.7.1) | 1 | ✅ Running |
+| Background Controller | v1.17.1 | 1 | ✅ Running |
+| Cleanup Controller | v1.17.1 | 1 | ✅ Running |
+| Reports Controller | v1.17.1 | 1 | ✅ Running |
+
+**ArgoCD Apps:** kyverno (Synced+Healthy), kyverno-policies (Synced+Healthy)
+**ClusterPolicies:** 11 Baseline PSS Policies, alle Ready, Audit-Modus
+**ArgoCD OutOfSync Fix:** Global in argocd-cm (ClusterPolicy + CRD ignoreDifferences)
+
+### Schritt 2: Trivy Operator (14.04.2026) ✅
+
+| Komponente | Version | Pods | Status |
+|------------|---------|------|--------|
+| Trivy Operator | v0.30.1 (Chart 0.32.1) | 1 | ✅ Running |
+| Built-in Trivy Server | (im Operator integriert) | - | ✅ Aktiv |
+| Scan-Jobs | (dynamisch, 2 parallel) | 0-2 | ✅ Laufen |
+
+**ArgoCD App:** trivy-operator (Synced+Healthy)
+**VulnerabilityReports:** Automatisch fuer alle Workloads, erste Ergebnisse nach ~2min
+**Erste Findings:** Velero 6 Critical, PostgreSQL 2 Critical, Longhorn 2 Critical
+
+### Schritt 3: CrowdSec — Ausstehend
+### Schritt 4: Falco — Ausstehend
 
 ---
 
 *Erstellt: 14.04.2026*
-*Letzte Aktualisierung: 14.04.2026 (Initiales Planungsdokument)*
+*Letzte Aktualisierung: 14.04.2026 (Kyverno + Trivy Operator DEV deployed, CrowdSec + Falco ausstehend)*
