@@ -30,6 +30,10 @@ alertmanager:
       repeat_interval: 4h
       receiver: 'email-and-teams'
       routes:
+        # InfoInhibitor: Meta-Alert an null-Receiver (kein Alarm)
+        - match:
+            alertname: InfoInhibitor
+          receiver: 'null'
         # Watchdog: Nur 1x taeglich um 07:00 MESZ (DeadMansSwitch)
         - match:
             alertname: Watchdog
@@ -53,6 +57,7 @@ alertmanager:
             location: 'Europe/Berlin'
 
     receivers:
+      - name: 'null'
       - name: 'email-and-teams'
         email_configs:
           - to: 'd.henke@eneg.de'
@@ -67,3 +72,8 @@ alertmanager:
         target_matchers:
           - severity = warning
         equal: ['namespace', 'alertname']
+      - source_matchers:
+          - alertname = InfoInhibitor
+        target_matchers:
+          - severity = info
+        equal: ['namespace']
