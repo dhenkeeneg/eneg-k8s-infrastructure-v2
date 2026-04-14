@@ -22,4 +22,23 @@ data:
     jqPathExpressions:
       - .spec.source.directory
 
+  # Kyverno v1.17: Der Admission Controller fuegt Default-Werte in ClusterPolicies
+  # ein (admission, emitWarning, failurePolicy auf top-level; skipBackgroundRequests
+  # und allowExistingViolations in rules). Diese Felder existieren nicht im
+  # Helm-Template und erzeugen permanentes OutOfSync ohne ignoreDifferences.
+  resource.customizations.ignoreDifferences.kyverno.io_ClusterPolicy: |
+    jsonPointers:
+      - /spec/admission
+      - /spec/emitWarning
+      - /spec/failurePolicy
+    jqPathExpressions:
+      - .spec.rules[]?.skipBackgroundRequests
+      - .spec.rules[]?.validate?.allowExistingViolations
+
+  # Kyverno CRDs (policies.kyverno.io): Kubernetes fuegt spec.conversion.strategy
+  # als Default hinzu. Betrifft alle neuen policies.kyverno.io CRDs in v1.17.
+  resource.customizations.ignoreDifferences.apiextensions.k8s.io_CustomResourceDefinition: |
+    jqPathExpressions:
+      - .spec.conversion
+
   # Server URL wird per Environment-Overlay gesetzt
