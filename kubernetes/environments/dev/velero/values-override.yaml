@@ -1,0 +1,33 @@
+# Velero DEV Override
+# Umgebungsspezifisch: S3-Endpoint, Bucket, Backup-Schedule
+
+# -----------------------------------------------------------------------
+# Backup Storage Location: DEV S3 Bucket auf NAS10
+# -----------------------------------------------------------------------
+configuration:
+  backupStorageLocation:
+    - name: default
+      provider: aws
+      default: true
+      accessMode: ReadWrite
+      bucket: k8s-dev-velero
+      config:
+        region: us-east-1
+        s3ForcePathStyle: "true"
+        s3Url: http://nas10.eneg.de:8010
+        insecureSkipTLSVerify: "true"
+
+# -----------------------------------------------------------------------
+# Backup Schedule: Taeglich 04:30 Europe/Berlin, 14 Tage Retention
+# -----------------------------------------------------------------------
+schedules:
+  daily-backup:
+    disabled: false
+    schedule: "30 4 * * *"
+    useOwnerReferencesInBackup: false
+    template:
+      ttl: "336h0m0s"
+      storageLocation: default
+      defaultVolumesToFsBackup: true
+      includedNamespaces:
+        - "*"

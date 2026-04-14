@@ -1,0 +1,86 @@
+# Velero Helm Chart Values (Base)
+# Chart: vmware-tanzu/velero v11.3.2 (App v1.17.1)
+# Kubernetes Backup & Disaster Recovery
+# https://vmware-tanzu.github.io/helm-charts
+
+# -----------------------------------------------------------------------
+# Velero Server
+# -----------------------------------------------------------------------
+resources:
+  requests:
+    cpu: 100m
+    memory: 128Mi
+  limits:
+    cpu: 500m
+    memory: 512Mi
+
+# -----------------------------------------------------------------------
+# Init Containers: AWS S3 Plugin
+# -----------------------------------------------------------------------
+initContainers:
+  - name: velero-plugin-for-aws
+    image: velero/velero-plugin-for-aws:v1.13.0
+    imagePullPolicy: IfNotPresent
+    volumeMounts:
+      - mountPath: /target
+        name: plugins
+
+# -----------------------------------------------------------------------
+# node-agent DaemonSet (fs-backup fuer PV-Daten via kopia)
+# -----------------------------------------------------------------------
+deployNodeAgent: true
+
+nodeAgent:
+  resources:
+    requests:
+      cpu: 100m
+      memory: 128Mi
+    limits:
+      cpu: 500m
+      memory: 512Mi
+
+# -----------------------------------------------------------------------
+# Backup-Konfiguration
+# -----------------------------------------------------------------------
+configuration:
+  # Alle PVs per File System Backup sichern
+  defaultVolumesToFsBackup: true
+
+  # Backup Storage Location (S3-kompatibel)
+  # Umgebungsspezifische Werte (bucket, s3Url) im Override
+  backupStorageLocation:
+    - name: default
+      provider: aws
+      default: true
+      accessMode: ReadWrite
+      config:
+        region: us-east-1
+        s3ForcePathStyle: "true"
+
+# -----------------------------------------------------------------------
+# Credentials: Verweis auf bestehendes SOPS-Secret
+# -----------------------------------------------------------------------
+credentials:
+  useSecret: true
+  existingSecret: velero-s3-credentials
+
+# -----------------------------------------------------------------------
+# Volume Snapshot Location: Nicht verwendet (kein Cloud-Provider)
+# -----------------------------------------------------------------------
+snapshotsEnabled: false
+
+# -----------------------------------------------------------------------
+# Prometheus ServiceMonitor (fuer Phase 7 Monitoring)
+# -----------------------------------------------------------------------
+metrics:
+  enabled: true
+  serviceMonitor:
+    enabled: true
+    additionalLabels:
+      release: kube-prometheus-stack
+
+# -----------------------------------------------------------------------
+# ArgoCD-Kompatibilitaet
+# -----------------------------------------------------------------------
+upgradeJobResources: {}
+upgradeCRDs: false

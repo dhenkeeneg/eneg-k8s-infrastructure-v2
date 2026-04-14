@@ -1,0 +1,44 @@
+---
+# ArgoCD Application: Velero Backup (DEV)
+# Helm Chart vmware-tanzu/velero v11.3.2 (App v1.17.1)
+# Multi-Source: Helm Chart + Base Values + DEV Override
+# Kubernetes Backup & Disaster Recovery auf NAS10 S3
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: velero
+  namespace: argocd
+  annotations:
+    argocd.argoproj.io/sync-wave: "5"
+  finalizers:
+    - resources-finalizer.argocd.argoproj.io
+spec:
+  project: default
+
+  sources:
+    # Source 1: Velero Helm Chart
+    - repoURL: https://vmware-tanzu.github.io/helm-charts
+      chart: velero
+      targetRevision: 11.3.2
+      helm:
+        releaseName: velero
+        valueFiles:
+          - $values/kubernetes/base/velero/values.yaml
+          - $values/kubernetes/environments/dev/velero/values-override.yaml
+
+    # Source 2: Git Repository Referenz fuer Values
+    - repoURL: git@github.com:dhenkeeneg/eneg-k8s-infrastructure-v2.git
+      targetRevision: main
+      ref: values
+
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: velero
+
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
+    syncOptions:
+      - CreateNamespace=true
+      - ServerSideApply=true
