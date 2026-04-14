@@ -1,10 +1,10 @@
 # Phase 10: Velero Backup + i-doit rclone Backup
 
-**Status:** DEV abgeschlossen, TEST/PROD offen
+**Status:** Abgeschlossen (DEV + TEST + PROD)
 **Beginn:** 14.04.2026
 **DEV fertig:** 14.04.2026
-**TEST fertig:** -
-**PROD fertig:** -
+**TEST fertig:** 14.04.2026
+**PROD fertig:** 14.04.2026
 **Voraussetzung:** Phase 7 (Monitoring) abgeschlossen, Phase 8c (PROD Rollout) abgeschlossen
 
 ---
@@ -553,6 +553,38 @@ Detailliertes Restore-Verfahren wird nach DEV-Implementierung als Runbook erstel
 
 ---
 
+## 18. TEST Implementierung — Ergebnisse (14.04.2026)
+
+Identische Konfiguration wie DEV, Bucket-Namen auf `k8s-test-*` angepasst.
+
+| Pruefpunkt | Ergebnis |
+|------------|----------|
+| 4 ArgoCD Apps (velero, velero-secrets, idoit-backup, idoit-backup-secrets) | Synced+Healthy |
+| Velero Server + node-agent (3/3) | Running |
+| BSL `default` | Available |
+| Schedule `velero-daily-backup` | Enabled |
+| CronJob `idoit-backup` | Active |
+| Full Backup (via --from-schedule) | Completed |
+| i-doit rclone Test-Lauf | Completed |
+
+---
+
+## 19. PROD Implementierung — Ergebnisse (14.04.2026)
+
+Identische Konfiguration wie DEV/TEST, Bucket-Namen auf `k8s-prod-*` angepasst.
+
+| Pruefpunkt | Ergebnis |
+|------------|----------|
+| 4 ArgoCD Apps (velero, velero-secrets, idoit-backup, idoit-backup-secrets) | Synced+Healthy |
+| Velero Server + node-agent (3/3) | Running |
+| BSL `default` | Available |
+| Schedule `velero-daily-backup` | Enabled |
+| CronJob `idoit-backup` | Active |
+| Full Backup (via --from-schedule) | Completed |
+| i-doit rclone Test-Lauf | Completed |
+
+---
+
 *Erstellt: 14.04.2026*
-*Letzte Aktualisierung: 14.04.2026 (DEV abgeschlossen)*
+*Letzte Aktualisierung: 14.04.2026 (DEV + TEST + PROD abgeschlossen)*
 

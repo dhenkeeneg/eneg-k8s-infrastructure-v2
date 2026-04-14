@@ -363,7 +363,7 @@ namespaces:
 | Komponente | Version | Status |
 |------------|---------|--------|
 | Keycloak | 26.5.4 | ✅ Installiert |
-| Velero | v1.17.1 (Helm 11.3.2) | ✅ DEV, TEST/PROD offen |
+| Velero | v1.17.1 (Helm 11.3.2) | ✅ Installiert |
 | Vaultwarden | - | Offen |
 
 ### Layer 7: Business Applications
@@ -894,7 +894,7 @@ extraArgs:
 | 7     | Monitoring-Stack (inkl. Backup-Health, WAL-Volume, S3-Endpoint Alerting)          | 2-3 Tage | ✅ Abgeschlossen (13.04.2026) |
 | 8     | TEST & PROD Rollout                                                               | 2-3 Tage | ✅ Abgeschlossen (30.03.2026) |
 | 9     | Security & Haertung                                                               | 3-5 Tage | 🔲 Offen                     |
-| 10    | Velero Backup + i-doit rclone Backup                                              | 2-3 Tage | 🟡 DEV abgeschlossen (14.04.2026) |
+| 10    | Velero Backup + i-doit rclone Backup                                              | 2-3 Tage | ✅ Abgeschlossen (14.04.2026) |
 
 ---
 
@@ -1238,9 +1238,9 @@ Headlamp als Web-basiertes Kubernetes Dashboard auf allen 3 Clustern deployed.
 
 ---
 
-### Phase 10: Velero Backup + i-doit rclone Backup 🟡
+### Phase 10: Velero Backup + i-doit rclone Backup ✅
 
-**Status:** DEV abgeschlossen (14.04.2026), TEST/PROD offen
+**Status:** Abgeschlossen (14.04.2026, DEV + TEST + PROD)
 
 **Velero v1.17.1 (Helm Chart 11.3.2):**
 - Taegliches Backup aller Kubernetes-Ressourcen + PV-Daten (kopia fs-backup)
@@ -1355,7 +1355,7 @@ docs/
 | 30.03.2026 | 2.12    | Headlamp Kubernetes Dashboard (Helm v0.41.0) auf DEV, TEST, PROD deployed, ServiceAccount Token Auth, Split-DNS                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                  |
 | 31.03.2026 | 2.13    | Dokumentation gegen Repository abgeglichen: Phase 6+8 Status auf Abgeschlossen, DNS PROD Wildcard durch Einzel-Eintraege ersetzt, Pilot-Apps-Tabelle auf 6 Apps erweitert (Keycloak, i-doit, it-info-versand ergaenzt), Repository-Struktur aktualisiert (docker/, scripts/, prod-Overlays, Ansible Playbooks), Namespace-Struktur vervollstaendigt, Dokumentationsstruktur aktualisiert, cnpg-barman-cloud-plugin-migration.md Guide erstellt, CNPG-Spec auf cnpg-shared + cnpg-erp angepasst, Kustomize-Overlay-Tabellen um DB- und App-Layer erweitert, S3-Bucket-Tabelle mit tatsaechlichen Namenskonventionen aktualisiert, Backup-Uebersicht korrigiert, DEV App-Secrets und Infra-Secrets von base/ nach environments/dev/ migriert (11 ArgoCD Apps angepasst), ArgoCD App-of-Apps OutOfSync Fix via resource.customizations.ignoreDifferences in argocd-cm (directory.recurse Default, Ref: #4501), ADR-002 Branch-per-Environment Promotion-Strategie, Phase 8e Migrationsplan erstellt |
 | 13.04.2026 | 2.14    | Phase 7 Monitoring-Stack ABGESCHLOSSEN (DEV+TEST+PROD): kube-prometheus-stack 83.0.0, Thanos 17.3.1, Loki 6.55.0, Alloy 1.7.0, Blackbox Exporter 11.9.1, prometheus-msteams v1.5.4. 9 ArgoCD Apps + 23 Pods pro Env, Grafana Dashboards (7x), Custom PrometheusRules (4x), AlertManager E-Mail+Teams, Watchdog 07:00 MESZ. Layer 4 Monitoring-Tabelle aktualisiert. Learning #20: CNPG enablePodMonitor SSA-Workaround (eigenstaendige PodMonitor-CRDs statt Operator-Funktion fuer TEST/PROD)                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                   |
-| 14.04.2026 | 2.15    | Phase 10 Velero Backup + i-doit rclone Backup DEV abgeschlossen: Velero v1.17.1 (Helm 11.3.2) mit AWS Plugin v1.13.0, node-agent DaemonSet (kopia fs-backup), taeglich 04:30 auf NAS10 S3 (k8s-{env}-velero). i-doit Upload+src rclone Backup taeglich 05:30 auf NAS10 S3 (k8s-{env}-idoit). 4 neue ArgoCD Apps. Backup-Strategie-Tabelle aktualisiert (Velero + i-doit + korrigierte Zeiten). Layer 6 Velero-Status auf DEV abgeschlossen. TEST/PROD Rollout offen |
+| 14.04.2026 | 2.15    | Phase 10 Velero Backup + i-doit rclone Backup ABGESCHLOSSEN (DEV+TEST+PROD): Velero v1.17.1 (Helm 11.3.2) mit AWS Plugin v1.13.0, node-agent DaemonSet (kopia fs-backup), taeglich 04:30 auf NAS10 S3 (k8s-{env}-velero). i-doit Upload+src rclone Backup taeglich 05:30 auf NAS10 S3 (k8s-{env}-idoit). 4 neue ArgoCD Apps pro Env. Backup-Strategie-Tabelle aktualisiert, Layer 6 Velero-Status auf Installiert, Namespace velero hinzugefuegt |
 
 ---
 
