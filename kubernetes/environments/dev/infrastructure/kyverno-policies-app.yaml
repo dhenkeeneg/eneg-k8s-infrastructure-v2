@@ -34,16 +34,7 @@ spec:
     server: https://kubernetes.default.svc
     namespace: kyverno
 
-  # Kyverno Admission Controller fuegt Default-Werte in ClusterPolicies ein
-  # (admission, emitWarning, failurePolicy, skipBackgroundRequests, allowExistingViolations)
-  # Diese Felder existieren nicht im Helm-Template → permanentes OutOfSync ohne ignoreDifferences
-  ignoreDifferences:
-    - group: kyverno.io
-      kind: ClusterPolicy
-      jsonPointers:
-        - /spec/admission
-        - /spec/emitWarning
-        - /spec/failurePolicy
+  # ignoreDifferences global in argocd-cm konfiguriert (CRDs + ClusterPolicies)
 
   syncPolicy:
     automated:
@@ -52,4 +43,3 @@ spec:
     syncOptions:
       - CreateNamespace=true
       - ServerSideApply=true
-      - RespectIgnoreDifferences=true
