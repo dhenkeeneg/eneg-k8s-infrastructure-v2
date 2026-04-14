@@ -11,25 +11,15 @@ operator:
 
 # -- Trivy Scanner Konfiguration
 trivy:
-  # Built-in Trivy Server im Cluster (vermeidet DB-Download pro Scan)
-  mode: ClientServer
+  # Built-in Trivy Server im Cluster aktivieren
+  # Setzt automatisch mode=ClientServer und serverURL auf den internen Service
+  # Cached die Vulnerability-DB lokal → schnellere Scans, weniger Traffic
+  builtInTrivyServer: true
   severity: UNKNOWN,LOW,MEDIUM,HIGH,CRITICAL
   # Nur fixbare Schwachstellen anzeigen (optionale Verschaerfung)
   ignoreUnfixed: false
   # Timeout fuer einzelne Scans
   timeout: 5m0s
-
-# -- Built-in Trivy Server (laeuft als Deployment im Cluster)
-# Cached die Vulnerability-DB lokal → schnellere Scans, weniger Traffic
-trivyServer:
-  enabled: true
-  resources:
-    requests:
-      cpu: 100m
-      memory: 256Mi
-    limits:
-      cpu: 500m
-      memory: 512Mi
 
 # -- Scan-Typen aktivieren
 vulnerabilityReportsScanner: Trivy
