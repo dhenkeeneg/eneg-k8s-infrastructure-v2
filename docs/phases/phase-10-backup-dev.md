@@ -1,8 +1,8 @@
 # Phase 10: Velero Backup + i-doit rclone Backup
 
-**Status:** In Bearbeitung (DEV)
+**Status:** DEV abgeschlossen, TEST/PROD offen
 **Beginn:** 14.04.2026
-**DEV fertig:** -
+**DEV fertig:** 14.04.2026
 **TEST fertig:** -
 **PROD fertig:** -
 **Voraussetzung:** Phase 7 (Monitoring) abgeschlossen, Phase 8c (PROD Rollout) abgeschlossen
@@ -492,10 +492,67 @@ Detailliertes Restore-Verfahren wird nach DEV-Implementierung als Runbook erstel
 
 ## 16. Learnings (DEV)
 
-_Wird waehrend der Implementierung ergaenzt._
+1. **Velero Helm Chart Name-Prefix:** Der Schedule heisst `velero-daily-backup` (nicht `daily-backup`).
+   Das Helm Chart setzt automatisch den Release-Namen als Prefix.
+
+2. **Manuelles Schedule-Backup:** `velero backup create --from-schedule velero-daily-backup --wait`
+   ist besser als manuelles Backup mit Flags, da exakt dieselben Parameter wie der Schedule
+   verwendet werden (TTL, includedNamespaces, defaultVolumesToFsBackup).
+
+3. **PV-Backup via kopia funktioniert Out-of-the-Box** mit `defaultVolumesToFsBackup: true`.
+   Keine zusaetzliche Konfiguration fuer Longhorn PVCs noetig. node-agent DaemonSet
+   greift direkt auf die PV-Daten auf dem jeweiligen Node zu.
+
+4. **rclone fsnotify Warnung** (`failed to create fsnotify watcher: too many open files`)
+   ist unkritisch — tritt beim Aufraemen des rclone-Prozesses auf, nicht beim Backup selbst.
+   Kein Einfluss auf Backup-Integritaet.
+
+5. **PVC subPath-Mounting in CronJob:** Bei einem PVC mit mehreren subPaths (wie idoit-data)
+   wird das Volume einmal deklariert und in den volumeMounts mehrfach mit verschiedenen
+   subPaths gemountet. Nicht mehrere Volume-Eintraege fuer dieselbe PVC verwenden.
+
+---
+
+## 17. DEV Implementierung — Ergebnisse (14.04.2026)
+
+### Deployed Components
+
+| Komponente | Version | Pods | Status |
+|------------|---------|------|--------|
+| Velero Server | v1.17.1 (Chart 11.3.2) | 1 | ✅ Running |
+| node-agent DaemonSet | v1.17.1 | 3 (je 1/Node) | ✅ Running |
+| velero-plugin-for-aws | v1.13.0 | (init-container) | ✅ |
+| i-doit Backup CronJob | rclone 1.73.1 | (bei Ausfuehrung) | ✅ Active |
+
+### ArgoCD Apps (4 neue Apps)
+
+| App | Typ | Status |
+|-----|-----|--------|
+| velero-secrets | Kustomize (KSOPS) | ✅ Synced+Healthy |
+| velero | Helm (Multi-Source) | ✅ Synced+Healthy |
+| idoit-backup-secrets | Kustomize (KSOPS) | ✅ Synced+Healthy |
+| idoit-backup | Kustomize | ✅ Synced+Healthy |
+
+### Velero Status
+
+| Pruefpunkt | Ergebnis |
+|------------|----------|
+| BackupStorageLocation `default` | Available (NAS10 S3 OK) |
+| Schedule `velero-daily-backup` | Enabled (30 4 * * *, TTL 336h) |
+| Test-Backup headlamp (ohne PV) | Completed, 14 Objekte, 2s |
+| Test-Backup idoit (mit PV) | Completed, 23 Objekte + idoit-data kopia, 13s |
+| Full Backup (alle Namespaces + PVs) | Completed (via --from-schedule) |
+
+### i-doit Backup Status
+
+| Pruefpunkt | Ergebnis |
+|------------|----------|
+| CronJob `idoit-backup` | Active, Schedule 05:30 Europe/Berlin |
+| Test-Lauf | Complete, 18s, src 23.7 MiB auf NAS10 |
+| Bucket `k8s-dev-idoit` | Daten in /upload/ und /src/ vorhanden |
 
 ---
 
 *Erstellt: 14.04.2026*
-*Letzte Aktualisierung: 14.04.2026*
+*Letzte Aktualisierung: 14.04.2026 (DEV abgeschlossen)*
 
