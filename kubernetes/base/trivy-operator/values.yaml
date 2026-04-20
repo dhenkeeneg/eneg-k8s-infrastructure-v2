@@ -8,18 +8,31 @@ operator:
   scanJobsConcurrentLimit: 3
   # Scan-Timeout fuer einzelne Jobs
   scanJobTimeout: 5m
+  # -- Built-in Trivy Server im Cluster aktivieren
+  # Chart-Konvention: Key liegt unter operator.*, NICHT unter trivy.* (fruehere
+  # Position war wirkungslos -> trivy.mode blieb Standalone -> Cache-Lock-Races).
+  # Setzt automatisch: trivy.mode=ClientServer und serverURL=http://trivy-operator-trivy:4975
+  # Deployed zusaetzlich ein trivy-server-0 StatefulSet mit PVC fuer DB-Cache
+  # -> Scan-Pods nutzen gemeinsamen Server, kein lokaler emptyDir-Cache mehr
+  builtInTrivyServer: true
 
 # -- Trivy Scanner Konfiguration
 trivy:
-  # Built-in Trivy Server im Cluster aktivieren
-  # Setzt automatisch mode=ClientServer und serverURL auf den internen Service
-  # Cached die Vulnerability-DB lokal → schnellere Scans, weniger Traffic
-  builtInTrivyServer: true
   severity: UNKNOWN,LOW,MEDIUM,HIGH,CRITICAL
   # Nur fixbare Schwachstellen anzeigen (optionale Verschaerfung)
   ignoreUnfixed: false
   # Timeout fuer einzelne Scans
   timeout: 5m0s
+
+  # -- Trivy Server (wird bei operator.builtInTrivyServer=true deployed)
+  server:
+    resources:
+      requests:
+        cpu: 200m
+        memory: 512Mi
+      limits:
+        cpu: 1000m
+        memory: 1Gi
 
 # -- Scan-Typen aktivieren
 vulnerabilityReportsScanner: Trivy
