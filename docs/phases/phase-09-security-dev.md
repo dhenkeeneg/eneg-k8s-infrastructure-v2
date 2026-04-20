@@ -339,10 +339,50 @@ kubernetes/
 5. **Trivy Operator OOMKilled bei 256Mi:** Der Operator watcht alle Workloads in allen
    Namespaces gleichzeitig. 256Mi Memory-Limit reicht nicht fuer einen Cluster mit
    ~50 Apps. Fix: Memory-Limit auf 512Mi erhoeht (Requests 256Mi).
+   **Erweiterung 20.04.2026 (siehe Learning #7):** Die DEV-Override-Erhoehung auf
+   512Mi/1Gi wirkte zunaechst nicht, weil sie am falschen Chart-Key ansetzte
+   (`operator.resources` statt Root-Level `resources:`).
 
-6. **Trivy Operator `builtInTrivyServer`:** Statt manuell `trivy.mode: ClientServer`
-   und `trivy.serverURL` zu setzen, genuegt `trivy.builtInTrivyServer: true`. Das
-   Chart setzt automatisch mode=ClientServer und die korrekte interne Service-URL.
+6. **Trivy Operator `builtInTrivyServer` — Chart-Pfad-Fallstrick:** Um den
+   integrierten Trivy-Server zu aktivieren, muss `builtInTrivyServer: true` unter
+   **`operator.*`** stehen — NICHT unter `trivy.*`. Ursprünglich (bis 20.04.2026)
+   stand der Key im Base-Values unter `trivy.builtInTrivyServer`, wurde vom Chart
+   stillschweigend ignoriert, und `trivy.mode` blieb auf Default `Standalone`.
+   Symptom: scan-vulnerabilityreport-Pods endeten regelmaessig mit
+   `BackoffLimitExceeded`; Fehlerbild
+   `FATAL Fatal error: unable to initialize fs cache: cache may be in use by another process: timeout`.
+   Ursache: Standalone-Mode laesst jeden Scan-Pod die Trivy-DB in seinen lokalen
+   emptyDir-Cache herunterladen; bei zwei parallelen Scans auf demselben Node →
+   Lock-Race. Fix: Key nach `operator.builtInTrivyServer` verschoben (20.04.2026,
+   Commit `5f9f55a`). Nach Sync: zusaetzliches `trivy-server-0` StatefulSet mit
+   PVC (5Gi), ConfigMap `trivy.mode=ClientServer`, `serverURL=http://trivy-service.trivy-system:4954`.
+
+7. **Trivy Operator `resources` auf Root-Ebene, NICHT unter `operator.*`
+   (Chart-Konvention):** Im Aqua-Chart liegt der Resources-Block fuer den
+   Operator-Pod selbst auf Root-Ebene (`resources:`). Ein DEV-Override unter
+   `operator.resources` wird vom Chart ignoriert. Symptom: Memory-Limits blieben
+   auf Base-Defaults (256Mi/512Mi) statt der beabsichtigten 512Mi/1Gi — Pods
+   liefen weiter OOM-gefaehrdet, ohne dass ArgoCD einen Diff meldete.
+   Fix (20.04.2026, Commit `d05c540`): Block in `environments/dev/trivy-operator/values-override.yaml`
+   von `operator.resources` nach Root-Level `resources:` verschoben.
+
+   **Uebergeordnetes Prinzip (Learning #6 und #7 am selben Tag):** Helm-Chart
+   Value-Overrides IMMER gegen die Chart-Struktur (`values.yaml`) pruefen, nicht
+   aus Intuition einen benachbarten Key als Platzhalter verwenden. Beide Fehler
+   hatten dasselbe Muster: Intuitiv unter naheliegendem Key platziert, vom Chart
+   kommentarlos ignoriert, Wirkung = 0.
+
+8. **DockerHub Rate-Limit bei Trivy ClientServer-Mode (offenes Thema):** Nach
+   Umstellung auf ClientServer tauchen bei Scans von Workloads mit
+   `docker.io/*`-Images (velero, openproject, mariadb, busybox, curl) Fehler
+   `TOOMANYREQUESTS: You have reached your unauthenticated pull rate limit` auf.
+   Der Trivy-Server haelt zwar die Vuln-DB, aber Metadata-Manifest-Calls gehen
+   weiterhin direkt gegen die Quell-Registry. Shared-IP des Clusters teilt sich
+   die 100 Pulls/6h Quota. **Loesungsoptionen fuer spaeter:**
+   (a) `trivy.registry.mirror."docker.io": mirror.gcr.io` im Base,
+   (b) authentisierte DockerHub-Credentials als Secret (5000 Pulls/6h),
+   (c) Workload-Images langfristig nach GHCR/NAS10-Registry spiegeln.
+   War vor dem Cache-Lock-Fix vorhanden, nur durch den Lock-Fehler verdeckt.
 
 ---
 
@@ -361,17 +401,27 @@ kubernetes/
 **ClusterPolicies:** 11 Baseline PSS Policies, alle Ready, Audit-Modus
 **ArgoCD OutOfSync Fix:** Global in argocd-cm (ClusterPolicy + CRD ignoreDifferences)
 
-### Schritt 2: Trivy Operator (14.04.2026) ✅
+### Schritt 2: Trivy Operator (14.04.2026 / Nachbesserung 20.04.2026) ✅
 
 | Komponente | Version | Pods | Status |
 |------------|---------|------|--------|
 | Trivy Operator | v0.30.1 (Chart 0.32.1) | 1 | ✅ Running |
-| Built-in Trivy Server | (im Operator integriert) | - | ✅ Aktiv |
-| Scan-Jobs | (dynamisch, 2 parallel) | 0-2 | ✅ Laufen |
+| Trivy Server (StatefulSet, ab 20.04.2026) | v0.69.3 | 1 (trivy-server-0, PVC 5Gi) | ✅ Running |
+| Scan-Jobs (ClientServer-Mode) | dynamisch, 2 parallel | 0-2 | ✅ Laufen |
 
 **ArgoCD App:** trivy-operator (Synced+Healthy)
 **VulnerabilityReports:** Automatisch fuer alle Workloads, erste Ergebnisse nach ~2min
 **Erste Findings:** Velero 6 Critical, PostgreSQL 2 Critical, Longhorn 2 Critical
+
+**Nachbesserung 20.04.2026 (zwei Base-Chart-Fixes, siehe Learnings #6 und #7):**
+- `operator.builtInTrivyServer: true` (war zuvor faelschlich unter `trivy.*`)
+  → trivy-server-0 StatefulSet wird jetzt deployed, ConfigMap auf
+  `trivy.mode=ClientServer` umgestellt, Cache-Lock-Fehler bei parallelen Scans
+  behoben.
+- `resources:` auf Root-Ebene (war zuvor faelschlich unter `operator.resources`)
+  → Memory-Limits 512Mi req / 1Gi lim wirken jetzt tatsaechlich.
+
+**Offenes Thema:** DockerHub Rate-Limit bei Scans von `docker.io/*`-Images (siehe Learning #8).
 
 ### Schritt 3: CrowdSec — Ausstehend
 ### Schritt 4: Falco — Ausstehend
@@ -379,4 +429,4 @@ kubernetes/
 ---
 
 *Erstellt: 14.04.2026*
-*Letzte Aktualisierung: 14.04.2026 (Kyverno + Trivy Operator DEV deployed, CrowdSec + Falco ausstehend)*
+*Letzte Aktualisierung: 20.04.2026 (Trivy Operator: Chart-Pfad-Fixes fuer `builtInTrivyServer` + `resources`, ClientServer-Mode aktiv, Cache-Lock-Problem geloest; DockerHub Rate-Limit als Follow-up dokumentiert)*

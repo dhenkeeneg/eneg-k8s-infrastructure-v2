@@ -851,6 +851,31 @@ kubernetes/
     deployed ueber die monitoring-alerts ArgoCD App.
     Betrifft: TEST und PROD (DEV nutzt die Operator-Funktion).
 
+21. **DEV-Tuning Prometheus Retention + CronJobOverdue (20.04.2026).**
+    Zwei nachgelagerte DEV-Feinjustierungen am bereits laufenden Monitoring-Stack:
+
+    - **Prometheus Retention 7d / 12GB (`environments/dev/monitoring/values-override.yaml`):**
+      Default (keine Retention-Limits) fuellt die 20Gi PVC auf PROD-Volumen.
+      Fuer DEV reichen 7 Tage Vorhalt; `retentionSize: 12GB` setzt harte Grenze
+      mit Sicherheitsmarge zur PVC-Groesse (TSDB schreibt sonst bis Voll-Zustand
+      und Prometheus geht in read-only).
+
+    - **CronJobOverdue DEV-Anpassung (`environments/dev/monitoring-alerts/backup-alerts-overdue-dev.yaml`):**
+      Base-Rule `backup-alerts.CronJobOverdue` feuerte nach 2h ueber
+      `kube_cronjob_next_schedule_time` mit Selector `databases|odoo|garage`.
+      In DEV mit i-doit rclone-Backup (05:30, lange Laufzeit, gelegentliche Retries)
+      zu empfindlich. Strategic-Merge-Patch auf die komplette Group ersetzt:
+      Threshold auf **36h**, Metrik `kube_cronjob_status_last_successful_time`
+      ("letzter Erfolg liegt zu lange zurueck"), Selector um `idoit` erweitert,
+      Description sprachlich angepasst.
+
+      Patch-Stil: **Strategic-Merge-Patch** (nicht JSON6902) — robust gegen
+      Reihenfolge-Aenderungen in der Base-Rule-Liste, im Gegenzug muss bei
+      Aenderungen an `base/monitoring/alert-rules/backup-alerts.yaml` die komplette
+      `backup.rules` Group im DEV-Patch nachgezogen werden.
+
+    Kustomization-Aenderung: `patches:` Block in `environments/dev/monitoring-alerts/kustomization.yaml`.
+
 ### Offene Punkte
 
 Phase 7 Monitoring-Stack ist vollstaendig abgeschlossen (DEV + TEST + PROD).
@@ -952,4 +977,4 @@ Keine offenen Punkte.
 ---
 
 *Erstellt: 08.04.2026*
-*Letzte Aktualisierung: 13.04.2026 (Phase 7 abgeschlossen — DEV + TEST + PROD)*
+*Letzte Aktualisierung: 20.04.2026 (DEV-Tuning Learning #21 ergaenzt: Prometheus retention 7d/12GB, CronJobOverdue SMP-Patch mit 36h Threshold + idoit im Selector)*

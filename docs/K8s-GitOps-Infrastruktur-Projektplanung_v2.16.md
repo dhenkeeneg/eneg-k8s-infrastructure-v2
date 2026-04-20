@@ -3,7 +3,7 @@
 ## Projektplanung - Version 2.16
 
 **Erstellt:** 04.02.2026  
-**Letzte Aktualisierung:** 14.04.2026  
+**Letzte Aktualisierung:** 20.04.2026  
 **Phase 9 gestartet:** 14.04.2026  
 **Standort:** Hamburg  
 **Projekt:** eNeG K8s Infrastructure v2
@@ -1261,27 +1261,38 @@ Headlamp als Web-basiertes Kubernetes Dashboard auf allen 3 Clustern deployed.
 
 ### Phase 9: Security & Haertung 🔧
 
-**Status:** In Arbeit (gestartet 14.04.2026)
+**Status:** In Arbeit — Kyverno + Trivy Operator DEV abgeschlossen (Stand 20.04.2026); CrowdSec + Falco ausstehend
+
+**Beginn:** 14.04.2026
 
 **Ziel:** Mehrschichtiger Security-Stack fuer alle drei Umgebungen.
 Vorbereitung fuer geplante Internet-Freischaltung einzelner Apps.
 
 **Komponenten und Versionen:**
 
-| Komponente | Version | Funktion |
-|------------|---------|----------|
-| Kyverno | v1.17.1 (Helm 3.7.1) | Policy Engine (Pod Security Standards, Image Policies) |
-| Kyverno Policies | Helm 3.7.1 | Kubernetes Pod Security Standards |
-| Trivy Operator | v0.30.1 (Helm 0.32.1) | Vulnerability Scanner (CVEs, Fehlkonfigurationen) |
-| CrowdSec Engine | Helm (latest stable) | WAF + Brute-Force-Schutz + IP-Reputation |
-| CrowdSec Bouncer | Plugin v1.3.3 | Traefik-Middleware (Ban/Captcha) |
-| Falco | v0.42.x (Helm 8.0.1) | Runtime Security (eBPF Syscall-Monitoring) |
+| Komponente | Version | Funktion | DEV-Status |
+|------------|---------|----------|------------|
+| Kyverno | v1.17.1 (Helm 3.7.1) | Policy Engine (Pod Security Standards, Image Policies) | ✅ Deployed |
+| Kyverno Policies | Helm 3.7.1 | Kubernetes Pod Security Standards (Baseline, Audit-Modus) | ✅ Deployed |
+| Trivy Operator | v0.30.1 (Helm 0.32.1) | Vulnerability Scanner (CVEs, Fehlkonfigurationen) | ✅ Deployed, ClientServer-Mode (20.04.2026) |
+| Trivy Server (intern) | v0.69.3 (trivy-server-0 StatefulSet, PVC 5Gi) | Zentraler DB-Cache fuer alle Scan-Pods | ✅ Aktiv seit 20.04.2026 |
+| CrowdSec Engine | Helm (latest stable) | WAF + Brute-Force-Schutz + IP-Reputation | ⏳ Ausstehend |
+| CrowdSec Bouncer | Plugin v1.3.3 | Traefik-Middleware (Ban/Captcha) | ⏳ Ausstehend |
+| Falco | v0.42.x (Helm 8.0.1) | Runtime Security (eBPF Syscall-Monitoring) | ⏳ Ausstehend |
 
 **Implementierungsreihenfolge:** Kyverno → Trivy Operator → CrowdSec → Falco
 
 **Neue Namespaces:** `kyverno`, `trivy-system`, `crowdsec`, `falco`
-**Neue ArgoCD Apps:** 6 pro Environment
+**Neue ArgoCD Apps:** 6 pro Environment (2 bereits in DEV aktiv)
 **Geschaetzter Aufwand:** DEV ~10-15h, TEST/PROD je ~2-3h
+
+**Wichtige Chart-Learnings (Trivy Operator, 20.04.2026):**
+- `operator.builtInTrivyServer: true` (nicht `trivy.builtInTrivyServer`) aktiviert
+  ClientServer-Mode + trivy-server-0 StatefulSet
+- `resources:` liegt im Aqua-Chart auf Root-Ebene (nicht unter `operator.*`)
+- Uebergeordnetes Prinzip: Helm-Value-Overrides IMMER gegen Chart-Struktur pruefen,
+  nicht aus Intuition benachbarte Keys benutzen
+- Offenes Thema: DockerHub Rate-Limit bei Scans von `docker.io/*`-Images
 
 **Phasendokumentation:** `docs/phases/phase-09-security-dev.md`
 
@@ -1407,6 +1418,7 @@ docs/
 | 13.04.2026 | 2.14    | Phase 7 Monitoring-Stack ABGESCHLOSSEN (DEV+TEST+PROD): kube-prometheus-stack 83.0.0, Thanos 17.3.1, Loki 6.55.0, Alloy 1.7.0, Blackbox Exporter 11.9.1, prometheus-msteams v1.5.4. 9 ArgoCD Apps + 23 Pods pro Env, Grafana Dashboards (7x), Custom PrometheusRules (4x), AlertManager E-Mail+Teams, Watchdog 07:00 MESZ. Layer 4 Monitoring-Tabelle aktualisiert. Learning #20: CNPG enablePodMonitor SSA-Workaround (eigenstaendige PodMonitor-CRDs statt Operator-Funktion fuer TEST/PROD)                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                   |
 | 14.04.2026 | 2.15    | Phase 10 Velero Backup + i-doit rclone Backup ABGESCHLOSSEN (DEV+TEST+PROD): Velero v1.17.1 (Helm 11.3.2) mit AWS Plugin v1.13.0, node-agent DaemonSet (kopia fs-backup) auf NAS10 S3 (k8s-{env}-velero). i-doit Upload+src rclone Backup auf NAS10 S3 (k8s-{env}-idoit). 4 neue ArgoCD Apps pro Env. Backup-Zeitplaene gestaffelt: PROD 00:01-02:00, TEST 02:15-04:15, DEV 04:30-06:30 (keine NAS10-Ueberlappung). MariaDB PhysicalBackup schedule.cron ist immutable (Learning #6). Layer 6 Velero auf Installiert, Namespace velero hinzugefuegt |
 | 14.04.2026 | 2.16    | Phase 9 Security & Haertung GESTARTET: Toolauswahl und Reihenfolge festgelegt (Kyverno v1.17.1 → Trivy Operator v0.30.1 → CrowdSec + Traefik Bouncer v1.3.3 → Falco v0.42.x). Layer 5 Security-Tabelle mit konkreten Versionen befuellt. 4 neue Namespaces (kyverno, trivy-system, crowdsec, falco), 6 neue ArgoCD Apps pro Env geplant. Phasendokumentation phase-09-security-dev.md erstellt. CrowdSec als WAF/Fail2Ban-Ersatz fuer geplante Internet-Freischaltung |
+| 20.04.2026 | 2.16    | Nachbesserungen (Stand v2.16 bleibt): **Trivy Operator Chart-Pfad-Fixes** — `builtInTrivyServer: true` nach `operator.*` verschoben (war unter `trivy.*`, wurde ignoriert); `resources:` auf Root-Ebene verschoben (war unter `operator.resources`). Folge: trivy-server-0 StatefulSet (PVC 5Gi) aktiv, Cache-Lock-Fehler bei parallelen Scans behoben, Memory-Limits 512Mi/1Gi wirken jetzt. Phase 9 Status: Kyverno + Trivy Operator DEV abgeschlossen. Learnings #6/#7/#8 in phase-09-security-dev.md ergaenzt (DockerHub Rate-Limit als Follow-up). **DEV-Monitoring-Tuning:** Prometheus retention 7d/12GB in DEV values-override, CronJobOverdue DEV-SMP-Patch mit 36h Threshold + idoit im Selector (`kube_cronjob_status_last_successful_time` statt next_schedule_time). Phase 7 Learning #21 ergaenzt |
 
 ---
 
