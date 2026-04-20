@@ -4,14 +4,16 @@
 # -- DEV: Scan-Intervall (alle 24h statt Default 6h, DEV braucht weniger)
 operator:
   scanJobsConcurrentLimit: 2
-  # -- DEV: Memory-Limits angehoben (Default 500Mi -> OOMKilled bei groesseren Image-Scans)
-  resources:
-    requests:
-      cpu: 100m
-      memory: 512Mi
-    limits:
-      cpu: 500m
-      memory: 1Gi
+
+# -- DEV: Memory-Limits angehoben (Base 256Mi/512Mi -> OOMKilled bei groesseren Image-Scans)
+# Key auf Root-Ebene (nicht unter operator.) - matcht Base-Chart-Pfad
+resources:
+  requests:
+    cpu: 100m
+    memory: 512Mi
+  limits:
+    cpu: 500m
+    memory: 1Gi
 
 # -- DEV: ServiceMonitor Labels fuer Prometheus Discovery
 serviceMonitor:
