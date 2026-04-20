@@ -3,8 +3,9 @@
 ## Projektplanung - Version 2.16
 
 **Erstellt:** 04.02.2026  
-**Letzte Aktualisierung:** 20.04.2026  
+**Letzte Aktualisierung:** 20.04.2026 (Phase 9a Vorbereitung)  
 **Phase 9 gestartet:** 14.04.2026  
+**Phase 9a vorbereitet:** 20.04.2026  
 **Standort:** Hamburg  
 **Projekt:** eNeG K8s Infrastructure v2
 
@@ -1280,11 +1281,11 @@ Vorbereitung fuer geplante Internet-Freischaltung einzelner Apps.
 | CrowdSec Bouncer | Plugin v1.3.3 | Traefik-Middleware (Ban/Captcha) | ⏳ Ausstehend |
 | Falco | v0.42.x (Helm 8.0.1) | Runtime Security (eBPF Syscall-Monitoring) | ⏳ Ausstehend |
 
-**Implementierungsreihenfolge:** Kyverno → Trivy Operator → CrowdSec → Falco
+**Implementierungsreihenfolge:** Kyverno → Trivy Operator → **Phase 9a (Container Registries Zot)** → CrowdSec → Falco
 
-**Neue Namespaces:** `kyverno`, `trivy-system`, `crowdsec`, `falco`
-**Neue ArgoCD Apps:** 6 pro Environment (2 bereits in DEV aktiv)
-**Geschaetzter Aufwand:** DEV ~10-15h, TEST/PROD je ~2-3h
+**Neue Namespaces:** `kyverno`, `trivy-system`, `registry`, `crowdsec`, `falco`
+**Neue ArgoCD Apps:** 8 pro Environment (2 bereits in DEV aktiv; Registry kommt DEV+PROD, nicht TEST)
+**Geschaetzter Aufwand:** DEV ~10-15h (+ Phase 9a: ~1-2 Tage), TEST/PROD je ~2-3h
 
 **Wichtige Chart-Learnings (Trivy Operator, 20.04.2026):**
 - `operator.builtInTrivyServer: true` (nicht `trivy.builtInTrivyServer`) aktiviert
@@ -1292,9 +1293,45 @@ Vorbereitung fuer geplante Internet-Freischaltung einzelner Apps.
 - `resources:` liegt im Aqua-Chart auf Root-Ebene (nicht unter `operator.*`)
 - Uebergeordnetes Prinzip: Helm-Value-Overrides IMMER gegen Chart-Struktur pruefen,
   nicht aus Intuition benachbarte Keys benutzen
-- Offenes Thema: DockerHub Rate-Limit bei Scans von `docker.io/*`-Images
+- DockerHub Rate-Limit bei Scans von `docker.io/*`-Images → wird in **Phase 9a** vollstaendig geloest durch eigene Zot-Registry mit Proxy-Cache
 
-**Phasendokumentation:** `docs/phases/phase-09-security-dev.md`
+**Phasendokumentation:**
+- `docs/phases/phase-09-security-dev.md` (Kyverno, Trivy, CrowdSec, Falco)
+- `docs/phases/phase-09a-security-registries.md` (Zot Registries DEV + PROD)
+
+---
+
+### Phase 9a: Container Registry Infrastruktur (Zot) 🔧
+
+**Status:** Vorbereitet, Umsetzung offen (abgestimmt 20.04.2026)
+
+**Ziel:** Eigene OCI-Container-Registry mit Proxy-Cache fuer Upstream-Registries
+und eigenem Image-Hosting. Einschub in Phase 9 zwischen Trivy Operator und CrowdSec,
+weil CrowdSec-/Falco-Rollout und generelle Image-Pulls sonst durch DockerHub
+Rate-Limit gebremst wuerden.
+
+**Topologie (Variante 2):**
+
+| Instanz | Cluster | DNS | S3 Bucket | Rolle |
+|---------|---------|-----|-----------|-------|
+| DEV-Zot | k8s-dev | registry-dev.eneg.de | nas10/k8s-dev-registry | Proxy-Cache + eigene Images; TEST pullt hier mit |
+| PROD-Zot | k8s-prod | registry-prod.eneg.de | nas10/k8s-prod-registry | Empfaengt Sync von DEV; PROD-Cluster pullt ausschliesslich hier, ohne Internet-Fallback |
+
+**Software:** Zot v2.1+ (project-zot/zot, CNCF Sandbox) via Helm Chart
+
+**Mirror-Scope containerd:** `docker.io`, `quay.io`, `ghcr.io`, `registry.k8s.io` —
+in DEV + TEST mit Internet-Fallback, in PROD ohne Fallback (bewusste Air-Gap)
+
+**Reihenfolge:**
+1. Etappe A (DEV-Registry + containerd-Mirror auf allen drei Clustern mit Fallback)
+2. Verifikation
+3. Etappe B (PROD-Registry + Sync von DEV + PROD containerd ohne Fallback)
+
+**Neuer Namespace:** `registry` (DEV und PROD)
+**Neue ArgoCD Apps:** `registry`, `registry-secrets` in DEV; gleiches in PROD nach Etappe B
+**Geschaetzter Aufwand:** ~1-2 Tage
+
+**Phasendokumentation:** `docs/phases/phase-09a-security-registries.md`
 
 ---
 
@@ -1419,6 +1456,7 @@ docs/
 | 14.04.2026 | 2.15    | Phase 10 Velero Backup + i-doit rclone Backup ABGESCHLOSSEN (DEV+TEST+PROD): Velero v1.17.1 (Helm 11.3.2) mit AWS Plugin v1.13.0, node-agent DaemonSet (kopia fs-backup) auf NAS10 S3 (k8s-{env}-velero). i-doit Upload+src rclone Backup auf NAS10 S3 (k8s-{env}-idoit). 4 neue ArgoCD Apps pro Env. Backup-Zeitplaene gestaffelt: PROD 00:01-02:00, TEST 02:15-04:15, DEV 04:30-06:30 (keine NAS10-Ueberlappung). MariaDB PhysicalBackup schedule.cron ist immutable (Learning #6). Layer 6 Velero auf Installiert, Namespace velero hinzugefuegt |
 | 14.04.2026 | 2.16    | Phase 9 Security & Haertung GESTARTET: Toolauswahl und Reihenfolge festgelegt (Kyverno v1.17.1 → Trivy Operator v0.30.1 → CrowdSec + Traefik Bouncer v1.3.3 → Falco v0.42.x). Layer 5 Security-Tabelle mit konkreten Versionen befuellt. 4 neue Namespaces (kyverno, trivy-system, crowdsec, falco), 6 neue ArgoCD Apps pro Env geplant. Phasendokumentation phase-09-security-dev.md erstellt. CrowdSec als WAF/Fail2Ban-Ersatz fuer geplante Internet-Freischaltung |
 | 20.04.2026 | 2.16    | Nachbesserungen (Stand v2.16 bleibt): **Trivy Operator Chart-Pfad-Fixes** — `builtInTrivyServer: true` nach `operator.*` verschoben (war unter `trivy.*`, wurde ignoriert); `resources:` auf Root-Ebene verschoben (war unter `operator.resources`). Folge: trivy-server-0 StatefulSet (PVC 5Gi) aktiv, Cache-Lock-Fehler bei parallelen Scans behoben, Memory-Limits 512Mi/1Gi wirken jetzt. Phase 9 Status: Kyverno + Trivy Operator DEV abgeschlossen. Learnings #6/#7/#8 in phase-09-security-dev.md ergaenzt (DockerHub Rate-Limit als Follow-up). **DEV-Monitoring-Tuning:** Prometheus retention 7d/12GB in DEV values-override, CronJobOverdue DEV-SMP-Patch mit 36h Threshold + idoit im Selector (`kube_cronjob_status_last_successful_time` statt next_schedule_time). Phase 7 Learning #21 ergaenzt |
+| 20.04.2026 | 2.16    | **Phase 9a Container Registry Infrastruktur (Zot) vorbereitet:** Zwischenschritt in Phase 9 zwischen Trivy Operator und CrowdSec. Loest DockerHub Rate-Limit (Phase 9 Learning #8) und konsolidiert eigene Images. Topologie Variante 2: DEV-Zot (`registry-dev.eneg.de`, Proxy-Cache + Hosting, NAS10 `k8s-dev-registry`) + PROD-Zot (`registry-prod.eneg.de`, empfaengt Sync von DEV, NAS10 `k8s-prod-registry`, ohne Internet-Fallback). TEST pullt von DEV. Mirror-Scope containerd: docker.io, quay.io, ghcr.io, registry.k8s.io. Auth: anonymous pull, htpasswd push (User `eneg`). Eigene Images `dhenkeeneg/*` via Zot sync-Extension gespiegelt (CI bleibt auf ghcr.io). Sync DEV→PROD mit Denylist-Filter fuer mutable Tags (latest, main, dev, rc*, alpha*, beta*). Abstimmung komplett. Phasendokumentation `docs/phases/phase-09a-security-registries.md` erstellt. Umsetzung in separatem Chat |
 
 ---
 
