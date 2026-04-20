@@ -7,3 +7,9 @@ resources:
   - ../../../base/monitoring/dashboards
   - ../../../base/monitoring/prometheus-msteams
   - kube-cpu-overcommit-dev.yaml
+
+# DEV-Patches auf Base-Rules
+patches:
+  # CronJobOverdue: 36h Threshold, kube_cronjob_status_last_successful_time, idoit im Selector
+  # Strategic-Merge-Patch: ersetzt komplette Group "backup.rules" (robust gg. Reihenfolge-Aenderungen)
+  - path: backup-alerts-overdue-dev.yaml

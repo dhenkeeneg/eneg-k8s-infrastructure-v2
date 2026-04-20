@@ -41,8 +41,13 @@ data:
       --config /config/rclone.conf \
       --checksum \
       --fast-list \
-      --transfers 4 \
+      --transfers 2 \
       --checkers 8 \
+      --retries 10 \
+      --retries-sleep 30s \
+      --low-level-retries 20 \
+      --s3-upload-concurrency 2 \
+      --disable-http2 \
       --stats 30s \
       --stats-one-line \
       --log-level INFO
@@ -57,8 +62,13 @@ data:
       --config /config/rclone.conf \
       --checksum \
       --fast-list \
-      --transfers 4 \
+      --transfers 2 \
       --checkers 8 \
+      --retries 10 \
+      --retries-sleep 30s \
+      --low-level-retries 20 \
+      --s3-upload-concurrency 2 \
+      --disable-http2 \
       --stats 30s \
       --stats-one-line \
       --log-level INFO

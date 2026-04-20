@@ -1,0 +1,58 @@
+# Strategic-Merge-Patch: backup-alerts (DEV-Anpassung)
+#
+# Zweck:
+# - CronJobOverdue: Threshold 36h (statt 2h), Metrik kube_cronjob_status_last_successful_time
+#   (statt kube_cronjob_next_schedule_time), idoit im Namespace-Selector.
+# - Description sprachlich auf neue Metrik/Threshold angepasst.
+#
+# Hinweis zum Patch-Stil:
+# Kustomize merged metadata.labels (Map), ersetzt aber Listen vollstaendig.
+# Deshalb muss spec.groups[0].rules KOMPLETT reproduziert werden - auch die
+# unveraenderten Rules CronJobFailed und BackupPodCrashLoop. Bei Aenderungen
+# an base/monitoring/alert-rules/backup-alerts.yaml hier nachziehen.
+#
+# idoit bewusst NUR in CronJobOverdue, nicht in CronJobFailed: Der rclone-Job
+# hat backoffLimit=2, Failures werden dort separat ueber Job-Logs gesichtet.
+# Overdue ist das relevantere Signal ("letzter Erfolg liegt >36h zurueck").
+---
+apiVersion: monitoring.coreos.com/v1
+kind: PrometheusRule
+metadata:
+  name: backup-alerts
+  namespace: monitoring
+spec:
+  groups:
+    - name: backup.rules
+      rules:
+        # CronJob fehlgeschlagen (Warning: 1x) -- unveraendert ggu. base
+        - alert: CronJobFailed
+          expr: |
+            kube_job_status_failed{namespace=~"databases|odoo|garage"} > 0
+          for: 5m
+          labels:
+            severity: warning
+          annotations:
+            summary: "CronJob {{ $labels.job_name }} fehlgeschlagen"
+            description: "Job {{ $labels.job_name }} in Namespace {{ $labels.namespace }} ist fehlgeschlagen."
+
+        # CronJob ueberfaellig -- DEV-Anpassung: 36h Threshold, last_successful_time, idoit
+        - alert: CronJobOverdue
+          expr: |
+            time() - kube_cronjob_status_last_successful_time{namespace=~"databases|odoo|garage|idoit"} > 129600
+          for: 10m
+          labels:
+            severity: warning
+          annotations:
+            summary: "CronJob {{ $labels.cronjob }} ueberfaellig"
+            description: "Letzter erfolgreicher Lauf des CronJobs {{ $labels.cronjob }} in Namespace {{ $labels.namespace }} liegt mehr als 36 Stunden zurueck."
+
+        # Pod CrashLoopBackOff in DB/Backup Namespaces -- unveraendert ggu. base
+        - alert: BackupPodCrashLoop
+          expr: |
+            increase(kube_pod_container_status_restarts_total{namespace=~"databases|odoo|garage"}[10m]) > 3
+          for: 5m
+          labels:
+            severity: critical
+          annotations:
+            summary: "Pod {{ $labels.pod }} in CrashLoop"
+            description: "Pod {{ $labels.pod }} in Namespace {{ $labels.namespace }} hat {{ $value | printf \"%.0f\" }} Restarts in 10 Minuten."

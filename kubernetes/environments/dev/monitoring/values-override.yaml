@@ -12,6 +12,9 @@ defaultRules:
 # --- Prometheus DEV ---
 prometheus:
   prometheusSpec:
+    # DEV-Retention: 7 Tage / max. 12 GB (Sicherheitsmarge zu 20Gi PVC, bevor TSDB Schreibstopp)
+    retention: 7d
+    retentionSize: 12GB
     storageSpec:
       volumeClaimTemplate:
         spec:
