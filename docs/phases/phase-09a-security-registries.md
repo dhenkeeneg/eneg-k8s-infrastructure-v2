@@ -1,11 +1,14 @@
 # Phase 9a: Container Registry Infrastruktur (Zot)
 
-**Status:** **Etappe A (DEV) ABGESCHLOSSEN** am 21.04.2026 — Etappe B (PROD) und TEST containerd-Mirror-Verifikation ausstehend
+**Status:** **Etappe A VOLLSTAENDIG ABGESCHLOSSEN (DEV + TEST + PROD)** am 21.04.2026 — Etappe B (PROD-Zot) offen
 **Abstimmung abgeschlossen:** 20.04.2026
-**Etappe A Umsetzung:** 21.04.2026 (DEV-Zot deployed, containerd-Mirror auf allen 3 DEV-Nodes ausgerollt, End-to-End-Pull verifiziert)
-**Phase 9 Uebersicht:** Kyverno + Trivy Operator DEV abgeschlossen; **Phase 9a Etappe A** abgeschlossen; CrowdSec + Falco folgen als Phase 9b
+**Etappe A Umsetzung:** 21.04.2026
+  - DEV: Zot deployed, containerd-Mirror auf 3 DEV-Nodes, End-to-End-Pull verifiziert
+  - TEST: containerd-Mirror auf 3 TEST-Nodes via Ansible 07 (mit Internet-Fallback)
+  - PROD: containerd-Mirror auf 3 PROD-Nodes via Ansible 07 (mit Internet-Fallback bis Etappe B)
+**Phase 9 Uebersicht:** Kyverno + Trivy Operator DEV abgeschlossen; **Phase 9a Etappe A** vollstaendig abgeschlossen; CrowdSec + Falco folgen als Phase 9b
 **Voraussetzungen:** Phase 7 (Monitoring), Phase 8 (TEST/PROD), Phase 10 (Velero), Phase 9 Schritt 1+2 (Kyverno + Trivy Operator in DEV)
-**Folge-Anweisung fuer naechsten Chat:** `docs/guides/phase-09a-test-prod-handoff.md`
+**Folge-Anweisung fuer Etappe B:** `docs/guides/phase-09a-test-prod-handoff.md` (Schritt 5)
 
 ---
 
@@ -570,9 +573,11 @@ curl -s https://registry-dev.eneg.de/v2/_catalog | jq
 # - Layer-Blobs
 ```
 
-### 12.12 Status Etappe A — Was ist erledigt vs. ausstehend
+### 12.12 Status Etappe A — DEV-Zwischenstand (21.04.2026 vormittags)
 
-**ERLEDIGT:**
+Dieser Abschnitt spiegelt den Zwischenstand nach dem DEV-Rollout wider. Der Vollabschluss Etappe A (inkl. TEST und PROD) ist in den Sections 12.13–12.15 dokumentiert.
+
+**ERLEDIGT (DEV):**
 - [x] DEV-Zot deployed, Pod Healthy
 - [x] Zot UI/HTTPS erreichbar mit Lets-Encrypt-Cert
 - [x] Proxy-Cache funktional fuer docker.io (verifiziert), quay.io/ghcr.io/registry.k8s.io (Konfig vorhanden)
@@ -582,7 +587,7 @@ curl -s https://registry-dev.eneg.de/v2/_catalog | jq
 - [x] preserveDigest + docker2s2 Multi-Arch-Loesung verifiziert
 - [x] sysctl inotify Limits ausgerollt (alle 3 Nodes + Packer)
 
-**AUSSTEHEND fuer Etappe A Vollabschluss:**
+**AUSSTEHEND fuer Etappe A Vollabschluss (Stand vormittags 21.04.2026):**
 - [ ] containerd registries.yaml auf TEST-Cluster ausrollen (Ansible 07 erneut, `--limit k8s_test`)
 - [ ] containerd registries.yaml auf PROD-Cluster ausrollen (Ansible 07 erneut, `--limit k8s_prod`, MIT Fallback bis Etappe B)
 - [ ] Trivy Operator nochmal scannen lassen — pruefen ob `TOOMANYREQUESTS` aus DockerHub jetzt verschwunden sind
@@ -590,4 +595,126 @@ curl -s https://registry-dev.eneg.de/v2/_catalog | jq
 - [ ] Gesamt-A9-Verifikations-Checkliste (Section 5 Ende) durchgehen
 
 **ETAPPE B (PROD-Registry):** Komplett ausstehend.
+
+---
+
+## 12.13 Etappe A — TEST-Rollout (21.04.2026 nachmittags)
+
+Der containerd-Mirror-Rollout auf dem TEST-Cluster verlief identisch zum DEV-Muster.
+
+**Ansible 07 mit `-i ansible/inventory/test/hosts.ini` durchgelaufen:**
+- `serial: 1` rolling restart ueber k8s-test-21 → pause → k8s-test-22 → k8s-test-23
+- PLAY RECAP: `ok=15-16, changed=2, failed=0, unreachable=0` pro Node
+- `hosts.toml` in `certs.d/docker.io/` auf allen 3 TEST-Nodes mit Mirror-Eintrag `https://registry-dev.eneg.de/v2` und Capabilities `["pull", "resolve"]` bestaetigt
+
+**Pre-Flight (Cross-VLAN-Routing 179 → 180):**
+- `ansible k3s_servers -i .../test/hosts.ini -m uri -a "url=https://registry-dev.eneg.de/v2/"` → alle 3 Nodes `status: 200` mit TLS-Cert validation
+
+**Catalog nach Test-Pull:**
+```
+{
+  "repositories": [
+    "eneg/eneg-it-info-versand",
+    "eneg/idoit-open",
+    "eneg/prometheus-msteams",
+    "library/alpine",          # neu durch TEST-Verifikation
+    "library/hello-world",
+    "library/nginx"
+  ]
+}
+```
+
+### 12.13.1 Learning — Zot OnDemand-First-Pull-Latency bei grossen Multi-Arch-Images
+
+Beim initialen Test-Pull `docker.io/library/alpine:3` auf einem TEST-Node ueber den Mirror kam `context canceled` zurueck. Ursache war kein Bug, sondern erwartetes Zot-Verhalten:
+
+- Zot-Log zeigt: `HEAD /v2/library/alpine/manifests/3?ns=docker.io`, `statusCode: 200`, **`latency: 6m34s`**
+- Alpine hat ~15–20 Platform-Varianten (amd64, arm64, arm/v6/v7, s390x, ppc64le, 386, riscv64, …); jede Variante wird waehrend des synchronen OnDemand-Syncs einzeln von DockerHub geladen und nach NAS10-S3 kopiert (regclient Copy-Layer/Copy-Config-Logs im Zot-Pod sichtbar, `successfully synced image` erst nach ~6 min)
+- containerd's HTTP-Request-Timeout (~30-60 s) schlug frueher zu → Client-seitig "context canceled"
+- Zweiter Pull des gleichen Images auf demselben Node: **6 s** (Cache-Hit aus Zot + NAS10-S3)
+- `curl -I` gegen Zot nach Cache-warm: **329 ms**
+
+**Konsequenz:**
+- In Etappe A (DEV/TEST/PROD mit Internet-Fallback): unkritisch — wenn Zot cancelt, greift containerd default endpoint fallback und zieht direkt vom Upstream. Der Pod-Start wird nicht beeintraechtigt.
+- Fuer Etappe B (PROD ohne Fallback): Warm-up aller produktiven Images in PROD-Zot BEVOR der Cutover auf "kein Fallback" stattfindet. Der Sync-Lauf DEV→PROD muss ausreichend Vorlauf haben.
+
+---
+
+## 12.14 Etappe A — PROD-Rollout (21.04.2026 spaetnachmittags)
+
+Analog zu TEST, identisches Verhalten.
+
+**Ansible 07 mit `-i ansible/inventory/prod/hosts.ini`:**
+- `serial: 1` rolling restart ueber k8s-prod-21 (Approval) → k8s-prod-22 → k8s-prod-23
+- PLAY RECAP: `ok=15-16, changed=2, failed=0, unreachable=0` pro Node
+- Approval-Pause mit `kubectl --context {{ kubectl_context }} get nodes/pods` — Playbook 07 wurde vorher env-agnostisch gemacht (Variable `kubectl_context: "k8s-{{ inventory_dir | basename }}"`), damit der Hinweis fuer alle drei Inventories korrekt ist
+- Wahrend der Approval-Pause in PROD: alle 3 Nodes Ready, keine CrashLoopBackOff/Failed-Pods, ArgoCD-Apps (40+) durchgaengig Synced+Healthy
+
+**Pre-Flight (Cross-VLAN-Routing 178 → 180):**
+- Alle 3 PROD-Nodes mit `status: 200` gegen `registry-dev.eneg.de/v2/`
+
+**Post-Rollout Test-Pull `docker.io/library/busybox:latest` auf k8s-prod-22:**
+- Ergebnis: **15,5 s** (Multi-Arch mit nur 4-5 Varianten → OnDemand-Sync innerhalb containerd-Timeout), kein Cancel.
+- Bestaetigt den Size-Effekt aus TEST-Learning (kleine Multi-Arch-Images gehen direkt durch).
+
+**Catalog nach Etappe A Vollabschluss:**
+```
+{
+  "repositories": [
+    "eneg/eneg-it-info-versand",
+    "eneg/idoit-open",
+    "eneg/prometheus-msteams",
+    "library/alpine",
+    "library/busybox",
+    "library/hello-world",
+    "library/nginx"
+  ]
+}
+```
+
+---
+
+## 12.15 Etappe A — Final Summary
+
+**Status:** VOLLSTAENDIG ABGESCHLOSSEN (21.04.2026)
+
+| Pruefung | DEV | TEST | PROD |
+|----------|:---:|:---:|:---:|
+| containerd `registries.yaml` geschrieben | ✅ | ✅ | ✅ |
+| `hosts.toml` im `certs.d/` mit Mirror-Eintrag | ✅ | ✅ | ✅ |
+| Rolling k3s-Restart ohne Fehler | ✅ | ✅ | ✅ |
+| Cluster nach Rollout: Nodes Ready, Pods Running | ✅ | ✅ | ✅ |
+| ArgoCD Apps Synced + Healthy | ✅ | ✅ | ✅ |
+| End-to-End Test-Pull via Mirror | ✅ (hello-world, nginx) | ✅ (alpine) | ✅ (busybox) |
+| Zot Catalog gefuellt | ✅ | ✅ | ✅ |
+| Cross-VLAN-Routing bestaetigt | n/a | 179→180 ✅ | 178→180 ✅ |
+
+**Ansible Playbook 07 Env-agnostisch:** Variable `kubectl_context: "k8s-{{ inventory_dir | basename }}"` aus vars-Section leitet aus `inventory/dev|test|prod/` den kubectl-Context fuer den Approval-Prompt ab.
+
+**Gesamt-Checkliste aus Section 8 (Etappe A):**
+- [x] DEV-Zot deployed, Healthy (Section 12.1)
+- [x] DEV-Zot UI erreichbar mit TLS
+- [x] Proxy-Cache fuer docker.io/quay.io/ghcr.io/registry.k8s.io
+- [x] Eigene Images via sync-Extension gespiegelt (`eneg/*` im Catalog)
+- [x] containerd registries.yaml auf 9 Nodes (DEV + TEST + PROD)
+- [x] Packer-Template aktualisiert (sysctl inotify)
+- [ ] Trivy-Scans laufen fehlerfrei in allen drei Envs — **offen**, siehe Punkt unten
+
+### Offener Punkt: Trivy-Operator Rate-Limit
+
+Der containerd-Mirror loest das DockerHub Rate-Limit fuer Pod-Pulls (kubelet → containerd → Zot). Er loest es **nicht automatisch** fuer Trivy Operator Scan-Jobs, weil Trivy die Ziel-Images nicht via containerd socket auflost, sondern ueber die Docker Registry Remote-API (`GET https://index.docker.io/v2/.../manifests/...`). Diese Requests umgehen den Mirror und laufen weiter in DockerHub's anonymen Pull-Limit.
+
+**Beobachtung 21.04.2026:**
+- Trivy-Scan-Job-Logs zeigen weiterhin `TOOMANYREQUESTS` fuer `velero/velero:v1.17.1`, `busybox:1.37`, `odoo:18`, `kiwigrid/k8s-sidecar:2.5.0`
+- 162 VulnerabilityReports existieren in DEV (nicht-docker.io Images werden gescannt)
+- Problem ist DEV-lokal, weil Trivy Operator nur in DEV installiert ist
+
+**Fix-Strategie (nach Etappe B angehen):**
+- **Primaer:** `TRIVY_REGISTRY_MIRROR=docker.io=registry-dev.eneg.de` als additionalEnvVar im Trivy-Operator Helm values
+- **Alternativ:** DockerHub-PAT an Trivy via `dockerConfigAuth` (rate-limit von 60/6h anon auf 200/6h authenticated)
+- **Fallback:** containerd-socket mount (hoher Security-Tradeoff, privilegierter Pod)
+
+Dokumentation der Umsetzung erfolgt zusammen mit Etappe B Abschluss.
+
+---
 
