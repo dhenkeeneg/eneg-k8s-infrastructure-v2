@@ -94,6 +94,7 @@ configFiles:
               "tlsVerify": true,
               "maxRetries": 3,
               "retryDelay": "5m",
+              "preserveDigest": true,
               "content": [
                 { "prefix": "**" }
               ]
@@ -104,6 +105,7 @@ configFiles:
               "tlsVerify": true,
               "maxRetries": 3,
               "retryDelay": "5m",
+              "preserveDigest": true,
               "content": [
                 { "prefix": "**" }
               ]
@@ -114,6 +116,7 @@ configFiles:
               "tlsVerify": true,
               "maxRetries": 3,
               "retryDelay": "5m",
+              "preserveDigest": true,
               "content": [
                 { "prefix": "**" }
               ]
@@ -124,6 +127,7 @@ configFiles:
               "tlsVerify": true,
               "maxRetries": 3,
               "retryDelay": "5m",
+              "preserveDigest": true,
               "content": [
                 { "prefix": "**" }
               ]
@@ -135,6 +139,7 @@ configFiles:
               "tlsVerify": true,
               "maxRetries": 3,
               "retryDelay": "5m",
+              "preserveDigest": true,
               "content": [
                 {
                   "prefix": "dhenkeeneg/**",
