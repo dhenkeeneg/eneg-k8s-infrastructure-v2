@@ -79,10 +79,7 @@ configFiles:
           }
         },
         "search": {
-          "enable": true,
-          "cve": {
-            "updateInterval": "24h"
-          }
+          "enable": true
         },
         "ui": {
           "enable": true
