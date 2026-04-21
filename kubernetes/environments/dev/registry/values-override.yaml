@@ -41,10 +41,6 @@ configFiles:
           "secure": false,
           "skipverify": false,
           "forcepathstyle": true
-        },
-        "cacheDriver": {
-          "name": "boltdb",
-          "rootDir": "/var/lib/registry"
         }
       },
       "http": {
