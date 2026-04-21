@@ -69,6 +69,8 @@
     k3s_restart_wait_seconds: 120
     # Pause-Zeit zwischen Nodes fuer Cluster-Stabilisierung
     inter_node_pause_seconds: 30
+    # kubectl-Context fuer Verifikations-Hinweise (aus Inventory-Dir abgeleitet: dev/test/prod)
+    kubectl_context: "k8s-{{ inventory_dir | basename }}"
 
   tasks:
 
@@ -242,8 +244,8 @@
           ERSTER NODE ({{ inventory_hostname }}) IST DURCH.
 
           Bitte in einem zweiten Terminal pruefen:
-            kubectl --context k8s-dev get nodes
-            kubectl --context k8s-dev get pods -A --field-selector status.phase!=Running
+            kubectl --context {{ kubectl_context }} get nodes
+            kubectl --context {{ kubectl_context }} get pods -A --field-selector status.phase!=Running
 
           Wenn alles gut aussieht: ENTER druecken zum Fortfahren mit Node 2+3.
           Wenn NICHT: Ctrl+C zum Abbruch, dann Ctrl+C nochmal zum finalen Stop.
