@@ -103,6 +103,7 @@
         cmd: k3s --version
       register: k3s_version_output
       changed_when: false
+      check_mode: false
 
     - name: k3s-Version ausgeben
       ansible.builtin.debug:
@@ -179,6 +180,7 @@
         state: started
         timeout: "{{ k3s_restart_wait_seconds }}"
         delay: 5
+      check_mode: false
 
     - name: Warten bis Node in kubelet-Status "Ready" ist
       ansible.builtin.shell:
@@ -191,6 +193,7 @@
       retries: 20
       delay: 5
       changed_when: false
+      when: not ansible_check_mode
 
     # -------------------------------------------------------------------------
     # 7. Verifikation: Mirror-Config in containerd geladen?
@@ -201,6 +204,7 @@
           ls /var/lib/rancher/k3s/agent/etc/containerd/certs.d/ 2>/dev/null | sort || echo "(leer)"
       register: containerd_certs_dir
       changed_when: false
+      when: not ansible_check_mode
 
     - name: containerd hosts.toml fuer docker.io anzeigen
       ansible.builtin.shell:
@@ -208,13 +212,15 @@
           cat /var/lib/rancher/k3s/agent/etc/containerd/certs.d/docker.io/hosts.toml 2>/dev/null || echo "(nicht vorhanden)"
       register: docker_io_hosts_toml
       changed_when: false
+      when: not ansible_check_mode
 
     - name: Mirror-Konfiguration ausgeben
       ansible.builtin.debug:
         msg:
-          - "certs.d/ Verzeichnisse: {{ containerd_certs_dir.stdout_lines }}"
+          - "certs.d/ Verzeichnisse: {{ containerd_certs_dir.stdout_lines | default(['(check-mode)']) }}"
           - "docker.io hosts.toml:"
-          - "{{ docker_io_hosts_toml.stdout_lines }}"
+          - "{{ docker_io_hosts_toml.stdout_lines | default(['(check-mode)']) }}"
+      when: not ansible_check_mode
 
     # -------------------------------------------------------------------------
     # 8. Pause vor naechstem Node (fuer Cluster-Stabilisierung)
@@ -223,6 +229,7 @@
       ansible.builtin.pause:
         seconds: "{{ inter_node_pause_seconds }}"
         prompt: "Cluster stabilisiert sich, naechster Node folgt in {{ inter_node_pause_seconds }}s..."
+      when: not ansible_check_mode
 
     # -------------------------------------------------------------------------
     # 9. Nach dem ERSTEN Node: manuelles Approval vor Node 2 einholen
@@ -241,7 +248,9 @@
           Wenn alles gut aussieht: ENTER druecken zum Fortfahren mit Node 2+3.
           Wenn NICHT: Ctrl+C zum Abbruch, dann Ctrl+C nochmal zum finalen Stop.
           ================================================================================
-      when: inventory_hostname == groups['k3s_servers'][0]
+      when:
+        - inventory_hostname == groups['k3s_servers'][0]
+        - not ansible_check_mode
 
   handlers:
 
