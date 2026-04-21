@@ -73,3 +73,19 @@ startupProbe:
   initialDelaySeconds: 5
   periodSeconds: 10
   failureThreshold: 30
+
+# Liveness/Readiness grosszuegiger konfiguriert, damit lange Sync-Operationen
+# (Multi-Arch Image-Pull via NAS10 S3) den Pod nicht killen.
+# /livez und /readyz antworten unabhaengig vom Sync-Thread-Status.
+# 60s Timeout fuer Liveness schuetzt vor haengendem HTTP-Handler ohne
+# vorzeitige Restarts bei Netzwerklatenz.
+livenessProbe:
+  initialDelaySeconds: 30
+  periodSeconds: 30
+  timeoutSeconds: 5
+  failureThreshold: 3
+readinessProbe:
+  initialDelaySeconds: 15
+  periodSeconds: 30
+  timeoutSeconds: 5
+  failureThreshold: 3
