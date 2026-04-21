@@ -1,0 +1,156 @@
+# Zot Registry DEV Override Values
+# Environment: DEV (VLAN 180)
+# Phase 9a - Etappe A
+#
+# Setzt: S3-Bucket, DNS-Host, Proxy-Cache-Upstreams, accessControl,
+#        GHCR-Sync-Extension, Extensions (search, ui, sync, metrics).
+
+# --- S3-Credentials als ENV via extraEnvVarsSecret (fuer config.json Expansion) ---
+# Zot config.json unterstuetzt env-var-Expansion fuer storage.cacheDriver.accesskey etc.
+# Chart-Property heisst extraEnvVars + Secret-Ref; wir verwenden direkte envFrom.
+extraEnvVars:
+  - name: AWS_ACCESS_KEY_ID
+    valueFrom:
+      secretKeyRef:
+        name: registry-s3-credentials
+        key: accesskey
+  - name: AWS_SECRET_ACCESS_KEY
+    valueFrom:
+      secretKeyRef:
+        name: registry-s3-credentials
+        key: secretkey
+
+# --- Config-Injection ---
+mountConfig: true
+configFiles:
+  config.json: |-
+    {
+      "distSpecVersion": "1.1.1",
+      "storage": {
+        "rootDirectory": "/var/lib/registry",
+        "dedupe": true,
+        "gc": true,
+        "gcDelay": "1h",
+        "gcInterval": "24h",
+        "storageDriver": {
+          "name": "s3",
+          "rootdirectory": "/zot",
+          "region": "us-east-1",
+          "regionendpoint": "nas10.eneg.de:8010",
+          "bucket": "k8s-dev-registry",
+          "secure": false,
+          "skipverify": false,
+          "forcepathstyle": true
+        },
+        "cacheDriver": {
+          "name": "boltdb",
+          "rootDir": "/var/lib/registry"
+        }
+      },
+      "http": {
+        "address": "0.0.0.0",
+        "port": "5000",
+        "realm": "zot",
+        "auth": {
+          "htpasswd": {
+            "path": "/secret/htpasswd"
+          }
+        },
+        "accessControl": {
+          "repositories": {
+            "**": {
+              "policies": [
+                {
+                  "users": ["eneg"],
+                  "actions": ["read", "create", "update", "delete"]
+                }
+              ],
+              "defaultPolicy": ["read"],
+              "anonymousPolicy": ["read"]
+            }
+          }
+        }
+      },
+      "log": {
+        "level": "info",
+        "output": "/dev/stdout"
+      },
+      "extensions": {
+        "metrics": {
+          "enable": true,
+          "prometheus": {
+            "path": "/metrics"
+          }
+        },
+        "search": {
+          "enable": true,
+          "cve": {
+            "updateInterval": "24h"
+          }
+        },
+        "ui": {
+          "enable": true
+        },
+        "sync": {
+          "enable": true,
+          "credentialsFile": "/ghcr-credentials/credentials.json",
+          "registries": [
+            {
+              "urls": ["https://registry-1.docker.io"],
+              "onDemand": true,
+              "tlsVerify": true,
+              "maxRetries": 3,
+              "retryDelay": "5m",
+              "content": [
+                { "prefix": "**" }
+              ]
+            },
+            {
+              "urls": ["https://quay.io"],
+              "onDemand": true,
+              "tlsVerify": true,
+              "maxRetries": 3,
+              "retryDelay": "5m",
+              "content": [
+                { "prefix": "**" }
+              ]
+            },
+            {
+              "urls": ["https://ghcr.io"],
+              "onDemand": true,
+              "tlsVerify": true,
+              "maxRetries": 3,
+              "retryDelay": "5m",
+              "content": [
+                { "prefix": "**" }
+              ]
+            },
+            {
+              "urls": ["https://registry.k8s.io"],
+              "onDemand": true,
+              "tlsVerify": true,
+              "maxRetries": 3,
+              "retryDelay": "5m",
+              "content": [
+                { "prefix": "**" }
+              ]
+            },
+            {
+              "urls": ["https://ghcr.io"],
+              "pollInterval": "15m",
+              "onDemand": false,
+              "tlsVerify": true,
+              "maxRetries": 3,
+              "retryDelay": "5m",
+              "content": [
+                {
+                  "prefix": "dhenkeeneg/**",
+                  "destination": "/eneg",
+                  "stripPrefix": true
+                }
+              ]
+            }
+          ]
+        }
+      }
+    }

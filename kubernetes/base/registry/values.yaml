@@ -1,0 +1,75 @@
+# Zot Registry Base Values (generisch, alle Environments)
+# Helm Chart: project-zot/zot v0.1.104 (App v2.1.15)
+# Docs: https://github.com/project-zot/helm-charts/tree/main/charts/zot
+#
+# Hinweis: Umgebungsspezifische Werte (S3 bucket, DNS, Proxy-Cache-Upstreams,
+# sync-credentials) werden per values-override.yaml im Environment-Overlay gesetzt.
+
+# --- Image ---
+# Chart pinnt v2.1.15; wir lassen das unueberschrieben fuer Chart-Konsistenz.
+
+# --- Replica ---
+replicaCount: 1
+
+# --- Service ---
+service:
+  type: ClusterIP
+  port: 5000
+
+# --- Persistence (lokaler Metadaten-/Dedup-Cache, Blobs liegen in S3) ---
+persistence: true
+pvc:
+  create: true
+  storage: 10Gi
+  storageClassName: longhorn
+  accessMode: ReadWriteOnce
+
+# --- Secret Mounts: htpasswd + GHCR-Sync-Credentials ---
+# Secrets werden per KSOPS in environments/<env>/registry-secrets/ bereitgestellt.
+mountSecret: false   # wir nutzen secretMounts stattdessen (flexibler)
+secretMounts:
+  - name: registry-htpasswd
+    secretName: registry-htpasswd
+    mountPath: /secret
+    readOnly: true
+  - name: registry-ghcr-sync
+    secretName: registry-ghcr-sync-credentials
+    mountPath: /ghcr-credentials
+    readOnly: true
+
+# --- Config-Injection via Helm configFiles ---
+# Die config.json wird vom Chart als ConfigMap gerendert und in /etc/zot gemountet.
+mountConfig: true
+# configFiles.config.json wird im Environment-Overlay gesetzt
+# (braucht env-spezifische Werte: S3 bucket, DNS, sync registries).
+
+# --- Ressourcen ---
+resources:
+  requests:
+    cpu: 200m
+    memory: 256Mi
+  limits:
+    cpu: 1000m
+    memory: 1Gi
+
+# --- Service Account ---
+serviceAccount:
+  create: true
+  annotations: {}
+  name: ""
+
+# --- Security Context ---
+# Zot-Chart-Default: runAsUser 65534 (nobody) — OK fuer Longhorn
+
+# --- HPA ausgeschaltet, nur 1 Replica im Start ---
+autoscaling:
+  enabled: false
+
+# --- Prometheus ServiceMonitor ---
+# Aktuell kein ServiceMonitor im Zot-Chart v0.1.104. Metrics-Extension
+# aktivieren wir ueber config.json (extensions.metrics). Dedizierter
+# ServiceMonitor wird in Phase 9a Nacharbeiten (Abschnitt 7) ergaenzt.
+
+# --- Liveness/Readiness via Zot v2.1-HTTP-Endpoints ---
+# Chart-Default nutzt /v2/ — passt.
+# Optional: Chart-Default bleibt aktiv.

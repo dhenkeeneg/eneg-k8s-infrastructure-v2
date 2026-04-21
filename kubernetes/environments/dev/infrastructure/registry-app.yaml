@@ -1,0 +1,49 @@
+---
+# ArgoCD Application: Zot Container Registry (DEV)
+# Helm Chart project-zot/zot v0.1.104 (App v2.1.15)
+# Multi-Source: Helm Chart + Base Values + DEV Override + Kustomize (namespace, ingressroute)
+# Phase 9a: Container Registry Infrastruktur
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: registry
+  namespace: argocd
+  annotations:
+    argocd.argoproj.io/sync-wave: "4"
+  finalizers:
+    - resources-finalizer.argocd.argoproj.io
+spec:
+  project: default
+
+  sources:
+    # Source 1: Zot Helm Chart
+    - repoURL: https://zotregistry.dev/helm-charts
+      chart: zot
+      targetRevision: 0.1.104
+      helm:
+        releaseName: registry
+        valueFiles:
+          - $values/kubernetes/base/registry/values.yaml
+          - $values/kubernetes/environments/dev/registry/values-override.yaml
+
+    # Source 2: Kustomize-Manifeste (namespace + ingressroute)
+    - repoURL: git@github.com:dhenkeeneg/eneg-k8s-infrastructure-v2.git
+      targetRevision: main
+      path: kubernetes/environments/dev/registry
+
+    # Source 3: Git Repository Referenz fuer Helm Values
+    - repoURL: git@github.com:dhenkeeneg/eneg-k8s-infrastructure-v2.git
+      targetRevision: main
+      ref: values
+
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: registry
+
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
+    syncOptions:
+      - CreateNamespace=true
+      - ServerSideApply=true
