@@ -87,6 +87,7 @@ configFiles:
         "sync": {
           "enable": true,
           "credentialsFile": "/ghcr-credentials/credentials.json",
+          "downloadDir": "/var/lib/registry/sync-tmp",
           "registries": [
             {
               "urls": ["https://registry-1.docker.io"],
