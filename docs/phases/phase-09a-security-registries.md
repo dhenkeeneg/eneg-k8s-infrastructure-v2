@@ -1,9 +1,11 @@
 # Phase 9a: Container Registry Infrastruktur (Zot)
 
-**Status:** Vorbereitet, zur Umsetzung freigegeben
+**Status:** **Etappe A (DEV) ABGESCHLOSSEN** am 21.04.2026 — Etappe B (PROD) und TEST containerd-Mirror-Verifikation ausstehend
 **Abstimmung abgeschlossen:** 20.04.2026
-**Phase 9 Uebersicht:** Kyverno + Trivy Operator DEV abgeschlossen; **Phase 9a (dieses Dokument)** eingeschoben; CrowdSec + Falco folgen als Phase 9b
+**Etappe A Umsetzung:** 21.04.2026 (DEV-Zot deployed, containerd-Mirror auf allen 3 DEV-Nodes ausgerollt, End-to-End-Pull verifiziert)
+**Phase 9 Uebersicht:** Kyverno + Trivy Operator DEV abgeschlossen; **Phase 9a Etappe A** abgeschlossen; CrowdSec + Falco folgen als Phase 9b
 **Voraussetzungen:** Phase 7 (Monitoring), Phase 8 (TEST/PROD), Phase 10 (Velero), Phase 9 Schritt 1+2 (Kyverno + Trivy Operator in DEV)
+**Folge-Anweisung fuer naechsten Chat:** `docs/guides/phase-09a-test-prod-handoff.md`
 
 ---
 
@@ -387,3 +389,205 @@ Wir starten Phase 9a Container Registry Infrastruktur (Zot). Bitte:
 
 *Erstellt: 20.04.2026*
 *Status: Vorbereitet, Umsetzung offen*
+
+
+---
+
+## 12. Etappe A Implementierungs-Learnings (21.04.2026)
+
+### 12.1 Tatsaechlich verwendete Versionen
+
+- **Helm Chart:** `zot-0.1.104` (Repo `https://zotregistry.dev/helm-charts`)
+- **App-Version:** `v2.1.15` (zotregistry.dev/zot)
+- **Pull-Image:** `ghcr.io/project-zot/zot-linux-amd64:v2.1.15`
+- **DockerHub Authentifizierung:** dedizierter PAT `dckr_pat_...` als read-only sync user (Bypass anonymes 60/6h Rate-Limit → 200/6h fuer authentifizierte Pulls)
+
+### 12.2 Repository-Struktur (Final, leicht abweichend von Section 5)
+
+```
+kubernetes/
+├── base/registry/
+│   ├── kustomization.yaml
+│   ├── namespace.yaml
+│   ├── values.yaml                   # Helm Base Values
+│   └── helmchart-template.yaml       # HelmChartCRD bzw. HelmChart Inflator
+├── environments/dev/
+│   ├── registry/
+│   │   ├── kustomization.yaml
+│   │   ├── namespace.yaml
+│   │   ├── values-override.yaml      # DEV-spezifisch (S3, DNS, Sync-Registries)
+│   │   └── ingressroute.yaml         # Traefik IngressRoute + Cross-Namespace Service
+│   ├── registry-secrets/             # SEPARATER Layer fuer Secrets (sync-wave 3)
+│   │   ├── kustomization.yaml
+│   │   ├── secret-generator.yaml     # 3 KSOPS Generators
+│   │   ├── s3-credentials.template/.enc.yaml
+│   │   ├── htpasswd.template/.enc.yaml
+│   │   └── ghcr-sync-credentials.template/.enc.yaml   # ENTHAELT auch DockerHub Creds
+│   └── infrastructure/
+│       ├── registry-secrets-app.yaml  # ArgoCD App, sync-wave 3
+│       └── registry-app.yaml          # ArgoCD App, sync-wave 4
+└── ansible/playbooks/
+    ├── 06-sysctl-inotify-limits.yml   # NEU: fs.inotify Limits fuer Zot fsnotify
+    └── 07-k3s-registries-mirror.yml   # NEU: containerd registries.yaml rollout
+
+packer/ubuntu-24.04/http/user-data.pkrtpl.hcl   # PATCHED: sysctl inotify
+```
+
+**Wichtig:** Secrets als eigener Layer/App (nicht im selben Layer wie Registry). Sync-Wave 3 (Secrets) → 4 (Registry-App) garantiert Reihenfolge.
+
+### 12.3 Multi-Arch + S3 + OnDemand: preserveDigest + http.compat zwingend
+
+**Problem:** Zot v2.1.15 schreibt bei Multi-Arch Images standardmaessig OCI-konvertierte Manifests (Digest aendert sich, Top-Level Index landet nicht im Catalog → `invalid manifest content` beim 2. Pull, 404 beim Pull per Index-Digest). Praktisch sind fast alle modernen Images Multi-Arch (hello-world hat ~15 Varianten, nginx hat 8+).
+
+**Loesung (zwingend kombiniert):**
+
+```yaml
+# values-override.yaml
+configFiles:
+  config.json: |
+    {
+      "http": {
+        "compat": ["docker2s2"]               # MUSS gesetzt sein wenn preserveDigest:true
+      },
+      "extensions": {
+        "sync": {
+          "registries": [
+            {
+              "urls": ["https://registry-1.docker.io"],
+              "onDemand": true,
+              "preserveDigest": true,         # Byte-exakte Manifest-Erhaltung
+              "credentialsFile": "/ghcr-credentials/credentials.json"
+            }
+            // ... analog fuer quay.io, ghcr.io (onDemand), registry.k8s.io, ghcr.io scheduled (dhenkeeneg/**)
+          ]
+        }
+      }
+    }
+```
+
+Ohne `http.compat: ["docker2s2"]` startet der Pod gar nicht: `can not use PreserveDigest option without enabling http.Compat`.
+
+### 12.4 DockerHub Credentials in Sync-Credentials-File integriert
+
+`ghcr-sync-credentials.enc.yaml` enthaelt JSON mit beiden Upstream-Registries:
+
+```json
+{
+  "ghcr.io": {"username": "dhenkeeneg", "password": "<ghcr-pat>"},
+  "registry-1.docker.io": {"username": "<dockerhub-user>", "password": "dckr_pat_..."}
+}
+```
+
+Wirkt automatisch fuer beide OnDemand-Registries (Zot waehlt Credentials per URL).
+
+### 12.5 containerd registries.yaml Pattern fuer K3s 1.26.13+
+
+K3s seit 1.26.13 unterstuetzt **default endpoint fallback** out of the box. `registries.yaml` braucht KEIN `rewrites:` mehr und der Mirror agiert transparent als Pull-Through-Cache:
+
+```yaml
+# /etc/rancher/k3s/registries.yaml (auf jedem Node)
+mirrors:
+  docker.io:
+    endpoint:
+      - "https://registry-dev.eneg.de"
+  quay.io:
+    endpoint:
+      - "https://registry-dev.eneg.de"
+  ghcr.io:
+    endpoint:
+      - "https://registry-dev.eneg.de"
+  registry.k8s.io:
+    endpoint:
+      - "https://registry-dev.eneg.de"
+```
+
+containerd erkennt am Pfad `?ns=docker.io` automatisch die Quelle und Zot routet entsprechend. **KEIN `rewrites: "(.*)": "docker.io/$1"` noetig** — das wuerde sogar zu Doppel-Pfaden fuehren.
+
+### 12.6 Ansible Playbook 07 — Rolling Rollout
+
+`ansible/playbooks/07-k3s-registries-mirror.yml`:
+- `serial: 1` (Node-fuer-Node)
+- Manual approval/pause nach erstem Node (mit `when: not ansible_check_mode`)
+- Pre-flight check: `curl -fsSL https://registry-dev.eneg.de/v2/` muss 200 liefern
+- Schreibt `/etc/rancher/k3s/registries.yaml`
+- `systemctl restart k3s` und Wartezeit auf `kubectl get nodes` Ready
+- Verifiziert anschliessend `cat /var/lib/rancher/k3s/agent/etc/containerd/certs.d/docker.io/hosts.toml`
+
+Fuer DEV-Cluster bereits ausgerollt, Output zeigt Mirror + default endpoint fallback aktiv.
+
+### 12.7 sysctl inotify-Limits fuer Zot
+
+Zot's fsnotify-Watcher kann mit Default `fs.inotify.max_user_watches=8192` Erschoepfung haben. Erhoeht via:
+
+```yaml
+# /etc/sysctl.d/99-k3s-zot.conf
+fs.inotify.max_user_watches = 524288
+fs.inotify.max_user_instances = 8192
+```
+
+Ausgerollt via `06-sysctl-inotify-limits.yml`. Packer-Template `user-data.pkrtpl.hcl` enthaelt diese Werte fuer neue Nodes ab Build.
+
+### 12.8 ArgoCD-spezifische Workarounds
+
+- **Replica-Count nach manuellem `scale=0`** wird nicht automatisch durch ArgoCD restored. Wenn Reset noetig: vor Reset ArgoCD App pausen, dann `scale=0` und `scale=1` manuell, dann ArgoCD wieder enable.
+- **HelmChart values mit `default:` Werten** koennen OutOfSync triggern wenn Kubernetes Defaults injected (z.B. `enabled: true` bei plugins). Loesung wie schon bei CNPG: `resource.customizations.ignoreDifferences` in `argocd-cm`.
+
+### 12.9 Zot Distroless Image — kein exec_in_pod sinnvoll
+
+Das Zot-Image ist distroless (kein `sh`, kein `bash`). `kubectl exec -it ... -- sh` schlaegt fehl. Verifikation laeuft ueber:
+- HTTP-API direkt von Mgmt-Node oder anderem Pod im Cluster (`curl https://registry-dev.eneg.de/v2/...`)
+- Pod-Logs (`kubectl logs ...`)
+- Metrics-Endpoint
+- Externe Tools (`crane`, `regctl`, `skopeo`)
+
+### 12.10 First-Sync Verhalten (cache miss warnings)
+
+Beim ersten Sync eines Images zeigt Zot `"not found in cache"` Warnings fuer jedes Blob. Das sind **keine Fehler**, sondern normales Verhalten der metadb beim Aufbau. Erfolgs-Signal ist die Log-Zeile:
+
+```
+"successfully synced image" repo=library/hello-world reference=latest
+```
+
+und im Anschluss ein Catalog-Eintrag.
+
+### 12.11 End-to-End-Verifikation (DEV)
+
+Erfolgreicher Test 21.04.2026:
+
+```bash
+# Auf k8s-dev-22 (containerd via Mirror)
+sudo k3s crictl pull docker.io/library/hello-world:latest    # ✅ ueber Zot
+sudo k3s crictl pull docker.io/library/nginx:stable-alpine    # ✅ Multi-Arch nginx
+
+# Catalog (von mgmt-10)
+curl -s https://registry-dev.eneg.de/v2/_catalog | jq
+# {"repositories": ["library/hello-world", "library/nginx"]}
+
+# Zot Logs zeigen "successfully synced image" und HTTP 200 Responses fuer:
+# - Manifest-Index (Multi-Arch, ~12 KB)
+# - Platform-Manifest (~1 KB)
+# - Config-Blob (~600 B)
+# - Layer-Blobs
+```
+
+### 12.12 Status Etappe A — Was ist erledigt vs. ausstehend
+
+**ERLEDIGT:**
+- [x] DEV-Zot deployed, Pod Healthy
+- [x] Zot UI/HTTPS erreichbar mit Lets-Encrypt-Cert
+- [x] Proxy-Cache funktional fuer docker.io (verifiziert), quay.io/ghcr.io/registry.k8s.io (Konfig vorhanden)
+- [x] containerd registries.yaml auf allen 3 DEV-Nodes via Ansible 07 ausgerollt
+- [x] End-to-End Pull-Verifikation: hello-world + nginx erfolgreich
+- [x] DockerHub-Auth aktiv, kein Rate-Limit beim Sync
+- [x] preserveDigest + docker2s2 Multi-Arch-Loesung verifiziert
+- [x] sysctl inotify Limits ausgerollt (alle 3 Nodes + Packer)
+
+**AUSSTEHEND fuer Etappe A Vollabschluss:**
+- [ ] containerd registries.yaml auf TEST-Cluster ausrollen (Ansible 07 erneut, `--limit k8s_test`)
+- [ ] containerd registries.yaml auf PROD-Cluster ausrollen (Ansible 07 erneut, `--limit k8s_prod`, MIT Fallback bis Etappe B)
+- [ ] Trivy Operator nochmal scannen lassen — pruefen ob `TOOMANYREQUESTS` aus DockerHub jetzt verschwunden sind
+- [ ] Eigene Images Sync-Lauf verifizieren: `dhenkeeneg/idoit-open` muss in Zot unter `eneg/idoit-open` auftauchen (PollInterval 15min)
+- [ ] Gesamt-A9-Verifikations-Checkliste (Section 5 Ende) durchgehen
+
+**ETAPPE B (PROD-Registry):** Komplett ausstehend.
+
