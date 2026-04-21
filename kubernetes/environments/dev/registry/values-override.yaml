@@ -28,7 +28,7 @@ configFiles:
       "distSpecVersion": "1.1.1",
       "storage": {
         "rootDirectory": "/var/lib/registry",
-        "dedupe": true,
+        "dedupe": false,
         "gc": true,
         "gcDelay": "1h",
         "gcInterval": "24h",
