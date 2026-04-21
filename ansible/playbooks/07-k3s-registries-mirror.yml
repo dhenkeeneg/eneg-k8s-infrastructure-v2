@@ -1,0 +1,255 @@
+# =============================================================================
+# Playbook: containerd Registry Mirror (Phase 9a / Zot)
+# =============================================================================
+# Hintergrund:
+#   Zot Registry ist als Proxy-Cache fuer DockerHub, GHCR, Quay und
+#   registry.k8s.io konfiguriert (Phase 9a). Damit containerd die Pulls
+#   transparent ueber Zot routet, braucht jeder K3s-Node eine
+#   /etc/rancher/k3s/registries.yaml.
+#
+#   K3s liest die Datei beim Start von k3s.service und schreibt die
+#   containerd-hosts.toml Dateien nach
+#   /var/lib/rancher/k3s/agent/etc/containerd/certs.d/
+#
+#   Default-Endpoint-Fallback ist built-in: Wenn Zot nicht erreichbar ist,
+#   versucht containerd automatisch das Original-Upstream. Kein manueller
+#   Fallback-Endpoint noetig (seit K3s v1.26.13+k3s1 / v1.27.10+k3s1).
+#
+# Was dieses Playbook macht:
+#   1. Pre-Flight: Zot ueber HTTPS erreichbar?
+#   2. Schreibt /etc/rancher/k3s/registries.yaml auf jedem Node
+#   3. Restartet k3s.service rolling (Node fuer Node, 30s Wartezeit)
+#   4. Manuelles Approval nach erstem Node (Sicherheit)
+#   5. Verifiziert dass Mirrors in containerd-Config geladen wurden
+#
+# Wichtig:
+#   - Rolling Restart wegen K3s-HA-Cluster (embedded etcd, 3 Server-Nodes)
+#   - Wartezeit nach jedem Restart bis Node wieder Ready ist
+#   - Kein Upgrade der Zot-Registry, Zot laeuft weiter in seinem Namespace
+#
+# Referenzen:
+#   - K3s Private Registry: https://docs.k3s.io/installation/private-registry
+#   - Phase 9a Doku: docs/phases/phase-09a-security-registries.md
+#
+# Ausfuehrung (nur DEV, Etappe A):
+#   ansible-playbook -i inventory/dev/hosts.ini playbooks/07-k3s-registries-mirror.yml
+#
+# Pruefung nach Ausfuehrung (von mgmt-10):
+#   ansible k3s_servers -i inventory/dev/hosts.ini -m shell \
+#     -a "crictl info | jq .config.registry.configs"
+#
+# Erster Pull-Test (auf Node):
+#   ssh k8s-dev-21 'sudo crictl pull docker.io/library/hello-world:latest'
+#   # Dann Bucket k8s-dev-registry pruefen -> sollte Content haben
+#
+# ROLLBACK (falls Pulls nicht mehr funktionieren):
+#   Auf jedem Node:
+#     sudo rm /etc/rancher/k3s/registries.yaml
+#     sudo systemctl restart k3s
+#   Oder Backup zurueckspielen:
+#     sudo cp /etc/rancher/k3s/registries.yaml.backup-YYYYMMDDT* \
+#            /etc/rancher/k3s/registries.yaml
+#     sudo systemctl restart k3s
+# =============================================================================
+
+- name: K3s containerd Registry Mirror (Zot Proxy) ausrollen
+  hosts: k3s_servers
+  become: true
+  gather_facts: true
+  serial: 1  # Rolling: nur ein Node gleichzeitig
+
+  vars:
+    zot_registry_url: "https://registry-dev.eneg.de"
+    zot_registries_to_mirror:
+      - "docker.io"
+      - "ghcr.io"
+      - "quay.io"
+      - "registry.k8s.io"
+    # Maximale Wartezeit bis Node nach k3s-Restart wieder Ready ist
+    k3s_restart_wait_seconds: 120
+    # Pause-Zeit zwischen Nodes fuer Cluster-Stabilisierung
+    inter_node_pause_seconds: 30
+
+  tasks:
+
+    # -------------------------------------------------------------------------
+    # 1. Pre-Flight: Zot-Registry muss erreichbar sein
+    # -------------------------------------------------------------------------
+    - name: Pre-Flight - Zot-Registry Erreichbarkeit pruefen
+      ansible.builtin.uri:
+        url: "{{ zot_registry_url }}/v2/"
+        method: GET
+        status_code: 200
+        validate_certs: true
+        timeout: 10
+      register: zot_health_check
+      run_once: true
+      delegate_to: localhost
+      become: false
+
+    - name: Pre-Flight - Zot-Status ausgeben
+      ansible.builtin.debug:
+        msg:
+          - "Zot HTTP Status: {{ zot_health_check.status }}"
+          - "Docker-Distribution-API: {{ zot_health_check.docker_distribution_api_version | default('nicht vorhanden') }}"
+      run_once: true
+
+    # -------------------------------------------------------------------------
+    # 2. Pre-Flight: aktuelle k3s-Version pruefen
+    # -------------------------------------------------------------------------
+    - name: Aktuelle k3s-Version pruefen
+      ansible.builtin.command:
+        cmd: k3s --version
+      register: k3s_version_output
+      changed_when: false
+
+    - name: k3s-Version ausgeben
+      ansible.builtin.debug:
+        msg: "{{ k3s_version_output.stdout_lines }}"
+
+    # -------------------------------------------------------------------------
+    # 3. Backup vorhandener registries.yaml (falls schon eine existiert)
+    # -------------------------------------------------------------------------
+    - name: Pruefen ob registries.yaml bereits existiert
+      ansible.builtin.stat:
+        path: /etc/rancher/k3s/registries.yaml
+      register: existing_registries
+
+    - name: Backup vorhandener registries.yaml (mit Timestamp)
+      ansible.builtin.copy:
+        src: /etc/rancher/k3s/registries.yaml
+        dest: "/etc/rancher/k3s/registries.yaml.backup-{{ ansible_date_time.iso8601_basic_short }}"
+        remote_src: true
+        owner: root
+        group: root
+        mode: '0600'
+      when: existing_registries.stat.exists
+
+    # -------------------------------------------------------------------------
+    # 4. Verzeichnis sicherstellen + registries.yaml schreiben
+    # -------------------------------------------------------------------------
+    - name: Verzeichnis /etc/rancher/k3s/ sicherstellen
+      ansible.builtin.file:
+        path: /etc/rancher/k3s
+        state: directory
+        owner: root
+        group: root
+        mode: '0755'
+
+    - name: registries.yaml mit Zot als Mirror schreiben
+      ansible.builtin.copy:
+        dest: /etc/rancher/k3s/registries.yaml
+        owner: root
+        group: root
+        mode: '0600'
+        content: |
+          # =============================================================================
+          # K3s Registry-Mirror-Konfiguration (verwaltet durch Ansible Playbook 07)
+          # =============================================================================
+          # Zot Registry (Phase 9a) als Proxy-Cache fuer Upstream-Registries.
+          # Bei Zot-Ausfall faellt containerd automatisch auf das Original-Upstream
+          # zurueck (built-in Default-Endpoint-Fallback seit K3s v1.26.13+k3s1).
+          #
+          # Zot Registry:      {{ zot_registry_url }}
+          # Upstream Mirrors:  {{ zot_registries_to_mirror | join(', ') }}
+          # =============================================================================
+          mirrors:
+          {% for registry in zot_registries_to_mirror %}
+            "{{ registry }}":
+              endpoint:
+                - "{{ zot_registry_url }}"
+          {% endfor %}
+      register: registries_yaml_written
+      notify: restart k3s
+
+    # -------------------------------------------------------------------------
+    # 5. Flush Handler: k3s-Restart erzwingen sobald Datei geschrieben wurde
+    # -------------------------------------------------------------------------
+    - name: k3s-Service neu starten (Flush Handler)
+      ansible.builtin.meta: flush_handlers
+
+    # -------------------------------------------------------------------------
+    # 6. Post-Restart: Warten bis k3s wieder laeuft
+    # -------------------------------------------------------------------------
+    - name: Warten bis k3s API-Port (6443) wieder antwortet
+      ansible.builtin.wait_for:
+        host: "{{ ansible_host }}"
+        port: 6443
+        state: started
+        timeout: "{{ k3s_restart_wait_seconds }}"
+        delay: 5
+
+    - name: Warten bis Node in kubelet-Status "Ready" ist
+      ansible.builtin.shell:
+        cmd: |
+          k3s kubectl get node {{ inventory_hostname }} \
+            --kubeconfig /etc/rancher/k3s/k3s.yaml \
+            -o jsonpath='{.status.conditions[?(@.type=="Ready")].status}'
+      register: node_ready_status
+      until: node_ready_status.stdout == "True"
+      retries: 20
+      delay: 5
+      changed_when: false
+
+    # -------------------------------------------------------------------------
+    # 7. Verifikation: Mirror-Config in containerd geladen?
+    # -------------------------------------------------------------------------
+    - name: Mirror-Hosts-Files in containerd-Config auflisten
+      ansible.builtin.shell:
+        cmd: |
+          ls /var/lib/rancher/k3s/agent/etc/containerd/certs.d/ 2>/dev/null | sort || echo "(leer)"
+      register: containerd_certs_dir
+      changed_when: false
+
+    - name: containerd hosts.toml fuer docker.io anzeigen
+      ansible.builtin.shell:
+        cmd: |
+          cat /var/lib/rancher/k3s/agent/etc/containerd/certs.d/docker.io/hosts.toml 2>/dev/null || echo "(nicht vorhanden)"
+      register: docker_io_hosts_toml
+      changed_when: false
+
+    - name: Mirror-Konfiguration ausgeben
+      ansible.builtin.debug:
+        msg:
+          - "certs.d/ Verzeichnisse: {{ containerd_certs_dir.stdout_lines }}"
+          - "docker.io hosts.toml:"
+          - "{{ docker_io_hosts_toml.stdout_lines }}"
+
+    # -------------------------------------------------------------------------
+    # 8. Pause vor naechstem Node (fuer Cluster-Stabilisierung)
+    # -------------------------------------------------------------------------
+    - name: Pause vor naechstem Node fuer Cluster-Stabilisierung
+      ansible.builtin.pause:
+        seconds: "{{ inter_node_pause_seconds }}"
+        prompt: "Cluster stabilisiert sich, naechster Node folgt in {{ inter_node_pause_seconds }}s..."
+
+    # -------------------------------------------------------------------------
+    # 9. Nach dem ERSTEN Node: manuelles Approval vor Node 2 einholen
+    # -------------------------------------------------------------------------
+    - name: MANUELLES APPROVAL - nur nach erstem Node
+      ansible.builtin.pause:
+        prompt: |
+
+          ================================================================================
+          ERSTER NODE ({{ inventory_hostname }}) IST DURCH.
+
+          Bitte in einem zweiten Terminal pruefen:
+            kubectl --context k8s-dev get nodes
+            kubectl --context k8s-dev get pods -A --field-selector status.phase!=Running
+
+          Wenn alles gut aussieht: ENTER druecken zum Fortfahren mit Node 2+3.
+          Wenn NICHT: Ctrl+C zum Abbruch, dann Ctrl+C nochmal zum finalen Stop.
+          ================================================================================
+      when: inventory_hostname == groups['k3s_servers'][0]
+
+  handlers:
+
+    # -------------------------------------------------------------------------
+    # Handler: k3s.service rolling restart
+    # -------------------------------------------------------------------------
+    - name: restart k3s
+      ansible.builtin.systemd:
+        name: k3s
+        state: restarted
+        daemon_reload: true
+      listen: restart k3s
