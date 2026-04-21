@@ -1,0 +1,11 @@
+---
+# Zot Container Registry Namespace (DEV)
+# Phase 9a: Container Registry Infrastruktur
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: registry
+  labels:
+    app.kubernetes.io/name: zot
+    app.kubernetes.io/part-of: infrastructure
+    app.kubernetes.io/managed-by: argocd
