@@ -86,12 +86,13 @@
       run_once: true
       delegate_to: localhost
       become: false
+      check_mode: false
 
     - name: Pre-Flight - Zot-Status ausgeben
       ansible.builtin.debug:
         msg:
-          - "Zot HTTP Status: {{ zot_health_check.status }}"
-          - "Docker-Distribution-API: {{ zot_health_check.docker_distribution_api_version | default('nicht vorhanden') }}"
+          - "Zot HTTP Status: {{ zot_health_check.status | default('(uebersprungen)') }}"
+          - "Docker-Distribution-API: {{ zot_health_check.docker_distribution_api_version | default('(uebersprungen)') }}"
       run_once: true
 
     # -------------------------------------------------------------------------
