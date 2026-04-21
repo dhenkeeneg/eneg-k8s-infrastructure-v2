@@ -65,3 +65,11 @@ autoscaling:
 
 # --- Liveness/Readiness: Zot v2.1 HTTP-Endpoints ---
 # Chart-Default nutzt /livez /readyz /startupz — passt.
+# Startup-Probe braucht mehr Budget: Zot Init mit S3-Backend + 5 Sync-
+# Registries dauert mehrere Minuten beim ersten Start (S3-Bucket-Scan,
+# Upstream-Registry-Checks). Default 35s reicht nicht aus.
+# Neues Budget: 5s initialDelay + (10s × 30 failures) = ~5 Minuten
+startupProbe:
+  initialDelaySeconds: 5
+  periodSeconds: 10
+  failureThreshold: 30
