@@ -16,7 +16,7 @@ service:
   type: ClusterIP
   port: 5000
 
-# --- Persistence (lokaler Metadaten-/Dedup-Cache, Blobs liegen in S3) ---
+# --- Persistence (lokaler Metadaten-/Sync-Download-Cache, Blobs liegen in S3) ---
 persistence: true
 pvc:
   create: true
@@ -24,18 +24,14 @@ pvc:
   storageClassName: longhorn
   accessMode: ReadWriteOnce
 
-# --- Secret Mounts: htpasswd + GHCR-Sync-Credentials ---
+# --- Secret-Mounts: htpasswd + GHCR-Sync-Credentials ---
 # Secrets werden per KSOPS in environments/<env>/registry-secrets/ bereitgestellt.
-mountSecret: false   # wir nutzen secretMounts stattdessen (flexibler)
-secretMounts:
-  - name: registry-htpasswd
-    secretName: registry-htpasswd
+# externalSecrets: Shortcut vom Chart fuer Secret-Volume-Mounts
+externalSecrets:
+  - secretName: registry-htpasswd
     mountPath: /secret
-    readOnly: true
-  - name: registry-ghcr-sync
-    secretName: registry-ghcr-sync-credentials
+  - secretName: registry-ghcr-sync-credentials
     mountPath: /ghcr-credentials
-    readOnly: true
 
 # --- Config-Injection via Helm configFiles ---
 # Die config.json wird vom Chart als ConfigMap gerendert und in /etc/zot gemountet.
@@ -58,9 +54,6 @@ serviceAccount:
   annotations: {}
   name: ""
 
-# --- Security Context ---
-# Zot-Chart-Default: runAsUser 65534 (nobody) — OK fuer Longhorn
-
 # --- HPA ausgeschaltet, nur 1 Replica im Start ---
 autoscaling:
   enabled: false
@@ -70,6 +63,5 @@ autoscaling:
 # aktivieren wir ueber config.json (extensions.metrics). Dedizierter
 # ServiceMonitor wird in Phase 9a Nacharbeiten (Abschnitt 7) ergaenzt.
 
-# --- Liveness/Readiness via Zot v2.1-HTTP-Endpoints ---
-# Chart-Default nutzt /v2/ — passt.
-# Optional: Chart-Default bleibt aktiv.
+# --- Liveness/Readiness: Zot v2.1 HTTP-Endpoints ---
+# Chart-Default nutzt /livez /readyz /startupz — passt.

@@ -5,10 +5,9 @@
 # Setzt: S3-Bucket, DNS-Host, Proxy-Cache-Upstreams, accessControl,
 #        GHCR-Sync-Extension, Extensions (search, ui, sync, metrics).
 
-# --- S3-Credentials als ENV via extraEnvVarsSecret (fuer config.json Expansion) ---
-# Zot config.json unterstuetzt env-var-Expansion fuer storage.cacheDriver.accesskey etc.
-# Chart-Property heisst extraEnvVars + Secret-Ref; wir verwenden direkte envFrom.
-extraEnvVars:
+# --- S3-Credentials als ENV via env (Chart-Value fuer Container-Umgebungsvariablen) ---
+# AWS SDK liest AWS_ACCESS_KEY_ID und AWS_SECRET_ACCESS_KEY automatisch aus ENV.
+env:
   - name: AWS_ACCESS_KEY_ID
     valueFrom:
       secretKeyRef:
