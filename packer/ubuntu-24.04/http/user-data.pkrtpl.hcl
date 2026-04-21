@@ -106,3 +106,15 @@ autoinstall:
       WantedBy=multi-user.target
       SVCEOF
     - curtin in-target -- systemctl enable regenerate-ssh-host-keys.service
+    # sysctl: inotify-Limits fuer K8s-Nodes erhoehen
+    # Ubuntu 24.04 Defaults sind zu niedrig fuer Pods mit vielen Secret/ConfigMap-
+    # Mounts + Log-Collectoren. Persistiert in /etc/sysctl.d/, automatisch
+    # beim Boot geladen. Ansible-Playbook 06-sysctl-inotify-limits.yml haelt
+    # bestehende Nodes auf demselben Stand.
+    - |
+      cat > /target/etc/sysctl.d/99-k8s-inotify.conf << 'SYSCTLEOF'
+      # K8s-Node inotify-Limits (Packer-Default, Ansible verwaltet Updates)
+      fs.inotify.max_user_instances = 8192
+      fs.inotify.max_user_watches   = 524288
+      fs.inotify.max_queued_events  = 16384
+      SYSCTLEOF

@@ -1,0 +1,99 @@
+# =============================================================================
+# Playbook: sysctl-Limits fuer inotify (Phase 9a-Nacharbeit)
+# =============================================================================
+# Hintergrund:
+#   Ubuntu 24.04 Default-Werte fuer fs.inotify.* sind fuer K8s-Nodes mit
+#   vielen Pods (Secret/ConfigMap-Mounts, Log-Collector, Operators) zu niedrig.
+#   Konkreter Ausloeser war Zot Registry (Phase 9a) mit:
+#     "failed to create a new hot reloader: too many open files"
+#
+#   Ubuntu 24.04 Defaults:
+#     fs.inotify.max_user_instances = 128
+#     fs.inotify.max_user_watches   = 8192
+#
+#   Neue Werte (empfohlen fuer produktive K8s-Nodes):
+#     fs.inotify.max_user_instances = 8192
+#     fs.inotify.max_user_watches   = 524288
+#     fs.inotify.max_queued_events  = 16384
+#
+# Was dieses Playbook macht:
+#   1. Schreibt /etc/sysctl.d/99-k8s-inotify.conf mit erhoehten Limits
+#   2. Laedt die Werte sofort via sysctl -p
+#   3. Verifiziert die aktiven Werte
+#
+# Referenzen:
+#   - grafana/k8s-monitoring-helm Issue #2030
+#   - kairos-io/kairos Issue #2071
+#   - project-zot/zot Issue #2381
+#
+# Ausfuehrung (pro Environment):
+#   ansible-playbook -i inventory/dev/hosts.ini  playbooks/06-sysctl-inotify-limits.yml
+#   ansible-playbook -i inventory/test/hosts.ini playbooks/06-sysctl-inotify-limits.yml
+#   ansible-playbook -i inventory/prod/hosts.ini playbooks/06-sysctl-inotify-limits.yml
+#
+# Alternativ alle drei auf einmal:
+#   ansible-playbook -i inventory/dev/hosts.ini -i inventory/test/hosts.ini -i inventory/prod/hosts.ini \
+#     playbooks/06-sysctl-inotify-limits.yml
+#
+# Pruefung nach Ausfuehrung:
+#   ansible k3s_servers -i inventory/dev/hosts.ini -m shell \
+#     -a "sysctl fs.inotify.max_user_instances fs.inotify.max_user_watches"
+# =============================================================================
+
+- name: K8s-Node sysctl-Limits fuer inotify erhoehen
+  hosts: k3s_servers
+  become: true
+  gather_facts: true
+
+  vars:
+    sysctl_inotify_config:
+      fs.inotify.max_user_instances: 8192
+      fs.inotify.max_user_watches: 524288
+      fs.inotify.max_queued_events: 16384
+
+  tasks:
+
+    # -------------------------------------------------------------------------
+    # 1. sysctl-Konfiguration persistent schreiben
+    # -------------------------------------------------------------------------
+    - name: sysctl-Konfiguration /etc/sysctl.d/99-k8s-inotify.conf schreiben
+      ansible.builtin.copy:
+        dest: /etc/sysctl.d/99-k8s-inotify.conf
+        owner: root
+        group: root
+        mode: '0644'
+        content: |
+          # K8s-Node inotify-Limits (verwaltet durch Ansible)
+          # Hintergrund: Default-Werte zu niedrig fuer Pods mit vielen
+          # Secret/ConfigMap-Mounts + Log-Collector + fsnotify-basierten Services.
+          # Erstmals ausgeloest durch Zot Registry v2.1.15 (Phase 9a).
+          fs.inotify.max_user_instances = 8192
+          fs.inotify.max_user_watches   = 524288
+          fs.inotify.max_queued_events  = 16384
+      register: sysctl_config_written
+
+    # -------------------------------------------------------------------------
+    # 2. sysctl-Werte sofort laden (ohne Reboot)
+    # -------------------------------------------------------------------------
+    - name: sysctl-Werte aus 99-k8s-inotify.conf live aktivieren
+      ansible.posix.sysctl:
+        name: "{{ item.key }}"
+        value: "{{ item.value }}"
+        sysctl_file: /etc/sysctl.d/99-k8s-inotify.conf
+        state: present
+        reload: true
+      loop: "{{ sysctl_inotify_config | dict2items }}"
+
+    # -------------------------------------------------------------------------
+    # 3. Verifikation: aktuelle Laufzeit-Werte ausgeben
+    # -------------------------------------------------------------------------
+    - name: Aktive sysctl-Werte auslesen
+      ansible.builtin.shell:
+        cmd: |
+          sysctl fs.inotify.max_user_instances fs.inotify.max_user_watches fs.inotify.max_queued_events
+      register: sysctl_active_values
+      changed_when: false
+
+    - name: Aktive sysctl-Werte ausgeben
+      ansible.builtin.debug:
+        msg: "{{ sysctl_active_values.stdout_lines }}"
