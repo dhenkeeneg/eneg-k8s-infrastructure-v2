@@ -698,23 +698,148 @@ Analog zu TEST, identisches Verhalten.
 - [x] Eigene Images via sync-Extension gespiegelt (`eneg/*` im Catalog)
 - [x] containerd registries.yaml auf 9 Nodes (DEV + TEST + PROD)
 - [x] Packer-Template aktualisiert (sysctl inotify)
-- [ ] Trivy-Scans laufen fehlerfrei in allen drei Envs — **offen**, siehe Punkt unten
+- [x] Trivy-Scans laufen fehlerfrei — **DEV abgeschlossen 22.04.2026** (siehe Section 12.16); TEST/PROD haben aktuell keinen Trivy-Operator
 
-### Offener Punkt: Trivy-Operator Rate-Limit
+### Offener Punkt: Trivy-Operator Rate-Limit — GELOEST 22.04.2026
 
 Der containerd-Mirror loest das DockerHub Rate-Limit fuer Pod-Pulls (kubelet → containerd → Zot). Er loest es **nicht automatisch** fuer Trivy Operator Scan-Jobs, weil Trivy die Ziel-Images nicht via containerd socket auflost, sondern ueber die Docker Registry Remote-API (`GET https://index.docker.io/v2/.../manifests/...`). Diese Requests umgehen den Mirror und laufen weiter in DockerHub's anonymen Pull-Limit.
 
-**Beobachtung 21.04.2026:**
+**Urspruengliche Beobachtung 21.04.2026:**
 - Trivy-Scan-Job-Logs zeigen weiterhin `TOOMANYREQUESTS` fuer `velero/velero:v1.17.1`, `busybox:1.37`, `odoo:18`, `kiwigrid/k8s-sidecar:2.5.0`
 - 162 VulnerabilityReports existieren in DEV (nicht-docker.io Images werden gescannt)
 - Problem ist DEV-lokal, weil Trivy Operator nur in DEV installiert ist
 
-**Fix-Strategie (nach Etappe B angehen):**
-- **Primaer:** `TRIVY_REGISTRY_MIRROR=docker.io=registry-dev.eneg.de` als additionalEnvVar im Trivy-Operator Helm values
-- **Alternativ:** DockerHub-PAT an Trivy via `dockerConfigAuth` (rate-limit von 60/6h anon auf 200/6h authenticated)
-- **Fallback:** containerd-socket mount (hoher Security-Tradeoff, privilegierter Pod)
-
-Dokumentation der Umsetzung erfolgt zusammen mit Etappe B Abschluss.
+**Loesung (22.04.2026):** `trivy.configFile` mit `registry.mirrors` redirected Trivy-Scan-Pulls auf DEV-Zot. Vollstaendige Dokumentation inkl. drei Iterationen, Learnings und Verifizierung in Section 12.16.
 
 ---
 
+
+## 12.16 Etappe A Nachbesserung — Trivy-Operator Mirror-Fix (22.04.2026)
+
+**Status:** ABGESCHLOSSEN. Trivy-Scans nutzen jetzt den DEV-Zot als Upstream-Mirror fuer `index.docker.io`.
+
+### Problem
+
+Nach Etappe A verbraucht der Trivy-Operator weiter anonyme DockerHub-Pull-Requests, weil er die Ziel-Images **nicht** ueber den containerd-Socket aufloest, sondern ueber die Docker Registry Remote-API direkt gegen `index.docker.io`. Der containerd-Mirror greift nur fuer kubelet-Pulls — Trivy-Scan-Pods sind davon nicht erfasst.
+
+Folge: TOOMANYREQUESTS fuer alle `docker.io/*`-Workloads (velero, busybox, mariadb, odoo, kiwigrid, curl, hocuspocus — insgesamt ~40 Scans im 6h-Fenster).
+
+### Loesung
+
+Trivy-seitiger Mirror-Redirect via `trivy.configFile` in den Helm-Values des Operators. Die Chart rendert das Object in die ConfigMap `trivy-operator-trivy-config` unter dem Key `trivy.configFile`, mountet sie als Datei in den Scan-Pod unter `/etc/trivy/trivy-config.yaml` und startet `trivy image` mit `--config`.
+
+**Finale Konfiguration** (`kubernetes/environments/dev/trivy-operator/values-override.yaml`):
+
+```yaml
+trivy:
+  configFile:
+    registry:
+      mirrors:
+        index.docker.io:
+          - registry-dev.eneg.de
+```
+
+### Drei Iterationen — Learnings
+
+**Versuch 1 (22.04. ~07:00 MEZ) — GESCHEITERT**
+
+`trivy.registry.mirror.docker.io: registry-dev.eneg.de` gesetzt. Die Chart schreibt den Wert als `trivy.registry.mirror.docker.io` in die ConfigMap, aber Trivy CLI liest Mirror-Settings **nicht** aus env vars. Beweis aus der upstream-values.yaml der Chart:
+
+```yaml
+# -- configFile can be used to tell Trivy to use specific options
+# available only in the config file (e.g. Mirror registries).
+```
+
+Scan-Pods gingen weiter gegen `index.docker.io`. Nebeneffekt: Die ConfigMap-Aenderung triggerte einen automatischen Vollrescan aller ~170 VulnerabilityReports (Trivy-Operator vergleicht Config-Hash), was das DockerHub Rate-Limit voll ausschoepfte.
+
+**Versuch 2 (22.04. ~07:30 MEZ) — GESCHEITERT (Double-Wrap-Bug)**
+
+`trivy.configFile` als Multi-Line-String mit `|`-Block-Scalar geschrieben:
+
+```yaml
+trivy:
+  configFile: |
+    registry:
+      mirrors:
+        index.docker.io:
+          - registry-dev.eneg.de
+```
+
+Die Chart-Template wendet `toYaml` auf den String an, der wiederum mit `|` gewrappt wird → ConfigMap-Wert enthaelt `|` als erste Zeile, kein valides YAML fuer Trivy. Aus der gerenderten ConfigMap:
+
+```yaml
+trivy.configFile: |
+    |                        # <-- Double-Wrap-Bug
+      registry:
+        mirrors:
+          ...
+```
+
+**Versuch 3 (22.04. ~08:20 MEZ) — ERFOLGREICH**
+
+`trivy.configFile` als YAML-Object (nicht String). Form entspricht exakt dem Chart-Kommentar-Beispiel in upstream values.yaml:
+
+```yaml
+trivy:
+  configFile:
+    registry:
+      mirrors:
+        index.docker.io:
+          - registry-dev.eneg.de
+```
+
+### Verifizierung (22.04.2026 ~08:20 MEZ)
+
+**ConfigMap korrekt gerendert:**
+
+```yaml
+trivy.configFile: |
+    registry:
+      mirrors:
+        index.docker.io:
+        - registry-dev.eneg.de
+```
+
+Der Block-Scalar-Marker `|` ist jetzt nur noch der aeussere YAML-Wrapper; der Inhalt beginnt sauber mit `registry:`.
+
+**Scan-Pod-Spec bestaetigt Config-Mount:**
+
+```
+/etc/trivy/trivy-config.yaml from configfile (ConfigMap trivy-operator-trivy-config)
+trivy image velero/velero:v1.17.1 ... --config /etc/trivy/trivy-config.yaml
+```
+
+**Zot-Logs bestaetigen Mirror-Nutzung (velero/velero:v1.17.1):**
+
+- Incoming: `User-Agent: trivy/0.69.3`, `Host: registry-dev.eneg.de` (NICHT docker.io)
+- Zot: `trying to get updated image by syncing on demand`
+- Zot: `sync: syncing image` gegen `registry-1.docker.io` via regclient
+- Zot: `pushing synced local image to local registry`
+
+**Alle bisher scheiternden docker.io-Workloads nach dem Fix erfolgreich gescannt:**
+
+| Workload | Image | Report-Alter nach Fix |
+|---|---|---|
+| velero daemonset + jobs | velero/velero:v1.17.1 | < 40 Min |
+| argocd redis | docker/library/redis:8.2.3-alpine | 30 Min |
+| openproject seeder/worker/web | openproject/openproject:17.1.2-slim | 130 Min |
+| openproject memcached | library/memcached:1.6.40-alpine | 21 h (vor Fix, aber stabil) |
+| mariadb-galera | library/mariadb:11.8.6 | 23 h (lief schon vor Fix via andere Pfade) |
+
+### Weitere Aenderungen
+
+- `scanJobsConcurrentLimit` temporaer auf `1` gesetzt, waehrend der Rescan-Flut (Versuch 2 hatte ~170 gleichzeitige Rescan-Jobs ausgeloest). Nach abgeschlossenem Rescan zurueck auf `2` (Standard-Wert fuer DEV).
+- Chart-Kommentar in `values-override.yaml` aktualisiert mit Begruendung und Learnings.
+
+### Wichtige Learnings (allgemein)
+
+1. **Aqua trivy-operator Chart, `trivy.configFile`-Feld MUSS ein YAML-Object sein**, kein Multi-Line-String. Die Chart-Template wendet `toYaml` darauf an, was bei Strings zu Double-Wrap mit `|` fuehrt.
+2. **Jede Aenderung an `trivy-operator-trivy-config` ConfigMap triggert automatischen Vollrescan** aller VulnerabilityReports. Der Operator vergleicht den Config-Hash; bei Aenderung werden alle Reports geloescht und neu gescannt. **Vor aenderungen an dieser ConfigMap** daher temporaer `scanJobsConcurrentLimit` auf `1` reduzieren, um die Rescan-Flut auf ein DockerHub-freundliches Tempo zu drosseln.
+3. **Zot OnDemand-Sync hat first-miss Latency** (~1-6 Min fuer Multi-Arch-Images). Scan-Pods warten waehrend dieser Zeit, laufen aber durch. Nach erstem Sync ist das Image im Zot-Cache und weitere Pulls sind instant.
+4. **`trivy.registry.mirror.*` in der Chart ist totes Feld** — es schreibt zwar in die ConfigMap, aber Trivy beachtet es nicht. Nur `trivy.configFile` ist wirksam.
+
+### Scope
+
+Nur DEV. TEST und PROD haben aktuell keinen Trivy-Operator — dort ist das Problem unbekannt. Bei spaeterer Trivy-Ausrollung in TEST/PROD muss dasselbe `configFile`-Setup mit den env-spezifischen Zot-Endpunkten (`registry-test.eneg.de`, `registry-prod.eneg.de`) angewendet werden.
+
+---
