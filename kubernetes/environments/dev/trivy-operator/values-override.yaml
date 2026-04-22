@@ -20,3 +20,25 @@ serviceMonitor:
   enabled: true
   labels:
     release: kube-prometheus-stack
+
+# -- Phase 9a Etappe A Nachbesserung (22.04.2026):
+#    Trivy-Operator umgeht den containerd-Mirror und pullt Images direkt via
+#    Docker Registry Remote-API. Fuer docker.io/*-Images triggert das
+#    TOOMANYREQUESTS (anonymes DockerHub Rate-Limit 60/6h).
+#    Fix: Trivy-seitiger Mirror-Redirect auf DEV-Zot.
+#
+#    Chart-Pfad verifiziert in aqua/trivy-operator v0.32.1 values.yaml:
+#      trivy:
+#        registry:
+#          mirror: {}   # "<upstream>": "<mirror-host>"
+#
+#    Vorab-Test 22.04.2026: curl GET registry-dev.eneg.de/v2/library/postgres/manifests/16-alpine
+#    -> HTTP/2 200, content-type: application/vnd.oci.image.index.v1+json, ~1 min Latency
+#    -> Zot OnDemand-Proxy matcht bare Pfade ohne "?ns=docker.io" via prefix:"**"
+#       gegen die erste Sync-Registry (registry-1.docker.io).
+#
+#    Nur DEV-lokal: TEST/PROD haben (noch) keinen Trivy-Operator.
+trivy:
+  registry:
+    mirror:
+      "docker.io": "registry-dev.eneg.de"
