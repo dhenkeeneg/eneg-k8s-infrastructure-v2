@@ -47,7 +47,7 @@ serviceMonitor:
 #    aller bestehenden VulnerabilityReports. Daher scanJobsConcurrentLimit
 #    voruebergehend auf 1. Nach stabilem Rescan-Durchlauf zurueck auf 2.
 trivy:
-  configFile: |
+  configFile:
     registry:
       mirrors:
         index.docker.io:
