@@ -2,13 +2,9 @@
 # Environment: DEV (VLAN 180)
 
 # -- DEV: Scan-Intervall (alle 24h statt Default 6h, DEV braucht weniger)
-# Temporaer auf 1 reduziert (22.04.2026) waehrend Rescan-Flut durch
-# Mirror-Konfig-Einfuehrung (trivy.configFile). Ziel: DockerHub
-# Rate-Limit nicht erneut ueberschreiten, weil Pulls bei first-miss
-# kurzzeitig gegen Upstream gehen koennen (OnDemand-Sync-Latency).
-# Nach stabilem Rescan-Durchlauf zurueck auf 2 setzen.
+# Standard-Wert fuer regulaeren Betrieb.
 operator:
-  scanJobsConcurrentLimit: 1
+  scanJobsConcurrentLimit: 2
 
 # -- DEV: Memory-Limits angehoben (Base 256Mi/512Mi -> OOMKilled bei groesseren Image-Scans)
 # Key auf Root-Ebene (nicht unter operator.) - matcht Base-Chart-Pfad
@@ -26,26 +22,30 @@ serviceMonitor:
   labels:
     release: kube-prometheus-stack
 
-# -- Phase 9a Etappe A Nachbesserung (22.04.2026) v2:
-#    Ersatz fuer den ersten nicht-wirksamen Versuch mit `trivy.registry.mirror`.
+# -- Phase 9a Etappe A Nachbesserung (22.04.2026):
+#    Trivy-Operator umgeht den containerd-Mirror und pullt Images direkt via
+#    Docker Registry Remote-API. Fuer docker.io/*-Images triggert das
+#    TOOMANYREQUESTS (anonymes DockerHub Rate-Limit 60/6h).
+#
+#    Fix: Trivy-seitiger Mirror-Redirect auf DEV-Zot via trivy.configFile.
 #    Die Aqua-Chart-Doku (values.yaml Kommentar bei `configFile`) sagt woertlich:
 #      "options available only in the config file (e.g. Mirror registries)"
 #    Die Trivy-CLI liest Mirror-Redirects daher NICHT aus env vars, sondern
 #    nur aus einer Trivy-eigenen YAML-Config-Datei.
 #
-#    `trivy.configFile` wird von der Chart als String in die ConfigMap
-#    `trivy-operator-trivy-config` unter dem Key `trivy.configFile` gerendert
-#    und im Scan-Pod als Datei gemountet; Trivy startet dann mit `--config`.
+#    `trivy.configFile` wird von der Chart als YAML-Object erwartet (nicht
+#    Multi-Line-String mit `|` - das fuehrt zu Double-Wrap durch toYaml).
+#    Die Chart rendert das Object in die ConfigMap `trivy-operator-trivy-config`
+#    unter dem Key `trivy.configFile` und mountet die Datei als
+#    `/etc/trivy/trivy-config.yaml` im Scan-Pod. Trivy startet mit `--config`.
 #
 #    Zot DEV ist als Mirror fuer index.docker.io konfiguriert:
 #      - Zot matched bare Pfade wie `library/postgres:16-alpine` ueber seine
 #        erste OnDemand-Sync-Registry `registry-1.docker.io` mit `prefix: "**"`
-#      - Vorab-Test 22.04.2026: curl GET registry-dev.eneg.de/v2/library/postgres/manifests/16-alpine
-#        -> HTTP/2 200, content-type: application/vnd.oci.image.index.v1+json
+#      - Verifiziert 22.04.2026: velero/velero:v1.17.1 erfolgreich via Zot
+#        gescannt, Zot-Logs zeigen OnDemand-Sync von docker.io
 #
-#    Geaenderte ConfigMap triggert laut Trivy-Operator Doku einen Rescan
-#    aller bestehenden VulnerabilityReports. Daher scanJobsConcurrentLimit
-#    voruebergehend auf 1. Nach stabilem Rescan-Durchlauf zurueck auf 2.
+#    Nur DEV-lokal: TEST/PROD haben (noch) keinen Trivy-Operator.
 trivy:
   configFile:
     registry:
