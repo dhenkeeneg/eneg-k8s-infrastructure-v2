@@ -19,6 +19,8 @@ data:
     region = us-east-1
     force_path_style = true
     no_check_bucket = true
+    list_chunk = 100
+    disable_http2 = true
 
   backup.sh: |
     #!/bin/sh
@@ -40,14 +42,14 @@ data:
       --backup-dir "nas10:k8s-dev-idoit/_backups/${BACKUP_DATE}/upload" \
       --config /config/rclone.conf \
       --checksum \
-      --fast-list \
       --transfers 2 \
-      --checkers 8 \
+      --checkers 2 \
       --retries 10 \
       --retries-sleep 30s \
       --low-level-retries 20 \
       --s3-upload-concurrency 2 \
-      --disable-http2 \
+      --contimeout 10s \
+      --timeout 120s \
       --stats 30s \
       --stats-one-line \
       --log-level INFO
@@ -61,14 +63,14 @@ data:
       --backup-dir "nas10:k8s-dev-idoit/_backups/${BACKUP_DATE}/src" \
       --config /config/rclone.conf \
       --checksum \
-      --fast-list \
       --transfers 2 \
-      --checkers 8 \
+      --checkers 2 \
       --retries 10 \
       --retries-sleep 30s \
       --low-level-retries 20 \
       --s3-upload-concurrency 2 \
-      --disable-http2 \
+      --contimeout 10s \
+      --timeout 120s \
       --stats 30s \
       --stats-one-line \
       --log-level INFO
