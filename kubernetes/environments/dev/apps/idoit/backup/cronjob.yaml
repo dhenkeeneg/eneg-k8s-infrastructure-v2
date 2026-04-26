@@ -35,6 +35,11 @@ data:
     # Datum fuer Backup-Dir (geloeschte/geaenderte Dateien)
     BACKUP_DATE=$(date +%Y-%m-%d)
 
+    # Wochentag (1=Mo, 7=So) und Force-Override fuer src/-Backup
+    DAY_OF_WEEK=$(date +%u)
+    FORCE_SRC="${BACKUP_FORCE_SRC:-no}"
+    echo "Wochentag: ${DAY_OF_WEEK} (1=Mo..7=So), BACKUP_FORCE_SRC=${FORCE_SRC}"
+
     echo "--- Sichere i-doit Upload-Verzeichnis ---"
     rclone sync \
       "/data/upload/" \
@@ -56,25 +61,33 @@ data:
     echo "--- Upload-Verzeichnis gesichert ---"
 
     echo ""
-    echo "--- Sichere i-doit src (Konfiguration) ---"
-    rclone sync \
-      "/data/src/" \
-      "nas10:k8s-dev-idoit/src" \
-      --backup-dir "nas10:k8s-dev-idoit/_backups/${BACKUP_DATE}/src" \
-      --config /config/rclone.conf \
-      --checksum \
-      --transfers 2 \
-      --checkers 2 \
-      --retries 10 \
-      --retries-sleep 30s \
-      --low-level-retries 20 \
-      --s3-upload-concurrency 2 \
-      --contimeout 10s \
-      --timeout 120s \
-      --stats 30s \
-      --stats-one-line \
-      --log-level INFO
-    echo "--- src gesichert ---"
+    if [ "$DAY_OF_WEEK" = "7" ] || [ "$FORCE_SRC" = "yes" ]; then
+      if [ "$FORCE_SRC" = "yes" ]; then
+        echo "--- Sichere i-doit src (Force-Override BACKUP_FORCE_SRC=yes) ---"
+      else
+        echo "--- Sichere i-doit src (Konfiguration, woechentlich Sonntag) ---"
+      fi
+      rclone sync \
+        "/data/src/" \
+        "nas10:k8s-dev-idoit/src" \
+        --backup-dir "nas10:k8s-dev-idoit/_backups/${BACKUP_DATE}/src" \
+        --config /config/rclone.conf \
+        --checksum \
+        --transfers 2 \
+        --checkers 2 \
+        --retries 10 \
+        --retries-sleep 30s \
+        --low-level-retries 20 \
+        --s3-upload-concurrency 2 \
+        --contimeout 10s \
+        --timeout 120s \
+        --stats 30s \
+        --stats-one-line \
+        --log-level INFO
+      echo "--- src gesichert ---"
+    else
+      echo "--- src/-Backup heute uebersprungen (Wochentag ${DAY_OF_WEEK}, laeuft nur So oder bei BACKUP_FORCE_SRC=yes) ---"
+    fi
 
     # Alte Backup-Dirs aufraemen (aelter als 32 Tage)
     echo ""
@@ -150,6 +163,15 @@ spec:
                     secretKeyRef:
                       name: idoit-backup-credentials
                       key: NAS10_SECRET_ACCESS_KEY
+                # src/ wird nur Sonntags gesichert. Fuer manuellen Force-Run:
+                # kubectl create job idoit-force-src-$(date +%Y%m%d-%H%M) \
+                #   --from=cronjob/idoit-backup -n idoit
+                # kubectl set env -n idoit job/idoit-force-src-... BACKUP_FORCE_SRC=yes
+                # (set env muss BEVOR der Pod startet ausgefuehrt werden -> CronJob suspenden,
+                #  patchen, Job triggern, ENV setzen, suspenden ruecknehmen.
+                #  Einfacher: cronjob temporaer patchen mit "yes", einmal triggern, zurueck auf "no")
+                - name: BACKUP_FORCE_SRC
+                  value: "no"
               volumeMounts:
                 - name: config
                   mountPath: /config/rclone.conf
