@@ -2,7 +2,15 @@
 # Environment: DEV (VLAN 180)
 # Minimales Override - base values sind bereits DEV-dimensioniert.
 
-# PVC-Groesse (gleich wie base, explizit fuer Konsistenz)
+# PVC-Groesse (gleich wie base, explizit fuer Konsistenz) + Memory-Limit erhoeht
+# Memory-Limit auf 2Gi angehoben, da 1Gi nach laengerer Offline-Phase
+# zu OOM-Kills fuehren kann (Backlog gepufferter Logs + WAL-Recovery + Compactor).
 singleBinary:
   persistence:
     size: 10Gi
+  resources:
+    requests:
+      cpu: 100m
+      memory: 256Mi
+    limits:
+      memory: 2Gi

@@ -10,10 +10,18 @@ loki:
       chunks: k8s-prod-loki
       ruler: k8s-prod-loki
 
-# PVC-Groesse (groesser als DEV/TEST)
+# PVC-Groesse (groesser als DEV/TEST) + Memory-Limit erhoeht
+# Memory-Limit auf 3Gi angehoben (mehr Apps, mehr Logs als DEV/TEST),
+# verhindert OOM-Kills nach laengerer Offline-Phase.
 singleBinary:
   persistence:
     size: 20Gi
+  resources:
+    requests:
+      cpu: 100m
+      memory: 256Mi
+    limits:
+      memory: 3Gi
 
 # Groessere Caches fuer PROD (8 vCPU / 24 GB Nodes)
 chunksCache:
