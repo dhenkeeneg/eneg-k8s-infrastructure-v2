@@ -31,3 +31,25 @@ schedules:
       defaultVolumesToFsBackup: true
       includedNamespaces:
         - "*"
+
+
+# -----------------------------------------------------------------------
+# Resource Limits: erhoeht wegen OOM-Kills bei ~4000 Items im Cluster
+# (Helm-Chart-Default 512Mi war zu klein - Pod wurde beim Backup OOM-killed)
+# -----------------------------------------------------------------------
+resources:
+  requests:
+    cpu: 200m
+    memory: 512Mi
+  limits:
+    cpu: 1000m
+    memory: 2Gi
+
+nodeAgent:
+  resources:
+    requests:
+      cpu: 100m
+      memory: 256Mi
+    limits:
+      cpu: 500m
+      memory: 1Gi

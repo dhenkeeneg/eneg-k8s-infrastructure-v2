@@ -101,7 +101,7 @@
       ansible.builtin.pause:
         seconds: "{{ cooldown_seconds }}"
       delegate_to: localhost
-      tags: [always]
+      tags: [cooldown]
 
 # -----------------------------------------------------------------------------
 # Play 3/3: Post-Verifikation (run_once auf localhost)
