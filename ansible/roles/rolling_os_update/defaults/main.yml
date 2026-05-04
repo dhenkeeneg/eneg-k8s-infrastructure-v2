@@ -1,0 +1,47 @@
+---
+# =============================================================================
+# Rolling OS Update Role - Default Variables
+# =============================================================================
+# Diese Defaults koennen via -e oder Inventory ueberschrieben werden.
+# =============================================================================
+
+# Pflicht-Variable (vom Aufrufer setzen): dev | test | prod
+target_env: ""
+
+# Wird automatisch aus target_env abgeleitet
+kubectl_context: "k8s-{{ target_env }}"
+
+# Pause zwischen Nodes (Sekunden) - gibt dem Cluster Zeit zur Stabilisierung
+cooldown_seconds: 60
+
+# kubectl drain Timeout
+drain_timeout_seconds: 600
+
+# Reboot-Timeout (Ansible reboot module wartet auf SSH zurueck)
+reboot_timeout_seconds: 600
+
+# Pakete, die waehrend Update geschuetzt sind (apt-mark hold)
+apt_hold_packages:
+  - k3s
+  - k3s-selinux
+
+# vSphere-Snapshot vor jedem Node-Update
+enable_vsphere_snapshot: true
+
+# Snapshot bei erfolgreichem Update wieder loeschen (false = behalten)
+snapshot_delete_on_success: true
+
+# Reboot immer wenn Pakete installiert wurden (auch ohne /var/run/reboot-required)
+# Entspricht der "Immer"-Reboot-Strategie
+force_reboot_on_changes: true
+
+# Namespaces, in denen nach CNPG-Clustern gesucht wird (--all-namespaces ist default)
+# Diese Liste ist nur informativ fuer Pre-Checks-Output
+cnpg_namespaces:
+  - databases
+
+# Velero - Mindestalter des letzten Backups (Pre-Check Warning if older)
+velero_max_backup_age_hours: 26
+
+# ArgoCD Namespace fuer Sync-Status-Check
+argocd_namespace: "argocd"

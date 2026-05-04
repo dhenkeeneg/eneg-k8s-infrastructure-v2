@@ -1,0 +1,56 @@
+---
+# =============================================================================
+# Post-Update Verifikation (run_once, lokal auf mgmt-10)
+# =============================================================================
+
+- name: Final Cluster Node-Status (-o wide)
+  ansible.builtin.command:
+    cmd: kubectl --context {{ kubectl_context }} get nodes -o wide
+  changed_when: false
+  register: final_node_status
+
+- name: Cluster Node-Status anzeigen
+  ansible.builtin.debug:
+    msg: |
+      ============================================================
+      Final Node-Status:
+      {{ final_node_status.stdout }}
+      ============================================================
+
+- name: Final CNPG Cluster-Status
+  ansible.builtin.command:
+    cmd: >-
+      kubectl --context {{ kubectl_context }} get clusters.postgresql.cnpg.io
+      --all-namespaces
+  changed_when: false
+  register: final_cnpg_status
+
+- name: CNPG Cluster-Status anzeigen
+  ansible.builtin.debug:
+    msg: |
+      Final CNPG-Status:
+      {{ final_cnpg_status.stdout }}
+
+- name: Final ArgoCD App Sync-Status
+  ansible.builtin.command:
+    cmd: >-
+      kubectl --context {{ kubectl_context }} get applications.argoproj.io
+      -n {{ argocd_namespace }}
+      -o jsonpath={range .items[*]}{.metadata.name}|{.status.sync.status}|{.status.health.status}{'\n'}{end}
+  changed_when: false
+  register: final_argocd_status
+  failed_when: false
+
+- name: ArgoCD-Status anzeigen
+  ansible.builtin.debug:
+    msg: |
+      Final ArgoCD-Status (name|sync|health):
+      {{ final_argocd_status.stdout | default('(nicht erreichbar)') }}
+
+- name: Erfolgsmeldung
+  ansible.builtin.debug:
+    msg: |
+      ============================================================
+      Rolling OS-Update fuer Environment '{{ target_env }}' abgeschlossen.
+      Cluster {{ kubectl_context }} ist betriebsbereit.
+      ============================================================

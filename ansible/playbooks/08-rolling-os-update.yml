@@ -1,0 +1,119 @@
+---
+# =============================================================================
+# Playbook 08 - Rolling OS Update fuer K3s Nodes
+# =============================================================================
+# Fuehrt einen sicheren Rolling-Update aller Ubuntu-Pakete auf einem K3s
+# HA-Cluster durch. Pro Node:
+#   - vSphere-Snapshot (govc)
+#   - CNPG Primary-Switchover (falls noetig)
+#   - Cordon + Drain
+#   - APT Update + Upgrade
+#   - Reboot (Strategie: "Immer wenn Pakete installiert")
+#   - Uncordon + Pod-/CNPG-Verifikation
+#   - Snapshot Cleanup
+#
+# Aufruf:
+#   ansible-playbook -i inventory/dev/hosts.ini  playbooks/08-rolling-os-update.yml -e target_env=dev
+#   ansible-playbook -i inventory/test/hosts.ini playbooks/08-rolling-os-update.yml -e target_env=test
+#   ansible-playbook -i inventory/prod/hosts.ini playbooks/08-rolling-os-update.yml -e target_env=prod
+#
+# Tags fuer gezielte Ausfuehrung:
+#   --tags pre-checks    : Nur Pre-Flight-Checks (kein Update, kein Snapshot)
+# =============================================================================
+
+# -----------------------------------------------------------------------------
+# Play 1/3: Pre-Flight Checks (run_once auf localhost)
+# -----------------------------------------------------------------------------
+- name: "[1/3] Pre-Flight Checks"
+  hosts: localhost
+  connection: local
+  gather_facts: true
+  any_errors_fatal: true
+
+  pre_tasks:
+    - name: SOPS-encrypted govc-Credentials laden
+      community.sops.load_vars:
+        file: "{{ playbook_dir }}/../secrets/govc-credentials.yaml"
+      no_log: true
+      tags: [always]
+
+  tasks:
+    - name: Pre-Checks ausfuehren
+      ansible.builtin.import_role:
+        name: rolling_os_update
+        tasks_from: pre_checks.yml
+      tags: [pre-checks, always]
+
+# -----------------------------------------------------------------------------
+# Play 2/3: Per-Node Rolling Update (serial: 1, order: reverse_sorted)
+# -----------------------------------------------------------------------------
+- name: "[2/3] Rolling OS Update (serial: 1)"
+  hosts: k3s_servers
+  serial: 1
+  order: reverse_sorted
+  become: true
+  any_errors_fatal: true
+
+  tasks:
+    - name: vSphere Snapshot anlegen
+      ansible.builtin.import_role:
+        name: rolling_os_update
+        tasks_from: snapshot_create.yml
+      tags: [snapshot]
+
+    - name: CNPG Primary-Switchover (falls noetig)
+      ansible.builtin.import_role:
+        name: rolling_os_update
+        tasks_from: cnpg_failover.yml
+      tags: [cnpg]
+
+    - name: Cordon und Drain
+      ansible.builtin.import_role:
+        name: rolling_os_update
+        tasks_from: drain.yml
+      tags: [drain]
+
+    - name: APT Update + Upgrade
+      ansible.builtin.import_role:
+        name: rolling_os_update
+        tasks_from: apt_update.yml
+      tags: [update]
+
+    - name: Reboot (falls noetig)
+      ansible.builtin.import_role:
+        name: rolling_os_update
+        tasks_from: reboot_if_changed.yml
+      tags: [reboot]
+
+    - name: Uncordon und Verifikation
+      ansible.builtin.import_role:
+        name: rolling_os_update
+        tasks_from: uncordon_verify.yml
+      tags: [verify]
+
+    - name: Snapshot loeschen (bei Erfolg)
+      ansible.builtin.import_role:
+        name: rolling_os_update
+        tasks_from: snapshot_delete.yml
+      tags: [snapshot]
+
+    - name: Cooldown ({{ cooldown_seconds }}s) bevor naechste Node
+      ansible.builtin.pause:
+        seconds: "{{ cooldown_seconds }}"
+      delegate_to: localhost
+      tags: [always]
+
+# -----------------------------------------------------------------------------
+# Play 3/3: Post-Verifikation (run_once auf localhost)
+# -----------------------------------------------------------------------------
+- name: "[3/3] Post-Update Verification"
+  hosts: localhost
+  connection: local
+  gather_facts: false
+
+  tasks:
+    - name: Post-Checks ausfuehren
+      ansible.builtin.import_role:
+        name: rolling_os_update
+        tasks_from: post_checks.yml
+      tags: [verify, always]

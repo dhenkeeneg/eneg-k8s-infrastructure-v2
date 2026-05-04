@@ -1,0 +1,79 @@
+---
+# =============================================================================
+# CNPG Primary-Switchover wenn Primary auf Ziel-Node
+# =============================================================================
+# Wird auf localhost (mgmt-10) ausgefuehrt.
+# Liest cnpg_clusters_inventory aus hostvars['localhost'].
+# Fuer jeden Cluster, dessen Primary-Pod auf der Ziel-Node laeuft, wird
+# kubectl cnpg promote ausgefuehrt (CNPG waehlt automatisch eine andere
+# ready Replica als neuen Primary).
+# =============================================================================
+
+- name: Primary-Pod-Locations aller CNPG Cluster abfragen
+  ansible.builtin.command:
+    cmd: >-
+      kubectl --context {{ kubectl_context }}
+      get pod {{ item.primary }}
+      -n {{ item.namespace }}
+      -o jsonpath={.spec.nodeName}
+  delegate_to: localhost
+  changed_when: false
+  loop: "{{ hostvars['localhost'].cnpg_clusters_inventory }}"
+  loop_control:
+    label: "{{ item.namespace }}/{{ item.name }} (primary={{ item.primary }})"
+  register: primary_node_lookups
+  when: hostvars['localhost'].cnpg_clusters_inventory | length > 0
+
+- name: Liste der zu-switchenden Cluster aufbauen
+  ansible.builtin.set_fact:
+    clusters_to_failover: >-
+      {{
+        primary_node_lookups.results
+        | default([])
+        | selectattr('stdout', 'eq', inventory_hostname)
+        | map(attribute='item')
+        | list
+      }}
+
+- name: Failover-Plan anzeigen
+  ansible.builtin.debug:
+    msg: |
+      CNPG Cluster mit Primary auf {{ inventory_hostname }}:
+      {% if clusters_to_failover | length == 0 %}
+      (keine - kein Switchover noetig)
+      {% else %}
+      {% for c in clusters_to_failover %}
+      - {{ c.namespace }}/{{ c.name }} (Primary={{ c.primary }})
+      {% endfor %}
+      {% endif %}
+
+- name: CNPG Primary-Switchover durchfuehren
+  ansible.builtin.command:
+    cmd: >-
+      kubectl --context {{ kubectl_context }}
+      cnpg promote {{ item.name }}
+      -n {{ item.namespace }}
+  delegate_to: localhost
+  loop: "{{ clusters_to_failover }}"
+  loop_control:
+    label: "{{ item.namespace }}/{{ item.name }}"
+  when: clusters_to_failover | length > 0
+  register: promote_results
+
+- name: Warten bis Switchover abgeschlossen (alle Cluster wieder healthy)
+  ansible.builtin.command:
+    cmd: >-
+      kubectl --context {{ kubectl_context }} get clusters.postgresql.cnpg.io
+      --all-namespaces
+      -o jsonpath={range .items[*]}{.status.phase}{'\n'}{end}
+  delegate_to: localhost
+  changed_when: false
+  register: cnpg_phase_after_promote
+  until: >-
+    cnpg_phase_after_promote.stdout_lines | length > 0 and
+    cnpg_phase_after_promote.stdout_lines
+    | reject('eq', 'Cluster in healthy state')
+    | list | length == 0
+  retries: 30
+  delay: 10
+  when: clusters_to_failover | length > 0

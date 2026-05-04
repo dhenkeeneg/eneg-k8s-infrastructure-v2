@@ -1,0 +1,14 @@
+---
+# =============================================================================
+# Rolling OS Update Role - Default Entry Point
+# =============================================================================
+# Diese Role ist fuer Aufruf via 08-rolling-os-update.yml Playbook gedacht.
+# Wenn jemand `roles: - rolling_os_update` direkt nutzt, gibt's einen Hinweis.
+# =============================================================================
+
+- name: Hinweis - bitte Playbook 08-rolling-os-update.yml nutzen
+  ansible.builtin.debug:
+    msg: |
+      Diese Role ist fuer Multi-Play-Aufruf via Playbook gedacht.
+      Bitte nutze:
+        ansible-playbook -i inventory/<env>/hosts.ini playbooks/08-rolling-os-update.yml -e target_env=<env>

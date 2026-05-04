@@ -1,0 +1,62 @@
+---
+# =============================================================================
+# Reboot wenn Pakete installiert wurden ("Immer"-Reboot-Strategie)
+# =============================================================================
+# Laeuft AUF der Node.
+# Reboot wird ausgeloest wenn:
+#   - force_reboot_on_changes=true UND apt_upgrade.changed=true, ODER
+#   - /var/run/reboot-required existiert (klassische Strikt-Strategie)
+# =============================================================================
+
+- name: Pruefen ob /var/run/reboot-required existiert
+  ansible.builtin.stat:
+    path: /var/run/reboot-required
+  register: reboot_required_file
+
+- name: Reboot-Bedarf ermitteln
+  ansible.builtin.set_fact:
+    needs_reboot: "{{ (force_reboot_on_changes | bool and apt_upgrade.changed) or reboot_required_file.stat.exists }}"
+
+- name: Reboot-Entscheidung anzeigen
+  ansible.builtin.debug:
+    msg: |
+      Reboot-Entscheidung fuer {{ inventory_hostname }}:
+        force_reboot_on_changes:    {{ force_reboot_on_changes }}
+        apt_upgrade.changed:        {{ apt_upgrade.changed }}
+        /var/run/reboot-required:   {{ reboot_required_file.stat.exists }}
+        => Reboot:                  {{ needs_reboot }}
+
+- name: Reboot {{ inventory_hostname }}
+  ansible.builtin.reboot:
+    msg: "Ansible: Reboot nach OS-Update"
+    reboot_timeout: "{{ reboot_timeout_seconds }}"
+    test_command: uptime
+  when: needs_reboot
+
+- name: Warten bis Node aus Cluster-Sicht wieder Ready (max 5 Min)
+  ansible.builtin.command:
+    cmd: >-
+      kubectl --context {{ kubectl_context }} get node {{ inventory_hostname }}
+      -o jsonpath={.status.conditions[?(@.type=='Ready')].status}
+  delegate_to: localhost
+  register: node_ready_check
+  until: node_ready_check.stdout == "True"
+  retries: 30
+  delay: 10
+  changed_when: false
+  when: needs_reboot
+
+- name: Pruefe ob /var/run/reboot-required nach Reboot weg ist
+  ansible.builtin.stat:
+    path: /var/run/reboot-required
+  register: reboot_required_after
+  when: needs_reboot
+
+- name: WARNUNG wenn /var/run/reboot-required nach Reboot weiterhin existiert
+  ansible.builtin.debug:
+    msg: |
+      WARNUNG: /var/run/reboot-required existiert nach Reboot weiterhin auf {{ inventory_hostname }}.
+      Moeglicherweise ist ein zweiter Reboot noetig.
+  when:
+    - needs_reboot
+    - reboot_required_after.stat.exists | default(false)

@@ -1,0 +1,178 @@
+---
+# =============================================================================
+# Pre-Flight Checks (run_once auf localhost = mgmt-10)
+# =============================================================================
+# Verifiziert dass der Cluster gesund ist BEVOR irgendein Update startet.
+# Setzt zwei Facts auf localhost:
+#   - govc_env (dict mit GOVC_* env vars)
+#   - cnpg_clusters_inventory (list of dicts: namespace, name, primary)
+# Diese werden in Play 2 via hostvars['localhost'] referenziert.
+# =============================================================================
+
+- name: target_env validieren
+  ansible.builtin.assert:
+    that:
+      - target_env in ['dev', 'test', 'prod']
+    fail_msg: "target_env muss 'dev', 'test' oder 'prod' sein. Aktuell: '{{ target_env }}'"
+    success_msg: "target_env = {{ target_env }}, kubectl_context = {{ kubectl_context }}"
+
+- name: govc_env Dict aus geladenen SOPS-Variablen aufbauen
+  ansible.builtin.set_fact:
+    govc_env:
+      GOVC_URL: "{{ govc_url }}"
+      GOVC_USERNAME: "{{ govc_username }}"
+      GOVC_PASSWORD: "{{ govc_password }}"
+      GOVC_INSECURE: "{{ govc_insecure }}"
+  no_log: true
+
+- name: kubectl client-Version pruefen
+  ansible.builtin.command:
+    cmd: kubectl version --client=true -o yaml
+  changed_when: false
+
+- name: kubectl-Verbindung zu Cluster {{ kubectl_context }} pruefen
+  ansible.builtin.command:
+    cmd: kubectl --context {{ kubectl_context }} cluster-info
+  changed_when: false
+
+- name: Node-Status holen
+  ansible.builtin.command:
+    cmd: >-
+      kubectl --context {{ kubectl_context }} get nodes
+      -o jsonpath={range .items[*]}{.metadata.name}={.status.conditions[?(@.type=='Ready')].status}{'\n'}{end}
+  changed_when: false
+  register: nodes_status
+
+- name: Node-Status anzeigen
+  ansible.builtin.debug:
+    msg: |
+      Node-Status:
+      {{ nodes_status.stdout }}
+
+- name: Pruefe dass alle Nodes Ready=True sind
+  ansible.builtin.assert:
+    that:
+      - "'=False' not in nodes_status.stdout"
+      - "'=Unknown' not in nodes_status.stdout"
+    fail_msg: "Mindestens ein Node ist nicht Ready. Stoppe Update."
+
+- name: ArgoCD Apps Sync- und Health-Status holen
+  ansible.builtin.command:
+    cmd: >-
+      kubectl --context {{ kubectl_context }} get applications.argoproj.io
+      -n {{ argocd_namespace }}
+      -o jsonpath={range .items[*]}{.metadata.name}|{.status.sync.status}|{.status.health.status}{'\n'}{end}
+  changed_when: false
+  register: argocd_apps
+  failed_when: false
+
+- name: ArgoCD-Status anzeigen
+  ansible.builtin.debug:
+    msg: |
+      ArgoCD Apps (name|sync|health):
+      {{ argocd_apps.stdout | default('(nicht erreichbar)') }}
+
+- name: WARNUNG bei OutOfSync oder Degraded ArgoCD-Apps
+  ansible.builtin.debug:
+    msg: |
+      ===========================================================
+      WARNUNG: ArgoCD-Apps mit Problem-Status erkannt!
+      Bitte vor Update klaeren ob das beabsichtigt ist.
+      ===========================================================
+  when:
+    - argocd_apps.stdout is defined
+    - argocd_apps.stdout | length > 0
+    - "'OutOfSync' in argocd_apps.stdout or 'Degraded' in argocd_apps.stdout"
+
+- name: Alle CNPG Cluster pruefen
+  ansible.builtin.command:
+    cmd: >-
+      kubectl --context {{ kubectl_context }} get clusters.postgresql.cnpg.io
+      --all-namespaces
+      -o jsonpath={range .items[*]}{.metadata.namespace};{.metadata.name};{.status.phase};{.status.currentPrimary}{'\n'}{end}
+  changed_when: false
+  register: cnpg_clusters_raw
+
+- name: CNPG-Cluster-Inventory anzeigen
+  ansible.builtin.debug:
+    msg: |
+      CNPG Clusters (namespace;name;phase;primary):
+      {{ cnpg_clusters_raw.stdout | default('(keine Cluster)') }}
+
+- name: Pruefe alle CNPG Cluster sind healthy
+  ansible.builtin.assert:
+    that: "'Cluster in healthy state' in line"
+    fail_msg: "CNPG-Cluster '{{ line }}' ist nicht healthy. Stoppe Update."
+  loop: "{{ cnpg_clusters_raw.stdout_lines }}"
+  loop_control:
+    loop_var: line
+  when: cnpg_clusters_raw.stdout | length > 0
+
+- name: CNPG-Cluster-Inventory als strukturierten Fact aufbauen
+  ansible.builtin.set_fact:
+    cnpg_clusters_inventory: >-
+      {{
+        cnpg_clusters_raw.stdout_lines
+        | reject('eq', '')
+        | map('split', ';')
+        | map('community.general.zip_longest', ['namespace', 'name', 'phase', 'primary'])
+        | map('items2dict', key_name=1, value_name=0)
+        | list
+      }}
+  when: cnpg_clusters_raw.stdout | length > 0
+
+- name: Fallback - leeres Inventory wenn keine Cluster
+  ansible.builtin.set_fact:
+    cnpg_clusters_inventory: []
+  when: cnpg_clusters_raw.stdout | length == 0
+
+- name: Velero - letztes Backup pruefen
+  ansible.builtin.command:
+    cmd: >-
+      kubectl --context {{ kubectl_context }} get backups.velero.io
+      -n velero
+      --sort-by=.status.completionTimestamp
+      -o jsonpath={.items[-1:].status.phase}|{.items[-1:].status.completionTimestamp}
+  changed_when: false
+  register: velero_last_backup
+  failed_when: false
+
+- name: Velero-Backup-Status anzeigen
+  ansible.builtin.debug:
+    msg: "Letztes Velero-Backup (phase|completionTimestamp): {{ velero_last_backup.stdout | default('NICHT ERMITTELT') }}"
+
+- name: govc-Verbindung pruefen (govc about)
+  ansible.builtin.command:
+    cmd: govc about
+  environment: "{{ govc_env }}"
+  changed_when: false
+  register: govc_about
+  no_log: true
+
+- name: govc-Verbindung erfolgreich
+  ansible.builtin.debug:
+    msg: "govc about erfolgreich. vCenter erreichbar."
+
+- name: govc - alle Ziel-VMs muessen gefunden werden
+  ansible.builtin.command:
+    cmd: govc vm.info {{ item }}
+  environment: "{{ govc_env }}"
+  loop: "{{ groups['k3s_servers'] }}"
+  changed_when: false
+  register: govc_vm_infos
+  failed_when: govc_vm_infos.stdout == ""
+  no_log: true
+
+- name: VM-Lookup erfolgreich
+  ansible.builtin.debug:
+    msg: "govc findet alle {{ groups['k3s_servers'] | length }} Ziel-VMs."
+
+- name: Pre-Checks erfolgreich abgeschlossen
+  ansible.builtin.debug:
+    msg: |
+      ============================================================
+      Pre-Checks erfolgreich.
+      Cluster {{ kubectl_context }} ist bereit fuer Rolling Update.
+      Anzahl CNPG-Cluster: {{ cnpg_clusters_inventory | length }}
+      Anzahl Ziel-Nodes:   {{ groups['k3s_servers'] | length }}
+      ============================================================

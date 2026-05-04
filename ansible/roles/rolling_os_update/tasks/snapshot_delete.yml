@@ -1,0 +1,43 @@
+---
+# =============================================================================
+# vSphere Snapshot loeschen (nach erfolgreichem Update)
+# =============================================================================
+# Wird auf localhost (mgmt-10) ausgefuehrt.
+# Nur wenn enable_vsphere_snapshot UND snapshot_delete_on_success.
+# Wenn Update fehlschlaegt, wird snapshot_delete.yml uebersprungen
+# (Block/rescue im Playbook), Snapshot bleibt zur Wiederherstellung.
+# =============================================================================
+
+- name: Snapshot {{ snapshot_name }} loeschen
+  ansible.builtin.command:
+    cmd: >-
+      govc snapshot.remove
+      -vm {{ inventory_hostname }}
+      {{ snapshot_name }}
+  environment: "{{ hostvars['localhost'].govc_env }}"
+  delegate_to: localhost
+  register: snapshot_remove_result
+  changed_when: snapshot_remove_result.rc == 0
+  when:
+    - enable_vsphere_snapshot | bool
+    - snapshot_delete_on_success | bool
+    - snapshot_name is defined
+  no_log: true
+
+- name: Bestaetigung
+  ansible.builtin.debug:
+    msg: "Snapshot {{ snapshot_name }} fuer {{ inventory_hostname }} entfernt."
+  when:
+    - enable_vsphere_snapshot | bool
+    - snapshot_delete_on_success | bool
+
+- name: Snapshot wird BEHALTEN
+  ansible.builtin.debug:
+    msg: |
+      Snapshot {{ snapshot_name }} fuer {{ inventory_hostname }} bleibt erhalten.
+      (snapshot_delete_on_success={{ snapshot_delete_on_success }})
+      Manuelle Loeschung mit:
+        govc snapshot.remove -vm {{ inventory_hostname }} {{ snapshot_name }}
+  when:
+    - enable_vsphere_snapshot | bool
+    - not snapshot_delete_on_success | bool

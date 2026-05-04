@@ -1,0 +1,50 @@
+---
+# =============================================================================
+# vSphere Snapshot anlegen (per Node, vor Update)
+# =============================================================================
+# Wird auf localhost (mgmt-10) ausgefuehrt mit govc.
+# Setzt fact 'snapshot_name' fuer spaeteres snapshot_delete.
+# =============================================================================
+
+- name: Snapshot-Name fuer {{ inventory_hostname }} generieren
+  ansible.builtin.set_fact:
+    snapshot_name: >-
+      ansible-osupdate-{{ target_env }}-{{ inventory_hostname }}-{{
+      lookup('pipe', 'date +%Y%m%d-%H%M%S') }}
+  when: enable_vsphere_snapshot
+
+- name: vSphere-Snapshot von {{ inventory_hostname }} erstellen
+  ansible.builtin.command:
+    cmd: >-
+      govc snapshot.create
+      -vm {{ inventory_hostname }}
+      -m=false
+      -d "Ansible 08-rolling-os-update vor OS-Update ({{ target_env }})"
+      {{ snapshot_name }}
+  environment: "{{ hostvars['localhost'].govc_env }}"
+  delegate_to: localhost
+  register: snapshot_create_result
+  changed_when: snapshot_create_result.rc == 0
+  when: enable_vsphere_snapshot
+  no_log: true
+
+- name: Snapshot-Erstellung verifizieren (govc snapshot.tree)
+  ansible.builtin.command:
+    cmd: govc snapshot.tree -vm {{ inventory_hostname }}
+  environment: "{{ hostvars['localhost'].govc_env }}"
+  delegate_to: localhost
+  register: snapshot_tree
+  changed_when: false
+  when: enable_vsphere_snapshot
+  no_log: true
+
+- name: Snapshot-Bestaetigung
+  ansible.builtin.debug:
+    msg: |
+      Snapshot fuer {{ inventory_hostname }} angelegt: {{ snapshot_name }}
+  when: enable_vsphere_snapshot
+
+- name: Snapshot deaktiviert - uebersprungen
+  ansible.builtin.debug:
+    msg: "enable_vsphere_snapshot=false - kein Snapshot fuer {{ inventory_hostname }}"
+  when: not enable_vsphere_snapshot

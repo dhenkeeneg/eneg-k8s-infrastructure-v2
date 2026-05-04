@@ -1,0 +1,57 @@
+---
+# =============================================================================
+# APT Update auf der Ziel-Node
+# =============================================================================
+# Laeuft AUF der Node (become: true im Playbook).
+# K3s wird vor dem Upgrade per apt-mark hold geschuetzt, danach wieder
+# auf install gesetzt.
+# =============================================================================
+
+- name: K3s-Pakete vor Upgrade schuetzen (apt-mark hold)
+  ansible.builtin.dpkg_selections:
+    name: "{{ item }}"
+    selection: hold
+  loop: "{{ apt_hold_packages }}"
+  failed_when: false
+  register: hold_result
+
+- name: APT Cache aktualisieren
+  ansible.builtin.apt:
+    update_cache: yes
+    cache_valid_time: 0
+
+- name: Anstehende Pakete vor Upgrade auflisten
+  ansible.builtin.command:
+    cmd: apt list --upgradable
+  register: apt_upgradable_before
+  changed_when: false
+
+- name: Upgradable Pakete anzeigen
+  ansible.builtin.debug:
+    msg: |
+      Anstehende Updates auf {{ inventory_hostname }}:
+      {{ apt_upgradable_before.stdout_lines | reject('search', 'WARNING') | reject('search', '^Listing') | list | join('\n') }}
+
+- name: Pakete aktualisieren (dist-upgrade)
+  ansible.builtin.apt:
+    upgrade: dist
+    autoclean: yes
+  register: apt_upgrade
+
+- name: APT autoremove
+  ansible.builtin.apt:
+    autoremove: yes
+    purge: yes
+
+- name: K3s-Schutz wieder aufheben (apt-mark unhold)
+  ansible.builtin.dpkg_selections:
+    name: "{{ item }}"
+    selection: install
+  loop: "{{ apt_hold_packages }}"
+  failed_when: false
+
+- name: Update-Status
+  ansible.builtin.debug:
+    msg: |
+      APT Update auf {{ inventory_hostname }} abgeschlossen.
+      Pakete installiert/aktualisiert: {{ apt_upgrade.changed }}
