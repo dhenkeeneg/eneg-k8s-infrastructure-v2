@@ -19,9 +19,7 @@
 
 - name: Final CNPG Cluster-Status
   ansible.builtin.command:
-    cmd: >-
-      kubectl --context {{ kubectl_context }} get clusters.postgresql.cnpg.io
-      --all-namespaces
+    cmd: kubectl --context {{ kubectl_context }} get clusters.postgresql.cnpg.io --all-namespaces
   changed_when: false
   register: final_cnpg_status
 
@@ -33,10 +31,16 @@
 
 - name: Final ArgoCD App Sync-Status
   ansible.builtin.command:
-    cmd: >-
-      kubectl --context {{ kubectl_context }} get applications.argoproj.io
-      -n {{ argocd_namespace }}
-      -o jsonpath={range .items[*]}{.metadata.name}|{.status.sync.status}|{.status.health.status}{'\n'}{end}
+    argv:
+      - kubectl
+      - --context
+      - "{{ kubectl_context }}"
+      - get
+      - applications.argoproj.io
+      - -n
+      - "{{ argocd_namespace }}"
+      - -o
+      - 'jsonpath={range .items[*]}{.metadata.name}|{.status.sync.status}|{.status.health.status}{"\n"}{end}'
   changed_when: false
   register: final_argocd_status
   failed_when: false

@@ -35,9 +35,15 @@
 
 - name: Warten bis Node aus Cluster-Sicht wieder Ready (max 5 Min)
   ansible.builtin.command:
-    cmd: >-
-      kubectl --context {{ kubectl_context }} get node {{ inventory_hostname }}
-      -o jsonpath={.status.conditions[?(@.type=='Ready')].status}
+    argv:
+      - kubectl
+      - --context
+      - "{{ kubectl_context }}"
+      - get
+      - node
+      - "{{ inventory_hostname }}"
+      - -o
+      - 'jsonpath={.status.conditions[?(@.type=="Ready")].status}'
   delegate_to: localhost
   register: node_ready_check
   until: node_ready_check.stdout == "True"

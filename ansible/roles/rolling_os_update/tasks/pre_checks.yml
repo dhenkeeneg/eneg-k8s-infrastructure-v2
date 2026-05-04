@@ -5,7 +5,7 @@
 # Verifiziert dass der Cluster gesund ist BEVOR irgendein Update startet.
 # Setzt zwei Facts auf localhost:
 #   - govc_env (dict mit GOVC_* env vars)
-#   - cnpg_clusters_inventory (list of dicts: namespace, name, primary)
+#   - cnpg_clusters_inventory (list of dicts: namespace, name, phase, primary)
 # Diese werden in Play 2 via hostvars['localhost'] referenziert.
 # =============================================================================
 
@@ -37,9 +37,14 @@
 
 - name: Node-Status holen
   ansible.builtin.command:
-    cmd: >-
-      kubectl --context {{ kubectl_context }} get nodes
-      -o jsonpath={range .items[*]}{.metadata.name}={.status.conditions[?(@.type=='Ready')].status}{'\n'}{end}
+    argv:
+      - kubectl
+      - --context
+      - "{{ kubectl_context }}"
+      - get
+      - nodes
+      - -o
+      - 'jsonpath={range .items[*]}{.metadata.name}={.status.conditions[?(@.type=="Ready")].status}{"\n"}{end}'
   changed_when: false
   register: nodes_status
 
@@ -58,10 +63,16 @@
 
 - name: ArgoCD Apps Sync- und Health-Status holen
   ansible.builtin.command:
-    cmd: >-
-      kubectl --context {{ kubectl_context }} get applications.argoproj.io
-      -n {{ argocd_namespace }}
-      -o jsonpath={range .items[*]}{.metadata.name}|{.status.sync.status}|{.status.health.status}{'\n'}{end}
+    argv:
+      - kubectl
+      - --context
+      - "{{ kubectl_context }}"
+      - get
+      - applications.argoproj.io
+      - -n
+      - "{{ argocd_namespace }}"
+      - -o
+      - 'jsonpath={range .items[*]}{.metadata.name}|{.status.sync.status}|{.status.health.status}{"\n"}{end}'
   changed_when: false
   register: argocd_apps
   failed_when: false
@@ -86,10 +97,15 @@
 
 - name: Alle CNPG Cluster pruefen
   ansible.builtin.command:
-    cmd: >-
-      kubectl --context {{ kubectl_context }} get clusters.postgresql.cnpg.io
-      --all-namespaces
-      -o jsonpath={range .items[*]}{.metadata.namespace};{.metadata.name};{.status.phase};{.status.currentPrimary}{'\n'}{end}
+    argv:
+      - kubectl
+      - --context
+      - "{{ kubectl_context }}"
+      - get
+      - clusters.postgresql.cnpg.io
+      - --all-namespaces
+      - -o
+      - 'jsonpath={range .items[*]}{.metadata.namespace};{.metadata.name};{.status.phase};{.status.currentPrimary}{"\n"}{end}'
   changed_when: false
   register: cnpg_clusters_raw
 
@@ -128,11 +144,17 @@
 
 - name: Velero - letztes Backup pruefen
   ansible.builtin.command:
-    cmd: >-
-      kubectl --context {{ kubectl_context }} get backups.velero.io
-      -n velero
-      --sort-by=.status.completionTimestamp
-      -o jsonpath={.items[-1:].status.phase}|{.items[-1:].status.completionTimestamp}
+    argv:
+      - kubectl
+      - --context
+      - "{{ kubectl_context }}"
+      - get
+      - backups.velero.io
+      - -n
+      - velero
+      - --sort-by=.status.completionTimestamp
+      - -o
+      - 'jsonpath={.items[-1:].status.phase}|{.items[-1:].status.completionTimestamp}'
   changed_when: false
   register: velero_last_backup
   failed_when: false
@@ -155,7 +177,10 @@
 
 - name: govc - alle Ziel-VMs muessen gefunden werden
   ansible.builtin.command:
-    cmd: govc vm.info {{ item }}
+    argv:
+      - govc
+      - vm.info
+      - "{{ item }}"
   environment: "{{ govc_env }}"
   loop: "{{ groups['k3s_servers'] }}"
   changed_when: false

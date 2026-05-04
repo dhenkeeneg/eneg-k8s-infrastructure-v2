@@ -17,11 +17,17 @@
 
 - name: Pods auf {{ inventory_hostname }} pruefen
   ansible.builtin.command:
-    cmd: >-
-      kubectl --context {{ kubectl_context }} get pods
-      --all-namespaces
-      --field-selector spec.nodeName={{ inventory_hostname }}
-      -o jsonpath={range .items[*]}{.metadata.namespace}/{.metadata.name}|{.status.phase}{'\n'}{end}
+    argv:
+      - kubectl
+      - --context
+      - "{{ kubectl_context }}"
+      - get
+      - pods
+      - --all-namespaces
+      - --field-selector
+      - "spec.nodeName={{ inventory_hostname }}"
+      - -o
+      - 'jsonpath={range .items[*]}{.metadata.namespace}/{.metadata.name}|{.status.phase}{"\n"}{end}'
   delegate_to: localhost
   register: pods_on_node
   changed_when: false
@@ -45,10 +51,15 @@
 
 - name: Warten bis alle CNPG Cluster wieder healthy sind
   ansible.builtin.command:
-    cmd: >-
-      kubectl --context {{ kubectl_context }} get clusters.postgresql.cnpg.io
-      --all-namespaces
-      -o jsonpath={range .items[*]}{.status.phase}{'\n'}{end}
+    argv:
+      - kubectl
+      - --context
+      - "{{ kubectl_context }}"
+      - get
+      - clusters.postgresql.cnpg.io
+      - --all-namespaces
+      - -o
+      - 'jsonpath={range .items[*]}{.status.phase}{"\n"}{end}'
   delegate_to: localhost
   changed_when: false
   register: cnpg_phase_after_uncordon
