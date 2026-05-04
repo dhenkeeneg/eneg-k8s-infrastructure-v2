@@ -40,6 +40,17 @@ spec:
     server: https://kubernetes.default.svc
     namespace: registry
 
+  # Server-Side-Apply Drift ignorieren: Kubernetes API-Server ergaenzt
+  # apiVersion und kind in volumeClaimTemplates automatisch (Schema-Defaults),
+  # was vom Helm-Chart nicht gesetzt wird. Kein echter Drift.
+  ignoreDifferences:
+    - group: apps
+      kind: StatefulSet
+      name: registry-zot
+      jsonPointers:
+        - /spec/volumeClaimTemplates/0/apiVersion
+        - /spec/volumeClaimTemplates/0/kind
+
   syncPolicy:
     automated:
       prune: true
