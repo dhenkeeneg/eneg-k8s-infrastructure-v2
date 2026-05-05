@@ -1,0 +1,51 @@
+---
+# ArgoCD Application: CoreDNS HA (DEV)
+# Phase 12: HA-Replacement fuer K3s-Default-CoreDNS
+# Multi-Source: Helm Chart v1.45.2 + Base Values + DEV Override
+#
+# Image: rancher/mirrored-coredns-coredns:1.14.1 (gleich wie K3s-Default,
+#        bereits im containerd-Cache aller Nodes vorhanden)
+# Service: kube-dns @ ClusterIP 10.43.0.10 (uebernimmt K3s-Default)
+#
+# WICHTIG: prune=false — verhindert versehentliche Cluster-DNS-Loeschung
+#          wenn die App accidentally aus dem Repo verschwindet.
+#          selfHeal=true heilt nur Drift.
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: coredns
+  namespace: argocd
+  annotations:
+    # Sync-Wave 0 — vor allen anderen Apps; CoreDNS ist Cluster-Critical
+    argocd.argoproj.io/sync-wave: "0"
+  finalizers:
+    - resources-finalizer.argocd.argoproj.io
+spec:
+  project: default
+
+  sources:
+    # Source 1: Helm Chart
+    - repoURL: https://coredns.github.io/helm
+      chart: coredns
+      targetRevision: 1.45.2
+      helm:
+        releaseName: coredns
+        valueFiles:
+          - $values/kubernetes/base/coredns/values.yaml
+          - $values/kubernetes/environments/dev/coredns/values-override.yaml
+
+    # Source 2: Git Repository Referenz fuer Helm Values
+    - repoURL: git@github.com:dhenkeeneg/eneg-k8s-infrastructure-v2.git
+      targetRevision: main
+      ref: values
+
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: kube-system
+
+  syncPolicy:
+    automated:
+      prune: false  # WICHTIG: nicht automatisch loeschen — sonst Cluster-Outage-Risiko
+      selfHeal: true
+    syncOptions:
+      - ServerSideApply=true

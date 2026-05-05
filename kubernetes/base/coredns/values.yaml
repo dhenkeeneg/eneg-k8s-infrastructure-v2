@@ -1,0 +1,80 @@
+# CoreDNS Base Values — generisch fuer alle Environments
+# Helm Chart: coredns/coredns v1.45.2 (CoreDNS App v1.13.1 by default — wir overriden auf v1.14.1)
+# Docs: https://github.com/coredns/helm
+#
+# Phase 12: HA-Replacement fuer K3s-Default-CoreDNS
+#
+# Hinweis: Das Corefile (servers:) ist umgebungsspezifisch (NodeHosts mit env-IPs)
+#          und wird in jedem environments/<env>/coredns/values-override.yaml
+#          komplett gesetzt. Helm merged Listen nicht — daher KEIN servers:
+#          Block in der Base, sondern komplett im Override.
+
+# --- Replicas ---
+# 3 Replicas, je 1 pro Node — eliminiert SPOF beim Node-Drain.
+replicaCount: 3
+
+# --- Image ---
+# Bewusst rancher/mirrored-coredns-coredns:1.14.1 (= K3s-Default).
+# Identisch zu was bisher 77d stabil lief und bereits in containerd-Cache aller Nodes.
+# Chart-Default waere coredns/coredns:1.13.1 (aelter — kein Downgrade gewuenscht).
+image:
+  repository: rancher/mirrored-coredns-coredns
+  tag: "1.14.1"
+  pullPolicy: IfNotPresent
+
+# --- Service ---
+# Service-Name MUSS "kube-dns" sein (Konvention; coredns-custom ConfigMap
+# erwartet diesen Namen, falls jemals genutzt).
+# ClusterIP MUSS 10.43.0.10 sein (K3s-Default; kubelet --cluster-dns ist hierauf konfiguriert).
+service:
+  clusterIP: 10.43.0.10
+  name: kube-dns
+
+# --- HA: Anti-Affinity ---
+# preferred (soft) reicht — bei 3 Replicas auf 3 Nodes greift die Verteilung sowieso,
+# bei Drain (= 2 verfuegbare Nodes) toleriert Scheduler die Co-Location.
+affinity:
+  podAntiAffinity:
+    preferredDuringSchedulingIgnoredDuringExecution:
+      - weight: 100
+        podAffinityTerm:
+          labelSelector:
+            matchLabels:
+              app.kubernetes.io/name: coredns
+          topologyKey: kubernetes.io/hostname
+
+# --- HA: Topology Spread ---
+# Verstaerkt die Verteilung; ScheduleAnyway statt DoNotSchedule, damit Drain nicht blockiert.
+topologySpreadConstraints:
+  - maxSkew: 1
+    topologyKey: kubernetes.io/hostname
+    whenUnsatisfiable: ScheduleAnyway
+    labelSelector:
+      matchLabels:
+        app.kubernetes.io/name: coredns
+
+# --- PodDisruptionBudget ---
+# Maximal 1 Replica darf gleichzeitig down sein — schuetzt vor versehentlichem
+# Mass-Drain (z.B. Cluster-Maintenance ohne sequentielles Drain).
+podDisruptionBudget:
+  minAvailable: 2
+
+# --- Ressourcen ---
+# Konservativ; CoreDNS ist sehr ressourcensparsam.
+resources:
+  requests:
+    cpu: 100m
+    memory: 70Mi
+  limits:
+    cpu: 200m
+    memory: 170Mi
+
+# --- Prometheus ServiceMonitor ---
+# Scraping aus dem monitoring-Namespace heraus; Endpoint :9153/metrics
+# wird durch das prometheus-Plugin im Corefile (Override) bereitgestellt.
+serviceMonitor:
+  enabled: true
+  namespace: monitoring
+
+# --- Tolerations: NICHT setzen, da nur Master-Nodes existieren (HA-K3s) ---
+# K3s-Master sind ohnehin schedulable; Default-Tolerations vom Chart reichen.
