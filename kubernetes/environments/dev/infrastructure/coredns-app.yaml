@@ -45,7 +45,8 @@ spec:
 
   syncPolicy:
     automated:
-      prune: false  # WICHTIG: nicht automatisch loeschen — sonst Cluster-Outage-Risiko
-      selfHeal: true
+      prune: false      # WICHTIG: nicht automatisch loeschen — Cluster-Outage-Risiko
+      selfHeal: false   # WICHTIG: Manuelle Kontrolle bei Cluster-DNS — bei Drift OutOfSync zeigen,
+                        #          aber NICHT auto-syncen. Bewusst manuell gesteuert (Phase 11/12 Lehre).
     syncOptions:
       - ServerSideApply=true
