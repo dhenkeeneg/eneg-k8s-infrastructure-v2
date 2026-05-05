@@ -5,6 +5,32 @@
 # Setzt: S3-Bucket, DNS-Host, Proxy-Cache-Upstreams, accessControl,
 #        GHCR-Sync-Extension, Extensions (search, ui, sync, metrics).
 
+# --- HA-Konfiguration ---
+# Phase 12: 3 Replicas mit Anti-Affinity + topologySpreadConstraints,
+# damit der Mirror waehrend Node-Drains immer erreichbar bleibt.
+# Backend ist S3 (NAS10), daher Multi-Replica unproblematisch.
+replicaCount: 3
+
+affinity:
+  podAntiAffinity:
+    preferredDuringSchedulingIgnoredDuringExecution:
+      - weight: 100
+        podAffinityTerm:
+          labelSelector:
+            matchLabels:
+              app.kubernetes.io/name: zot
+              app.kubernetes.io/instance: registry
+          topologyKey: kubernetes.io/hostname
+
+topologySpreadConstraints:
+  - maxSkew: 1
+    topologyKey: kubernetes.io/hostname
+    whenUnsatisfiable: ScheduleAnyway
+    labelSelector:
+      matchLabels:
+        app.kubernetes.io/name: zot
+        app.kubernetes.io/instance: registry
+
 # --- S3-Credentials als ENV via env (Chart-Value fuer Container-Umgebungsvariablen) ---
 # AWS SDK liest AWS_ACCESS_KEY_ID und AWS_SECRET_ACCESS_KEY automatisch aus ENV.
 env:
