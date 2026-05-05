@@ -40,14 +40,14 @@
       when: k3s_config.changed
 
     - name: Warten bis K3s API wieder erreichbar ist
-      ansible.builtin.uri:
-        url: "https://localhost:6443/healthz"
-        validate_certs: false
-        status_code: 200
+      # Statt anonyme uri /healthz (wirft 401 in modernen K3s — Auth required)
+      # nutzen wir k3s kubectl, das das interne kubeconfig verwendet.
+      ansible.builtin.command: k3s kubectl get --raw=/healthz
       register: k3s_health
-      until: k3s_health.status == 200
+      until: k3s_health.rc == 0 and 'ok' in (k3s_health.stdout | default(''))
       retries: 30
       delay: 10
+      changed_when: false
       when: k3s_config.changed
 
     - name: 30s Stabilisierungs-Pause
