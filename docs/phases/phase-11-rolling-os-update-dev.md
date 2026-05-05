@@ -122,15 +122,56 @@ Die Ursache war eine **Kette von zwei Single-Points-of-Failure**:
 
 **Problem:** K3s-Default ist 1 CoreDNS-Replica → Single Point of Failure.
 
-**Maßnahme:**
-- CoreDNS Deployment auf 2-3 Replicas skalieren.
-- Pod-Anti-Affinity über Hostnames (jede Replica auf einer anderen Node).
-- topologySpreadConstraints für `kubernetes.io/hostname`.
-- Sicherstellen, dass die Konfiguration K3s-Upgrade-resistent ist (HelmChartConfig oder ArgoCD-managed).
+**Recherche-Ergebnis (05.05.2026):** K3s hat **keinen offiziellen Konfig-Mechanismus** für CoreDNS-Replicas — bekannter offener Issue seit 2020 (k3s-io/k3s#1606). Die `coredns-custom` ConfigMap erlaubt nur Corefile-Anpassungen, NICHT Replica-Anzahl/Affinity. Direkte Deployment-Patches werden vom K3s-Addon-Controller wieder zurückgesetzt.
+
+**Einzige stabile Lösung — Option C2 (offiziell laut K3s-Docs):**
+1. K3s mit `--disable=coredns` auf allen 3 Mastern starten (sequenziell, mit kurzen DNS-Lücken).
+2. CoreDNS via ArgoCD-managed Helm-Chart deployen (3 Replicas + Anti-Affinity + topologySpreadConstraints).
+3. Reihenfolge muss exakt stimmen: erst eigener CoreDNS auf, dann K3s-Addon ab.
+
+**Aufwand:** 1-2 Stunden, in eigener konzentrierter Session.
 
 **Vor TEST/PROD-Update zwingend!**
 
-### 🔥 LL #2: Image Pre-Warming für Zot-Mirror
+### 🔥 LL #1b: Zot Container Registry HA aufbauen (HÖCHSTE PRIORITÄT)
+
+**Problem:** Zot läuft als StatefulSet mit nur 1 Replica. Beim Drain der Zot-Node (oder Reboot) ist der Mirror für 30-60s nicht erreichbar. Wenn gleichzeitig ein anderer Pod migriert und ein nicht-cached Image braucht → kaskadierender ImagePullBackOff (siehe Vorfall in Abschnitt 3).
+
+**Backend-Architektur ermöglicht Multi-Replica:**
+- Storage: S3 auf NAS10 (Bucket `k8s-{env}-registry`)
+- Multi-Replica auf gleichem Bucket = unproblematisch (Image-Layer sind immutable)
+- Lokale PVCs sind nur Cache + Sync-Tmp
+
+**Maßnahme:** In `kubernetes/base/registry/values.yaml` (oder DEV-Override):
+```yaml
+replicaCount: 3
+
+affinity:
+  podAntiAffinity:
+    preferredDuringSchedulingIgnoredDuringExecution:
+      - weight: 100
+        podAffinityTerm:
+          labelSelector:
+            matchLabels:
+              app.kubernetes.io/name: zot
+              app.kubernetes.io/instance: registry
+          topologyKey: kubernetes.io/hostname
+
+topologySpreadConstraints:
+  - maxSkew: 1
+    topologyKey: kubernetes.io/hostname
+    whenUnsatisfiable: ScheduleAnyway
+    labelSelector:
+      matchLabels:
+        app.kubernetes.io/name: zot
+        app.kubernetes.io/instance: registry
+```
+
+**Aufwand:** ~30 Min Implementierung + 10-15 Min Wartezeit für Pod-Spinup mit S3-Backend-Scan.
+
+**Storage-Impact:** +20 GB Longhorn pro Cluster (3× 10Gi PVC statt 1×).
+
+### 🔥 LL #2: Zot Image Pre-Warming
 
 **Problem:** Bei jedem Pod-Reschedule auf einer neuen Node, die ein Image nicht im Cache hat, wird über Zot gepullt. Zot OnDemand-Sync hängt bei multi-arch manifests.
 
