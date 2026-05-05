@@ -28,4 +28,5 @@
   ansible.builtin.debug:
     msg: |
       Drain {{ inventory_hostname }} abgeschlossen.
-      stdout (gekuerzt): {{ drain_result.stdout_lines | default([]) | last(5) }}
+      Anzahl stdout-Zeilen: {{ drain_result.stdout_lines | default([]) | length }}
+      Letzte Zeile: {{ drain_result.stdout_lines | default(['(leer)']) | last }}
