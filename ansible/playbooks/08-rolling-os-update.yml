@@ -29,6 +29,8 @@
   connection: local
   gather_facts: true
   any_errors_fatal: true
+  environment:
+    KUBECONFIG: "{{ kubeconfig_path | default('/home/admin-ubuntu/.kube/config') }}"
 
   pre_tasks:
     - name: SOPS-encrypted govc-Credentials laden
@@ -53,6 +55,8 @@
   order: reverse_sorted
   become: true
   any_errors_fatal: true
+  environment:
+    KUBECONFIG: "{{ kubeconfig_path | default('/home/admin-ubuntu/.kube/config') }}"
 
   tasks:
     - name: vSphere Snapshot anlegen
@@ -110,6 +114,8 @@
   hosts: localhost
   connection: local
   gather_facts: false
+  environment:
+    KUBECONFIG: "{{ kubeconfig_path | default('/home/admin-ubuntu/.kube/config') }}"
 
   tasks:
     - name: Post-Checks ausfuehren

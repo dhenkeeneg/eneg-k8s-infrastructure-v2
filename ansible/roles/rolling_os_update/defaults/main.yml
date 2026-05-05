@@ -11,6 +11,12 @@ target_env: ""
 # Wird automatisch aus target_env abgeleitet
 kubectl_context: "k8s-{{ target_env }}"
 
+# Pfad zur kubeconfig auf dem Ansible-Controller (k8s-mgmt-10).
+# Wird in Play 2/3 als KUBECONFIG-Environment-Variable gesetzt, damit
+# `delegate_to: localhost` Tasks auf die zentrale Multi-Context-Config
+# zugreifen koennen (sonst wird nicht die Shell-Env von admin-ubuntu geerbt).
+kubeconfig_path: "/home/admin-ubuntu/.kube/config"
+
 # Pause zwischen Nodes (Sekunden) - gibt dem Cluster Zeit zur Stabilisierung
 cooldown_seconds: 60
 
