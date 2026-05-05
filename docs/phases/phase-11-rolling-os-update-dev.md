@@ -141,6 +141,30 @@ Die Ursache war eine **Kette von zwei Single-Points-of-Failure**:
 
 **Alternative (kurzfristig):** In Zot `OnDemand`-Sync deaktivieren und stattdessen periodischen Sync für die wichtigen Repos einrichten.
 
+### 🔥 LL #2b: imagePullPolicy=Always verstärkt das Zot-Problem
+
+**Problem:** Container mit `imagePullPolicy: Always` zwingen containerd zu jedem Pod-Start einen frischen Pull über Zot, auch wenn das Image bereits im containerd-Cache liegt. Bei Zot-Hängen → sofortiger ImagePullBackOff.
+
+**Beispiel aus dieser Session:** argocd-repo-server lief in ImagePullBackOff trotz vorhandenem Image, weil imagePullPolicy=Always. InitContainer mit gleichem Image (IfNotPresent) liefen problemlos.
+
+**Bestandsaufnahme im DEV-Cluster — Container mit imagePullPolicy=Always:**
+- argocd-application-controller (quay.io/argoproj/argocd:v3.3.0)
+- argocd-applicationset-controller (quay.io/argoproj/argocd:v3.3.0)
+- argocd-dex-server (ghcr.io/dexidp/dex:v2.43.0)
+- argocd-notifications-controller (quay.io/argoproj/argocd:v3.3.0)
+- argocd-redis (public.ecr.aws/docker/library/redis:8.2.3-alpine)
+- argocd-repo-server (quay.io/argoproj/argocd:v3.3.0)
+- argocd-server (quay.io/argoproj/argocd:v3.3.0)
+- idoit (ghcr.io/dhenkeeneg/idoit-open:37)
+- it-info-versand (ghcr.io/dhenkeeneg/eneg-it-info-versand:de4d0c0)
+
+**Maßnahme:**
+- Bei festen Tags ist `IfNotPresent` semantisch korrekt — `Always` macht nur bei mutable Tags wie `latest` Sinn.
+- Helm-Values der ArgoCD-, idoit- und it-info-versand-Apps anpassen (`imagePullPolicy: IfNotPresent`).
+- Im Repo unter `environments/dev/apps/.../values.yaml` und entsprechend für TEST/PROD.
+
+**Root-Cause-Behebung:** Wenn Zot Pre-Warming (LL #2) sauber funktioniert, ist `Always` zwar weniger problematisch, aber `IfNotPresent` bleibt die richtige Wahl.
+
 ### 🔥 LL #3: Kritische Helm-Charts haben CoreDNS-Abhängigkeit
 
 **Beobachtet:** Longhorn, CNPG, ArgoCD, Velero, Monitoring — alle brauchen DNS für interne Service-Resolution. Bei DNS-Outage kaskadiert das.
@@ -182,7 +206,8 @@ Die Ursache war eine **Kette von zwei Single-Points-of-Failure**:
 
 - [ ] **CoreDNS HA**: 2-3 Replicas mit Anti-Affinity. Manifest erstellen, in `base/coredns-ha-patch.yaml` (oder analog) ablegen, ArgoCD-managed.
 - [ ] **Zot Image Pre-Warming**: Liste aller aktiven Images extrahieren + Pre-Sync-Skript erstellen. Vor jedem Rolling-Update ausführen.
-- [ ] **Test auf DEV**: CoreDNS HA + Zot Pre-Warm validieren bevor TEST/PROD angefasst wird. Idempotenter Re-Run von 08-rolling-os-update auf DEV als Smoke-Test.
+- [ ] **imagePullPolicy auf IfNotPresent umstellen** für die 9 betroffenen Container in ArgoCD/idoit/it-info-versand. Helm-Values im Repo anpassen, alle Environments.
+- [ ] **Test auf DEV**: CoreDNS HA + Zot Pre-Warm + imagePullPolicy validieren bevor TEST/PROD angefasst wird. Idempotenter Re-Run von 08-rolling-os-update auf DEV als Smoke-Test.
 
 ### Mittelfristig (kann nach TEST/PROD)
 
