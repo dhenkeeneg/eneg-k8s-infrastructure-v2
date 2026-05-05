@@ -1,0 +1,131 @@
+---
+# =============================================================================
+# Post-Drain Cleanup
+# =============================================================================
+# Setzt alle in pre_drain_prep.yml gesetzten Maintenance-Modes zurueck:
+#   1. MariaDB Galera PDB (falls geaendert)
+#   2. Longhorn node-drain-policy
+#   3. CNPG nodeMaintenanceWindow.inProgress = false
+#
+# Liest die Original-Werte aus Facts, die in pre_drain_prep.yml gesetzt wurden.
+# Wird auf localhost (mgmt-10) ausgefuehrt.
+# =============================================================================
+
+# -----------------------------------------------------------------------------
+# 1) MariaDB Galera PDB zuruecksetzen
+# -----------------------------------------------------------------------------
+
+- name: "[Galera] PDB minAvailable auf Originalwert zuruecksetzen"
+  ansible.builtin.command:
+    argv:
+      - kubectl
+      - --context
+      - "{{ kubectl_context }}"
+      - patch
+      - "pdb"
+      - "{{ mariadb_galera_pdb_name }}"
+      - -n
+      - "{{ mariadb_galera_namespace }}"
+      - --type=merge
+      - -p
+      - '{"spec":{"minAvailable":"{{ galera_pdb_min_available_saved }}"}}'
+  delegate_to: localhost
+  changed_when: true
+  when:
+    - enable_mariadb_galera_pdb_override
+    - galera_pdb_override_needed | default(false)
+    - galera_pdb_min_available_saved is defined
+
+- name: "[Galera] PDB-Reset bestaetigen"
+  ansible.builtin.debug:
+    msg: |
+      MariaDB Galera PDB minAvailable zurueckgesetzt auf: {{ galera_pdb_min_available_saved }}
+  when:
+    - enable_mariadb_galera_pdb_override
+    - galera_pdb_override_needed | default(false)
+    - galera_pdb_min_available_saved is defined
+
+# -----------------------------------------------------------------------------
+# 2) Longhorn node-drain-policy zuruecksetzen
+# -----------------------------------------------------------------------------
+
+- name: "[Longhorn] node-drain-policy auf Originalwert zuruecksetzen"
+  ansible.builtin.command:
+    argv:
+      - kubectl
+      - --context
+      - "{{ kubectl_context }}"
+      - patch
+      - "settings.longhorn.io"
+      - "node-drain-policy"
+      - -n
+      - "{{ longhorn_namespace }}"
+      - --type=merge
+      - -p
+      - '{"value":"{{ longhorn_drain_policy_saved }}"}'
+  delegate_to: localhost
+  changed_when: true
+  when:
+    - enable_longhorn_drain_policy_override
+    - longhorn_drain_policy_saved is defined
+    - longhorn_drain_policy_saved != longhorn_drain_policy_during_update
+
+- name: "[Longhorn] Drain-Policy zurueckgesetzt"
+  ansible.builtin.debug:
+    msg: |
+      Longhorn node-drain-policy: {{ longhorn_drain_policy_during_update }} -> {{ longhorn_drain_policy_saved | default('block-if-contains-last-replica') }}
+  when:
+    - enable_longhorn_drain_policy_override
+    - longhorn_drain_policy_saved is defined
+
+# -----------------------------------------------------------------------------
+# 3) CNPG nodeMaintenanceWindow deaktivieren
+# -----------------------------------------------------------------------------
+
+- name: "[CNPG] nodeMaintenanceWindow.inProgress=false setzen"
+  ansible.builtin.command:
+    argv:
+      - kubectl
+      - --context
+      - "{{ kubectl_context }}"
+      - patch
+      - "cluster.postgresql.cnpg.io"
+      - "{{ item.split('/')[1] }}"
+      - -n
+      - "{{ item.split('/')[0] }}"
+      - --type=merge
+      - -p
+      - '{"spec":{"nodeMaintenanceWindow":{"inProgress":false,"reusePVC":true}}}'
+  delegate_to: localhost
+  loop: "{{ cnpg_clusters_to_maintain | default([]) }}"
+  loop_control:
+    label: "{{ item }}"
+  when:
+    - enable_cnpg_maintenance_mode
+    - cnpg_clusters_to_maintain | default([]) | length > 0
+  changed_when: true
+
+- name: "[CNPG] Maintenance-Mode deaktiviert"
+  ansible.builtin.debug:
+    msg: |
+      CNPG Maintenance Mode deaktiviert fuer:
+      {% if cnpg_clusters_to_maintain | default([]) | length == 0 %}
+      (keine Cluster waren im Maintenance-Mode)
+      {% else %}
+      {% for c in cnpg_clusters_to_maintain %}
+      - {{ c }}
+      {% endfor %}
+      {% endif %}
+  when: enable_cnpg_maintenance_mode
+
+# -----------------------------------------------------------------------------
+# Zusammenfassung
+# -----------------------------------------------------------------------------
+
+- name: "[Post-Drain-Cleanup] Zusammenfassung"
+  ansible.builtin.debug:
+    msg: |
+      ============================================================
+      Post-Drain-Cleanup fuer {{ inventory_hostname }} abgeschlossen.
+      Alle Maintenance-Modes zurueckgesetzt.
+      ============================================================

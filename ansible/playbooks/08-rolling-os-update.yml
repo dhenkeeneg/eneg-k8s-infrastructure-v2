@@ -71,6 +71,12 @@
         tasks_from: cnpg_failover.yml
       tags: [cnpg]
 
+    - name: Pre-Drain Maintenance-Mode aktivieren (CNPG/Longhorn/Galera)
+      ansible.builtin.import_role:
+        name: rolling_os_update
+        tasks_from: pre_drain_prep.yml
+      tags: [maintenance, drain]
+
     - name: Cordon und Drain
       ansible.builtin.import_role:
         name: rolling_os_update
@@ -94,6 +100,12 @@
         name: rolling_os_update
         tasks_from: uncordon_verify.yml
       tags: [verify]
+
+    - name: Post-Drain Cleanup (Maintenance-Modes deaktivieren)
+      ansible.builtin.import_role:
+        name: rolling_os_update
+        tasks_from: post_drain_cleanup.yml
+      tags: [maintenance, verify]
 
     - name: Snapshot loeschen (bei Erfolg)
       ansible.builtin.import_role:

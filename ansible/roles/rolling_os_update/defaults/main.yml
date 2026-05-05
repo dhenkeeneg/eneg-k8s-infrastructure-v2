@@ -20,8 +20,8 @@ kubeconfig_path: "/home/admin-ubuntu/.kube/config"
 # Pause zwischen Nodes (Sekunden) - gibt dem Cluster Zeit zur Stabilisierung
 cooldown_seconds: 60
 
-# kubectl drain Timeout
-drain_timeout_seconds: 600
+# kubectl drain Timeout (erhoeht wegen Volume-Detach + Maintenance-Operations)
+drain_timeout_seconds: 900
 
 # Reboot-Timeout (Ansible reboot module wartet auf SSH zurueck)
 reboot_timeout_seconds: 600
@@ -51,3 +51,35 @@ velero_max_backup_age_hours: 26
 
 # ArgoCD Namespace fuer Sync-Status-Check
 argocd_namespace: "argocd"
+
+# =============================================================================
+# Maintenance-Mode Variablen (fuer pre_drain_prep / post_drain_cleanup)
+# =============================================================================
+# Diese steuern die "lehrbuchkonforme" Drain-Strategie:
+# - CNPG nodeMaintenanceWindow waehrend Drain aktivieren (Vendor-Empfehlung)
+# - Longhorn node-drain-policy temporaer auf allow-if-replica-is-stopped
+# - MariaDB Galera PDB anpassen wenn 2+ Pods auf der Ziel-Node liegen
+# =============================================================================
+
+# CNPG: Aktiviere nodeMaintenanceWindow.inProgress=true vor dem Drain
+# fuer alle Cluster, die Pods auf der Ziel-Node haben.
+# reusePVC=true bedeutet: Pod-Recreation wartet bis Node zurueck ist.
+# Quelle: https://cloudnative-pg.io/docs/1.28/kubernetes_upgrade/
+enable_cnpg_maintenance_mode: true
+
+# Longhorn: Temporaere Aenderung der node-drain-policy waehrend des Drains.
+# Ermoeglicht Eviction der instance-manager Pods auch bei strict-local Volumes,
+# da Replica nach Reboot wieder verfuegbar sein wird.
+# Quelle: https://longhorn.io/docs/1.11.0/maintenance/maintenance/
+enable_longhorn_drain_policy_override: true
+longhorn_namespace: "longhorn-system"
+longhorn_drain_policy_during_update: "allow-if-replica-is-stopped"
+
+# MariaDB Galera: PDB-Anpassung wenn mehrere Galera-Pods auf der Ziel-Node sind.
+# Aktuell hat das Galera-Setup KEIN Anti-Affinity, daher kann es vorkommen
+# dass 2/3 Pods auf einer Node liegen (-> regulaerer Drain blockiert).
+enable_mariadb_galera_pdb_override: true
+mariadb_galera_namespace: "databases"
+mariadb_galera_pdb_name: "mariadb-galera"
+# Pod-Selector zum Zaehlen der Galera-Pods auf der Ziel-Node:
+mariadb_galera_pod_selector: "app.kubernetes.io/instance=mariadb-galera"

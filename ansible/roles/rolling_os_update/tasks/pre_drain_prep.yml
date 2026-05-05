@@ -1,0 +1,240 @@
+---
+# =============================================================================
+# Pre-Drain Preparation
+# =============================================================================
+# Aktiviert "lehrbuchkonforme" Maintenance-Modes vor dem Drain:
+#   1. CNPG: Setze nodeMaintenanceWindow.inProgress=true fuer alle Cluster
+#      mit Pods auf der Ziel-Node. PDB wird dabei temporaer aufgehoben,
+#      Pod-Recreation wartet auf Node-Rueckkehr (reusePVC: true).
+#   2. Longhorn: Aendere node-drain-policy temporaer auf
+#      'allow-if-replica-is-stopped' damit instance-manager evictet werden kann.
+#   3. MariaDB Galera: Falls 2+ Pods auf der Ziel-Node, PDB minAvailable
+#      temporaer auf 0 patchen (Galera-PDB blockt sonst Drain).
+#
+# Speichert original-Werte als Facts fuer post_drain_cleanup.yml.
+# Wird auf localhost (mgmt-10) ausgefuehrt.
+# =============================================================================
+
+# -----------------------------------------------------------------------------
+# 1) CNPG nodeMaintenanceWindow aktivieren
+# -----------------------------------------------------------------------------
+
+- name: "[CNPG] Liste aller CNPG-Cluster mit Pods auf {{ inventory_hostname }}"
+  ansible.builtin.command:
+    argv:
+      - kubectl
+      - --context
+      - "{{ kubectl_context }}"
+      - get
+      - pods
+      - --all-namespaces
+      - -l
+      - "cnpg.io/podRole=instance"
+      - --field-selector
+      - "spec.nodeName={{ inventory_hostname }}"
+      - -o
+      - 'jsonpath={range .items[*]}{.metadata.namespace}/{.metadata.labels.cnpg\.io/cluster}{"\n"}{end}'
+  delegate_to: localhost
+  register: cnpg_pods_on_node
+  changed_when: false
+  when: enable_cnpg_maintenance_mode
+
+- name: "[CNPG] Eindeutige Cluster-Liste aufbauen (namespace/cluster)"
+  ansible.builtin.set_fact:
+    cnpg_clusters_to_maintain: "{{ cnpg_pods_on_node.stdout_lines | default([]) | unique | reject('equalto', '') | list }}"
+  when: enable_cnpg_maintenance_mode
+
+- name: "[CNPG] Maintenance-Plan anzeigen"
+  ansible.builtin.debug:
+    msg: |
+      CNPG Cluster mit Pods auf {{ inventory_hostname }} (-> Maintenance Mode aktivieren):
+      {% if cnpg_clusters_to_maintain | length == 0 %}
+      (keine - kein CNPG-Maintenance noetig)
+      {% else %}
+      {% for c in cnpg_clusters_to_maintain %}
+      - {{ c }}
+      {% endfor %}
+      {% endif %}
+  when: enable_cnpg_maintenance_mode
+
+- name: "[CNPG] nodeMaintenanceWindow.inProgress=true setzen"
+  ansible.builtin.command:
+    argv:
+      - kubectl
+      - --context
+      - "{{ kubectl_context }}"
+      - patch
+      - "cluster.postgresql.cnpg.io"
+      - "{{ item.split('/')[1] }}"
+      - -n
+      - "{{ item.split('/')[0] }}"
+      - --type=merge
+      - -p
+      - '{"spec":{"nodeMaintenanceWindow":{"inProgress":true,"reusePVC":true}}}'
+  delegate_to: localhost
+  loop: "{{ cnpg_clusters_to_maintain | default([]) }}"
+  loop_control:
+    label: "{{ item }}"
+  when:
+    - enable_cnpg_maintenance_mode
+    - cnpg_clusters_to_maintain | default([]) | length > 0
+  changed_when: true
+
+# -----------------------------------------------------------------------------
+# 2) Longhorn node-drain-policy aendern
+# -----------------------------------------------------------------------------
+
+- name: "[Longhorn] Aktuelle node-drain-policy speichern"
+  ansible.builtin.command:
+    argv:
+      - kubectl
+      - --context
+      - "{{ kubectl_context }}"
+      - get
+      - "settings.longhorn.io"
+      - "node-drain-policy"
+      - -n
+      - "{{ longhorn_namespace }}"
+      - -o
+      - 'jsonpath={.value}'
+  delegate_to: localhost
+  register: longhorn_drain_policy_original
+  changed_when: false
+  when: enable_longhorn_drain_policy_override
+
+- name: "[Longhorn] Original-Wert als Fact speichern"
+  ansible.builtin.set_fact:
+    longhorn_drain_policy_saved: "{{ longhorn_drain_policy_original.stdout | default('block-if-contains-last-replica') }}"
+  when: enable_longhorn_drain_policy_override
+
+- name: "[Longhorn] node-drain-policy auf '{{ longhorn_drain_policy_during_update }}' setzen"
+  ansible.builtin.command:
+    argv:
+      - kubectl
+      - --context
+      - "{{ kubectl_context }}"
+      - patch
+      - "settings.longhorn.io"
+      - "node-drain-policy"
+      - -n
+      - "{{ longhorn_namespace }}"
+      - --type=merge
+      - -p
+      - '{"value":"{{ longhorn_drain_policy_during_update }}"}'
+  delegate_to: localhost
+  changed_when: true
+  when:
+    - enable_longhorn_drain_policy_override
+    - longhorn_drain_policy_saved != longhorn_drain_policy_during_update
+
+- name: "[Longhorn] Drain-Policy bestaetigen"
+  ansible.builtin.debug:
+    msg: |
+      Longhorn node-drain-policy:
+        original: {{ longhorn_drain_policy_saved }}
+        waehrend update: {{ longhorn_drain_policy_during_update }}
+  when: enable_longhorn_drain_policy_override
+
+# -----------------------------------------------------------------------------
+# 3) MariaDB Galera PDB anpassen (nur wenn 2+ Pods auf Ziel-Node)
+# -----------------------------------------------------------------------------
+
+- name: "[Galera] Anzahl Galera-Pods auf {{ inventory_hostname }} ermitteln"
+  ansible.builtin.command:
+    argv:
+      - kubectl
+      - --context
+      - "{{ kubectl_context }}"
+      - get
+      - pods
+      - -n
+      - "{{ mariadb_galera_namespace }}"
+      - -l
+      - "{{ mariadb_galera_pod_selector }}"
+      - --field-selector
+      - "spec.nodeName={{ inventory_hostname }}"
+      - -o
+      - 'jsonpath={.items[*].metadata.name}'
+  delegate_to: localhost
+  register: galera_pods_on_node
+  changed_when: false
+  when: enable_mariadb_galera_pdb_override
+
+- name: "[Galera] Pod-Count und Plan ermitteln"
+  ansible.builtin.set_fact:
+    galera_pod_count_on_node: "{{ galera_pods_on_node.stdout.split() | default([]) | length }}"
+    galera_pdb_override_needed: "{{ (galera_pods_on_node.stdout.split() | default([]) | length | int) >= 2 }}"
+  when: enable_mariadb_galera_pdb_override
+
+- name: "[Galera] Plan anzeigen"
+  ansible.builtin.debug:
+    msg: |
+      Galera-Pods auf {{ inventory_hostname }}: {{ galera_pod_count_on_node | default(0) }}
+      PDB-Override noetig: {{ galera_pdb_override_needed | default(false) }}
+      {% if galera_pdb_override_needed | default(false) %}
+      -> PDB minAvailable wird temporaer auf 0 gesetzt
+      {% else %}
+      -> Standard-PDB greift normal
+      {% endif %}
+  when: enable_mariadb_galera_pdb_override
+
+- name: "[Galera] Aktuellen PDB minAvailable speichern"
+  ansible.builtin.command:
+    argv:
+      - kubectl
+      - --context
+      - "{{ kubectl_context }}"
+      - get
+      - "pdb"
+      - "{{ mariadb_galera_pdb_name }}"
+      - -n
+      - "{{ mariadb_galera_namespace }}"
+      - -o
+      - 'jsonpath={.spec.minAvailable}'
+  delegate_to: localhost
+  register: galera_pdb_original
+  changed_when: false
+  when:
+    - enable_mariadb_galera_pdb_override
+    - galera_pdb_override_needed | default(false)
+
+- name: "[Galera] Original-PDB-Wert als Fact speichern"
+  ansible.builtin.set_fact:
+    galera_pdb_min_available_saved: "{{ galera_pdb_original.stdout | default('50%') }}"
+  when:
+    - enable_mariadb_galera_pdb_override
+    - galera_pdb_override_needed | default(false)
+
+- name: "[Galera] PDB minAvailable auf 0 patchen (temporaer)"
+  ansible.builtin.command:
+    argv:
+      - kubectl
+      - --context
+      - "{{ kubectl_context }}"
+      - patch
+      - "pdb"
+      - "{{ mariadb_galera_pdb_name }}"
+      - -n
+      - "{{ mariadb_galera_namespace }}"
+      - --type=merge
+      - -p
+      - '{"spec":{"minAvailable":0}}'
+  delegate_to: localhost
+  changed_when: true
+  when:
+    - enable_mariadb_galera_pdb_override
+    - galera_pdb_override_needed | default(false)
+
+# -----------------------------------------------------------------------------
+# Zusammenfassung
+# -----------------------------------------------------------------------------
+
+- name: "[Pre-Drain-Prep] Zusammenfassung"
+  ansible.builtin.debug:
+    msg: |
+      ============================================================
+      Pre-Drain-Prep fuer {{ inventory_hostname }} abgeschlossen.
+      - CNPG Maintenance: {{ cnpg_clusters_to_maintain | default([]) | length }} Cluster aktiviert
+      - Longhorn drain-policy: {{ longhorn_drain_policy_saved | default('-') }} -> {{ longhorn_drain_policy_during_update if enable_longhorn_drain_policy_override else '(unveraendert)' }}
+      - Galera PDB-Override: {{ 'JA (' + galera_pdb_min_available_saved | default('50%') + ' -> 0)' if (galera_pdb_override_needed | default(false)) else 'nein' }}
+      ============================================================
