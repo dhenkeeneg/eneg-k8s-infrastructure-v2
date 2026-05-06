@@ -167,8 +167,10 @@ Bei der finalen Cluster-Pruefung wurden 2 nicht-Phase-12b-Alarme gefunden:
 
 Beide haengen kausal zusammen (Compactions schlagen fehl → Daten akkumulieren → PV voll). Keine Aktion im Rahmen Phase 12b — separates Tracking.
 
+**Status (Update 06.05.2026):** Beide Alarme behoben durch PVC-Resize 10Gi → 30Gi in TEST und PROD. Details: [monitoring-thanos-pvc-resize-test-prod.md](monitoring-thanos-pvc-resize-test-prod.md).
+
 ## Naechste Schritte
 
 1. **24h Burn-in** auf TEST (bis 07.05.2026 mittags)
 2. **PROD-Rollout** in neuer Chat-Session, basierend auf aktualisiertem Handoff-Doc und diesem Lessons-Doc
-3. **Pre-existing Thanos-Alerts** in TEST separat untersuchen (eigener Sub-Task)
+3. **Pre-existing Thanos-Alerts** in TEST separat untersuchen (eigener Sub-Task) — **erledigt 06.05.2026**, siehe [monitoring-thanos-pvc-resize-test-prod.md](monitoring-thanos-pvc-resize-test-prod.md)
