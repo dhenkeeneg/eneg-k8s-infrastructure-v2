@@ -1,5 +1,11 @@
 # Phase 12 - HA Improvements Handoff: CoreDNS + Zot
 
+> **Status:** ✅ **Abgeschlossen am 06.05.2026 (DEV)** — siehe [phase-12-ha-improvements-completed.md](phase-12-ha-improvements-completed.md) fuer den End-to-End-Bericht.
+>
+> TEST/PROD-Rollout: siehe [phase-12b-coredns-test-prod-handoff.md](phase-12b-coredns-test-prod-handoff.md).
+>
+> Dieses Doc bleibt als historische Plan-Vorlage erhalten. **Achtung:** Einige Snippets im Doc (z.B. `serviceMonitor.enabled: true`, `uri /healthz`, fehlende NodeHosts) sind durch die Praxis ueberholt — die Lessons im completed-Doc und der TEST/PROD-Handoff haben Vorrang.
+
 **Datum erstellt:** 05.05.2026  
 **Vorgaenger-Phase:** Phase 11 (Rolling OS-Update DEV)  
 **Mission:** Zwei kritische Single-Points-of-Failure aufloesen, die im OS-Update-Vorfall identifiziert wurden  
