@@ -69,12 +69,32 @@ resources:
     cpu: 200m
     memory: 170Mi
 
-# --- Prometheus ServiceMonitor ---
-# Scraping aus dem monitoring-Namespace heraus; Endpoint :9153/metrics
-# wird durch das prometheus-Plugin im Corefile (Override) bereitgestellt.
-serviceMonitor:
-  enabled: true
-  namespace: monitoring
+# --- ServiceAccount ---
+# Dedizierte SA statt default-SA in kube-system (Best Practice — verhindert,
+# dass die default-SA ungewollt cluster-weite Read-Rechte erbt).
+# ClusterRole+Binding werden vom Chart automatisch fuer diese SA erstellt.
+serviceAccount:
+  create: true
+  name: coredns
+
+# --- Prometheus Metrics ---
+# Der separate Metrics-Service "coredns-metrics" (Port 9153/TCP) wird vom
+# Chart erstellt und matched die CoreDNS-Pods automatisch. Der zugehoerige
+# ServiceMonitor wird im monitoring-Namespace deployed mit dem additionalLabel
+# 'release: kube-prometheus-stack', damit der Prometheus-Operator ihn picked.
+#
+# Hinweis: Der vom kube-prometheus-stack mitgelieferte Service+ServiceMonitor
+# 'kube-prometheus-stack-coredns' (Selector k8s-app=kube-dns) bleibt im
+# Cluster ohne Endpoints (matcht unsere Labels nicht) — kein Doppel-Scraping.
+# Cleanup im kube-prometheus-stack via 'coreDns.enabled: false' ist Phase-13-Topic.
+prometheus:
+  service:
+    enabled: true
+  monitor:
+    enabled: true
+    namespace: monitoring
+    additionalLabels:
+      release: kube-prometheus-stack
 
 # --- Tolerations: NICHT setzen, da nur Master-Nodes existieren (HA-K3s) ---
 # K3s-Master sind ohnehin schedulable; Default-Tolerations vom Chart reichen.
