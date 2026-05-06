@@ -1,7 +1,12 @@
 # Thanos PROD Override
 # Environment: PROD (VLAN 178)
-# Minimales Override - base values sind bereits passend dimensioniert.
-# Store Gateway und Compactor PVCs (je 10Gi) aus base reichen fuer PROD.
 
-# Keine Aenderungen noetig - base values gelten.
-# Datei existiert fuer Konsistenz und spaetere Anpassungen.
+# Compactor PVC: Vergroessert von 10Gi auf 30Gi (2026-05-06)
+# Grund: Wochentliche Re-Compactions von 24h-Bloecken zu 7d-Block
+# benoetigen ~14-20 GB lokalen Working-Space (Source-Bloecke + Output).
+# 10Gi war zu klein und fuehrte zu KubePersistentVolumeFillingUp Alerts
+# und ThanosCompactionFailed (in DEV/TEST bereits aufgetreten).
+# Identische Loesung wie DEV (05.05.2026) und TEST (06.05.2026).
+compactor:
+  persistence:
+    size: 30Gi
