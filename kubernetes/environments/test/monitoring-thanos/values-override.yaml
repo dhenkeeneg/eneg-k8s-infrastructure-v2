@@ -1,7 +1,12 @@
 # Thanos TEST Override
 # Environment: TEST (VLAN 179)
-# Minimales Override - base values sind bereits passend dimensioniert.
-# In PROD ggf. andere PVC-Groessen oder Ressourcen.
 
-# Keine Aenderungen noetig fuer TEST - base values gelten.
-# Datei existiert fuer Konsistenz und spaetere Anpassungen.
+# Compactor PVC: Vergroessert von 10Gi auf 30Gi (2026-05-06)
+# Grund: Wochentliche Re-Compactions von 24h-Bloecken zu 7d-Block
+# benoetigen ~14-20 GB lokalen Working-Space (Source-Bloecke + Output).
+# 10Gi war zu klein und fuehrte zu KubePersistentVolumeFillingUp Alerts
+# und ThanosCompactionFailed.
+# Identische Loesung wie DEV (05.05.2026).
+compactor:
+  persistence:
+    size: 30Gi
