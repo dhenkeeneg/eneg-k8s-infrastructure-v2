@@ -231,3 +231,12 @@ kubeScheduler:
   enabled: false
 kubeProxy:
   enabled: false
+
+# CoreDNS-Monitoring: Default 'enabled: true' in der Base.
+# Wenn ein Environment sein eigenes CoreDNS via Helm-Chart deployt
+# (siehe Phase 12 — DEV/TEST/PROD jeweils sequenziell), MUSS dort
+# in environments/{env}/monitoring/values-override.yaml gesetzt werden:
+#   coreDns:
+#     enabled: false
+# Sonst kollidiert der mitgelieferte Service+ServiceMonitor mit dem
+# eigenen Setup (matcht aber unsere Labels nicht — bleibt endpoint-leer).
