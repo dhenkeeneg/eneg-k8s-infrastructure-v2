@@ -2,6 +2,14 @@
 # Environment: TEST (VLAN 179)
 # PVC-Groessen, AlertManager-Config (SMTP + Teams)
 
+# --- CoreDNS-Monitoring deaktivieren (Phase 12) ---
+# TEST betreibt CoreDNS via eigenem Helm-Chart (coredns/coredns) mit
+# eigenem Service "coredns-metrics" und ServiceMonitor "coredns".
+# Der vom kube-prometheus-stack mitgelieferte Service+SM ist hier
+# nicht passend (Selector matcht unsere Pod-Labels nicht).
+coreDns:
+  enabled: false
+
 # --- Prometheus TEST ---
 prometheus:
   prometheusSpec:

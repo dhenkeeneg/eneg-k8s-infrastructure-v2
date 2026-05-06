@@ -30,6 +30,7 @@ k3s_disable:
   - traefik
   - servicelb
   - local-storage
+  - coredns  # Phase 12: replaced durch ArgoCD-managed CoreDNS HA
 
 # Zusaetzliche Server-Argumente
 k3s_server_extra_args: >-
