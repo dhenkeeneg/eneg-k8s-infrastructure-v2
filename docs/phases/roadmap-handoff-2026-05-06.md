@@ -2,8 +2,9 @@
 
 **Status:** Aktueller Master-Plan fuer die naechsten ~2 Wochen
 **Erstellt:** 06.05.2026 (nach erfolgreichem Thanos-PVC-Resize TEST + PROD)
+**Aktualisiert:** 07.05.2026 (Block 1 PROD CoreDNS HA abgeschlossen)
 **Owner:** Daniel Henke
-**Naechste Aktion:** Block 1 — Phase 12b CoreDNS HA PROD (frueh. 07.05.2026 mittags nach 24h TEST-Burn-in)
+**Naechste Aktion:** Block 2 — Phase 11 Rolling OS-Update TEST (frueh. 08.05.2026 nachmittags nach 24h PROD-Burn-in)
 
 ---
 
@@ -31,6 +32,7 @@
 | 06.05. fruh | Phase 12 Plan B — CoreDNS HA via eigenem Helm-Chart | DEV |
 | 06.05. mittag | Phase 12b — CoreDNS HA Rollout (mit 5min DNS-Outage) | TEST |
 | 06.05. nachmittag | Thanos Compactor PVC Resize | TEST + PROD |
+| 07.05. fruh | Phase 12b — CoreDNS HA Rollout (0s Outage, sauber beim 1. Versuch) | **PROD** |
 
 **Projektplanung:** v2.20 (`docs/K8s-GitOps-Infrastruktur-Projektplanung_v2.20.md`)
 
@@ -42,7 +44,7 @@
 
 | # | Aufgabe | Voraussetzung | Risiko | Aufwand | Doku |
 |---|---|---|---|---|---|
-| 1 | Phase 12b CoreDNS HA **PROD** | TEST 24h Burn-in (ab 06.05. nachmittag) | Mittel | 1-2h | phase-12b-coredns-test-prod-handoff.md |
+| 1 | ~~Phase 12b CoreDNS HA **PROD**~~ ✅ ABGESCHLOSSEN 07.05.2026 | TEST 24h Burn-in | Mittel | 1-2h (real ~1h) | phase-12b-prod-completed.md |
 | 2 | Phase 11 Rolling OS-Update **TEST** | Block 1 fertig | Mittel | 3-4h | phase-11-rolling-os-update-dev.md |
 | 3 | Phase 11 Rolling OS-Update **PROD** | Block 2 verifiziert | Mittel | 3-4h | (gleich) |
 | 4 | Phase 9a Etappe B — PROD-Zot + Cutover | Block 3 fertig (nicht zwingend, aber sauberer) | Mittel | 0,5-1 Tag | guides/phase-09a-test-prod-handoff.md |

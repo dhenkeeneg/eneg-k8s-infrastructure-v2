@@ -172,5 +172,5 @@ Beide haengen kausal zusammen (Compactions schlagen fehl → Daten akkumulieren 
 ## Naechste Schritte
 
 1. **24h Burn-in** auf TEST (bis 07.05.2026 mittags)
-2. **PROD-Rollout** in neuer Chat-Session, basierend auf aktualisiertem Handoff-Doc und diesem Lessons-Doc
+2. **PROD-Rollout** in neuer Chat-Session, basierend auf aktualisiertem Handoff-Doc und diesem Lessons-Doc — **erledigt 07.05.2026**, siehe [phase-12b-prod-completed.md](phase-12b-prod-completed.md) (Cutover ohne DNS-Outage durchgefuehrt; alle TEST-Lessons LL-T1 bis LL-T6 bestaetigt)
 3. **Pre-existing Thanos-Alerts** in TEST separat untersuchen (eigener Sub-Task) — **erledigt 06.05.2026**, siehe [monitoring-thanos-pvc-resize-test-prod.md](monitoring-thanos-pvc-resize-test-prod.md)
