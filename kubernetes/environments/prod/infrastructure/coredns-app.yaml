@@ -1,0 +1,62 @@
+---
+# ArgoCD Application: CoreDNS HA (PROD)
+# Phase 12: HA-Replacement fuer K3s-Default-CoreDNS
+# Multi-Source: Helm Chart v1.45.2 + Base Values + PROD Override
+#
+# Image: rancher/mirrored-coredns-coredns:1.14.1 (gleich wie K3s-Default,
+#        bereits im containerd-Cache aller Nodes vorhanden)
+# Service: kube-dns @ ClusterIP 10.43.0.10 (uebernimmt K3s-Default)
+#
+# WICHTIG (TEST-Lesson 06.05.2026):
+#   syncPolicy.automated ist BEWUSST WEGGELASSEN bei initialem Deploy.
+#   Hintergrund: ArgoCD App-of-Apps discovered Push <60s und triggert
+#   Auto-Sync, bevor manueller Cutover-Apply durchgehen kann → Race-Condition,
+#   ServerSideApply uebernimmt Resources mit falschem Selector → DNS-Outage.
+#   Nach erfolgreichem Cutover wird automated: nachtraeglich aktiviert via
+#   `kubectl patch application coredns ...` (siehe phase-12b Handoff Schritt 3).
+#
+# WICHTIG: prune=false und selfHeal=false bleiben auch nach Cutover-Aktivierung
+#          gesetzt — verhindert versehentliche Cluster-DNS-Loeschung wenn die
+#          App accidentally aus dem Repo verschwindet, und behaelt manuelle
+#          Kontrolle bei Cluster-DNS (Phase 11/12 Lehre).
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: coredns
+  namespace: argocd
+  annotations:
+    # Sync-Wave 0 — vor allen anderen Apps; CoreDNS ist Cluster-Critical
+    argocd.argoproj.io/sync-wave: "0"
+  finalizers:
+    - resources-finalizer.argocd.argoproj.io
+spec:
+  project: default
+
+  sources:
+    # Source 1: Helm Chart
+    - repoURL: https://coredns.github.io/helm
+      chart: coredns
+      targetRevision: 1.45.2
+      helm:
+        releaseName: coredns
+        valueFiles:
+          - $values/kubernetes/base/coredns/values.yaml
+          - $values/kubernetes/environments/prod/coredns/values-override.yaml
+
+    # Source 2: Git Repository Referenz fuer Helm Values
+    - repoURL: git@github.com:dhenkeeneg/eneg-k8s-infrastructure-v2.git
+      targetRevision: main
+      ref: values
+
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: kube-system
+
+  syncPolicy:
+    # KEIN automated:! Wird erst NACH erfolgreichem Cutover aktiviert
+    # (TEST-Lesson 06.05.2026 — Race-Condition mit App-of-Apps Discovery <60s).
+    # Aktivierung via:
+    #   kubectl --context k8s-prod -n argocd patch application coredns \
+    #     --type merge -p '{"spec":{"syncPolicy":{"automated":{"prune":false,"selfHeal":false}}}}'
+    syncOptions:
+      - ServerSideApply=true

@@ -1,0 +1,52 @@
+# CoreDNS PROD Override Values
+# Environment: PROD (VLAN 178)
+# Phase 12: HA-Replacement fuer K3s-Default-CoreDNS
+#
+# Setzt: Komplettes Corefile (servers:), inkl. K3s-NodeHosts-Replacement
+#        per inline hosts-Plugin mit PROD-Cluster-Node-IPs.
+#
+# WICHTIG: Bei Aenderung der Cluster-Node-IPs (z.B. Re-IP) hier anpassen!
+#          Im K3s-Default-CoreDNS wurde NodeHosts dynamisch generiert; in
+#          unserem Helm-managed Setup ist die Liste statisch im Override.
+
+# --- Corefile (servers:) ---
+# Aufbau wiederholt das K3s-Default-Corefile, mit folgenden Anpassungen:
+#   + health-Plugin mit lameduck 5s (graceful shutdown — Best Practice 2026)
+#   + kubernetes-Plugin mit ttl 30 (kuerzeres Caching, Best Practice 2026)
+#   + hosts-Plugin INLINE statt /etc/coredns/NodeHosts-File-Mount
+#   - import /etc/coredns/custom/*.override   (entfaellt — keine custom configs)
+#   - import /etc/coredns/custom/*.server     (entfaellt — keine custom configs)
+servers:
+  - zones:
+      - zone: .
+    port: 53
+    plugins:
+      - name: errors
+      - name: health
+        configBlock: |-
+          lameduck 5s
+      - name: ready
+      - name: kubernetes
+        parameters: cluster.local in-addr.arpa ip6.arpa
+        configBlock: |-
+          pods insecure
+          fallthrough in-addr.arpa ip6.arpa
+          ttl 30
+      # NodeHosts-Replacement (vorher: K3s-managed /etc/coredns/NodeHosts ConfigMap-Eintrag)
+      - name: hosts
+        configBlock: |-
+          192.168.178.21 k8s-prod-21
+          192.168.178.22 k8s-prod-22
+          192.168.178.23 k8s-prod-23
+          ttl 60
+          reload 15s
+          fallthrough
+      - name: prometheus
+        parameters: 0.0.0.0:9153
+      - name: forward
+        parameters: . /etc/resolv.conf
+      - name: cache
+        parameters: 30
+      - name: loop
+      - name: reload
+      - name: loadbalance

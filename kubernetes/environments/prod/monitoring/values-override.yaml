@@ -2,6 +2,14 @@
 # Environment: PROD (VLAN 178)
 # PVC-Groessen, AlertManager-Config (SMTP + Teams)
 
+# --- CoreDNS-Monitoring deaktivieren (Phase 12) ---
+# PROD betreibt CoreDNS via eigenem Helm-Chart (coredns/coredns) mit
+# eigenem Service "coredns-metrics" und ServiceMonitor "coredns".
+# Der vom kube-prometheus-stack mitgelieferte Service+SM ist hier
+# nicht passend (Selector matcht unsere Pod-Labels nicht).
+coreDns:
+  enabled: false
+
 # --- Prometheus PROD (groessere PVCs) ---
 prometheus:
   prometheusSpec:
