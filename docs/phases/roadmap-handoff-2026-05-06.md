@@ -2,16 +2,24 @@
 
 **Status:** Aktueller Master-Plan fuer die naechsten ~2 Wochen
 **Erstellt:** 06.05.2026 (nach erfolgreichem Thanos-PVC-Resize TEST + PROD)
-**Aktualisiert:** 07.05.2026 (Block 1 PROD CoreDNS HA abgeschlossen)
+**Aktualisiert:** 08.05.2026 (Block 2 — Phase 11 OS-Update TEST abgeschlossen, Bug-Fix + Pre-Warming-Integration)
 **Owner:** Daniel Henke
-**Naechste Aktion:** Block 2 — Phase 11 Rolling OS-Update TEST (frueh. 08.05.2026 nachmittags nach 24h PROD-Burn-in)
+**Naechste Aktion:** Block 3 — Phase 11 Rolling OS-Update **PROD** (frueh. 09.05.2026 nachmittags nach 24h TEST-Burn-in)
 
 ---
 
-## 1. Kontext & Stand 06.05.2026
+## 1. Kontext & Stand 08.05.2026
 
-### Heute abgeschlossen
-- **Thanos Compactor PVC 10Gi → 30Gi** in TEST und PROD (analog DEV vom 05.05.)
+### Heute abgeschlossen (08.05.2026)
+- **imagePullPolicy GitOps-konform** (Mini-Block, vormittag): 4 App-Deployments und 7 ArgoCD-Workloads pro Cluster auf `IfNotPresent`. Helper-Skript `scripts/maintenance/apply-argocd-imagepullpolicy.sh`. Doku: `docs/phases/imagepullpolicy-cleanup-2026-05-08.md`.
+- **Phase 11 Rolling OS-Update TEST** (mittag): 3/3 Nodes Kernel 6.8.0-110 → 6.8.0-111. PLAY RECAP failed=0. 8 ImagePullBackOff-Pods nach Drain (fehlende Images in manueller Pre-Warm-Liste, Recovery ~5 min). Doku: `docs/phases/phase-11-rolling-os-update-test.md`.
+- **Playbook-Verbesserungen** (nachmittag) als Konsequenz aus TEST-Lessons:
+  - **Image Pre-Warming als Phase 2/4 ins Playbook integriert** (`tasks/image_prewarm.yml`, 165 Zeilen). Liste wird bei jedem Lauf neu generiert. Default `enable_prewarm: true`.
+  - **Bug-Fix Task-Namen:** Hartkodierte `{{ inventory_hostname }}` in `name:` ergaben falschen Output bei `serial: 1`. Banner-Task-Pattern eingefuehrt. Betroffen: drain.yml, reboot_if_changed.yml, uncordon_verify.yml, snapshot_create.yml, pre_drain_prep.yml.
+- Commits: `7e63b51` (Pre-Warming + Task-Namen-Fix), Doku-Commits folgend.
+
+### Frueher abgeschlossen
+- **Thanos Compactor PVC 10Gi → 30Gi** in TEST und PROD (06.05., analog DEV vom 05.05.)
 - Doku: `docs/phases/monitoring-thanos-pvc-resize-test-prod.md`
 - Runbook NEU: `docs/runbooks/longhorn-volume-expansion-deadlock.md` (erstes File im runbooks/-Verzeichnis)
 - Querverweis-Update: `docs/phases/phase-12b-test-completed.md`
@@ -33,6 +41,9 @@
 | 06.05. mittag | Phase 12b — CoreDNS HA Rollout (mit 5min DNS-Outage) | TEST |
 | 06.05. nachmittag | Thanos Compactor PVC Resize | TEST + PROD |
 | 07.05. fruh | Phase 12b — CoreDNS HA Rollout (0s Outage, sauber beim 1. Versuch) | **PROD** |
+| 08.05. vormittag | imagePullPolicy GitOps-konform (Mini-Block) | DEV + TEST + PROD |
+| 08.05. mittag | Phase 11 — Rolling OS-Update | **TEST** |
+| 08.05. nachmittag | Playbook-Verbesserungen (Pre-Warming-Integration, Task-Namen-Fix) | Repo-Aenderung |
 
 **Projektplanung:** v2.20 (`docs/K8s-GitOps-Infrastruktur-Projektplanung_v2.20.md`)
 
@@ -45,8 +56,8 @@
 | # | Aufgabe | Voraussetzung | Risiko | Aufwand | Doku |
 |---|---|---|---|---|---|
 | 1 | ~~Phase 12b CoreDNS HA **PROD**~~ ✅ ABGESCHLOSSEN 07.05.2026 | TEST 24h Burn-in | Mittel | 1-2h (real ~1h) | phase-12b-prod-completed.md |
-| 2 | Phase 11 Rolling OS-Update **TEST** | Block 1 fertig | Mittel | 3-4h | phase-11-rolling-os-update-dev.md |
-| 3 | Phase 11 Rolling OS-Update **PROD** | Block 2 verifiziert | Mittel | 3-4h | (gleich) |
+| 2 | ~~Phase 11 Rolling OS-Update **TEST**~~ ✅ ABGESCHLOSSEN 08.05.2026 | Block 1 fertig | Mittel | 3-4h (real ~1,5h) | phase-11-rolling-os-update-test.md |
+| 3 | Phase 11 Rolling OS-Update **PROD** | Block 2 verifiziert (24h Burn-in) | Mittel-Hoch | 3-4h | phase-11-rolling-os-update-test.md |
 | 4 | Phase 9a Etappe B — PROD-Zot + Cutover | Block 3 fertig (nicht zwingend, aber sauberer) | Mittel | 0,5-1 Tag | guides/phase-09a-test-prod-handoff.md |
 
 ### 🟡 Mittlere Prioritaet
@@ -74,11 +85,17 @@
 - **07.05. mittag:** Phase 12b CoreDNS HA **PROD** (24h Burn-in TEST war ab 06.05. nachmittag)
 - **08.05.:** 24h Burn-in PROD verifizieren
 
-### Block 2 — Rolling OS-Update TEST (1 Tag)
-- **08.-09.05.:** Phase 11 OS-Update **TEST** (verbesserte Maintenance-Playbooks aus DEV-Vorfall)
+### Block 2 — Rolling OS-Update TEST ✅ (08.05.2026 abgeschlossen)
+- Voller Lauf: ~41 min, alle 3 Nodes Kernel 6.8.0-110 → 6.8.0-111, failed=0
+- 8 ImagePullBackOff-Pods nach Drain (manuelle Pre-Warm-Liste hatte Luecken)
+- Recovery sauber, Selbstheilung von Volume `pvc-98e73a20-...` (prometheus-0)
+- Detail-Doku: `docs/phases/phase-11-rolling-os-update-test.md`
+- **Lessons in Playbook eingearbeitet (08.05. nachmittag):** Image-Pre-Warming integriert, Task-Namen-Fix
 
-### Block 3 — Rolling OS-Update PROD (1 Tag)
-- **12.05.:** Phase 11 OS-Update **PROD** (nach TEST-Verifikation)
+### Block 3 — Rolling OS-Update PROD (1 Tag, frueh. 09.05.)
+- **09.05.:** Phase 11 OS-Update **PROD** (nach 24h TEST-Burn-in)
+- Vor PROD-Lauf: `drain_timeout_seconds` auf 1200 erhoehen (LL #T-3 aus TEST), DEV-Zot-Verfuegbarkeit verifizieren
+- Snapshots zwingend behalten bis 24h-Burn-in durch (`-e snapshot_delete_on_success=false`)
 
 ### Block 4 — Phase 9a Etappe B (1 Tag)
 - **13.-14.05.:** PROD-Zot deployen + Warm-up + containerd-Cutover (schliesst gleichzeitig Zot HA in PROD ab)
@@ -282,18 +299,21 @@ docs/
 ├── K8s-GitOps-Infrastruktur-Projektplanung_v2.20.md   # Master-Plan
 ├── phases/
 │   ├── roadmap-handoff-2026-05-06.md                  # DIESES DOKUMENT
+│   ├── phase-11-rolling-os-update-test.md             # NEU 08.05. (TEST done)
+│   ├── phase-11-rolling-os-update-test-handoff.md     # NEU 08.05. (TEST-Plan, jetzt obsolet)
 │   ├── imagepullpolicy-cleanup-2026-05-08.md          # NEU 08.05. (Mini-Block)
 │   ├── monitoring-thanos-pvc-resize-test-prod.md      # NEU 06.05.
 │   ├── phase-12-ha-improvements-completed.md          # DEV done 06.05.
-│   ├── phase-12b-coredns-test-prod-handoff.md         # PROD-Plan, 24h Burn-in laeuft
+│   ├── phase-12b-coredns-test-prod-handoff.md         # PROD-Plan (jetzt obsolet)
 │   ├── phase-12b-test-completed.md                    # TEST done 06.05.
+│   ├── phase-12b-prod-completed.md                    # PROD done 07.05.
 │   ├── phase-11-rolling-os-update-dev.md              # DEV done 30.04.
 │   ├── phase-10-backup-dev.md                         # done 14.04.
 │   ├── phase-09-security-dev.md                       # Kyverno+Trivy DEV done
 │   ├── phase-09a-security-registries.md               # Etappe A done all envs
 │   └── phase-08e-branch-migration-handoff.md          # offen
 ├── runbooks/
-│   └── longhorn-volume-expansion-deadlock.md          # NEU 06.05. (erster Eintrag)
+│   └── longhorn-volume-expansion-deadlock.md          # NEU 06.05.
 ├── guides/
 │   ├── phase-09a-test-prod-handoff.md                 # Etappe B Anleitung
 │   ├── cnpg-barman-cloud-plugin-migration-v2.md
@@ -302,6 +322,19 @@ docs/
 └── decisions/
     ├── ADR-001-kustomize-overlay-pattern.md
     └── ADR-002-branch-per-environment.md
+
+ansible/
+└── roles/
+    └── rolling_os_update/
+        ├── defaults/main.yml                          # NEU: Pre-Warm-Variablen
+        ├── tasks/
+        │   ├── image_prewarm.yml                      # NEU 08.05. (165 Zeilen)
+        │   ├── drain.yml, reboot_if_changed.yml,
+        │   ├── uncordon_verify.yml, snapshot_create.yml,
+        │   └── pre_drain_prep.yml                     # MOD: Banner-Pattern statt {{inventory_hostname}}
+        └── ...
+playbooks/
+└── 08-rolling-os-update.yml                            # MOD: 1/4-4/4 statt 1/3-3/3
 ```
 
 ---
