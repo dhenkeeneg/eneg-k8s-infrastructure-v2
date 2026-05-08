@@ -1,0 +1,165 @@
+---
+# =============================================================================
+# Cluster-Wide Image Pre-Warming (vor Rolling-Update)
+# =============================================================================
+# Verhindert ImagePullBackOff bei Pod-Reschedule waehrend Drain.
+#
+# Ablauf:
+#   1. Image-Liste aus Cluster ermitteln (run_once auf localhost)
+#   2. Liste in Audit-Datei schreiben (/tmp/prewarm-images-<env>-<ts>.txt)
+#   3. GHCR-Pull-Secret aus k8s extrahieren (run_once, no_log)
+#   4. Liste auf aktuelle Node kopieren (/tmp/prewarm-images.txt)
+#   5. Bash-Loop pro Node: alle Images sequenziell pullen
+#      - Private GHCR-Images mit --user (Auth)
+#      - Oeffentliche Images ohne Auth (Mirror-Config greift)
+#   6. Cleanup auf der Node
+# =============================================================================
+
+# -----------------------------------------------------------------------------
+# 1) Image-Liste aus Cluster ermitteln (einmalig)
+# -----------------------------------------------------------------------------
+
+- name: "[Pre-Warm] Aktiv genutzte Images im Cluster ermitteln"
+  ansible.builtin.shell: |
+    set -e
+    kubectl --context {{ kubectl_context }} get pods -A \
+      -o jsonpath='{range .items[*]}{range .spec.containers[*]}{.image}{"\n"}{end}{range .spec.initContainers[*]}{.image}{"\n"}{end}{end}' \
+      | grep -v '^$' | sort -u
+  delegate_to: localhost
+  run_once: true
+  become: false
+  register: cluster_images
+  changed_when: false
+
+- name: "[Pre-Warm] Audit-Trail-Dateiname festlegen"
+  ansible.builtin.set_fact:
+    prewarm_audit_file: "{{ prewarm_audit_dir }}/prewarm-images-{{ target_env }}-{{ lookup('pipe', 'date +%Y%m%d-%H%M%S') }}.txt"
+  run_once: true
+
+- name: "[Pre-Warm] Image-Liste in Audit-Datei speichern"
+  ansible.builtin.copy:
+    content: "{{ cluster_images.stdout }}\n"
+    dest: "{{ prewarm_audit_file }}"
+    mode: '0644'
+  delegate_to: localhost
+  run_once: true
+  become: false
+  changed_when: false
+
+- name: "[Pre-Warm] Cluster-Image-Inventur Zusammenfassung"
+  ansible.builtin.debug:
+    msg: |
+      ============================================================
+      Cluster Image-Inventur ({{ target_env }})
+      ============================================================
+      Anzahl unique Images: {{ cluster_images.stdout_lines | length }}
+      Audit-Trail:          {{ prewarm_audit_file }}
+      ============================================================
+  run_once: true
+
+# -----------------------------------------------------------------------------
+# 2) GHCR-Pull-Secret aus k8s extrahieren (optional)
+# -----------------------------------------------------------------------------
+
+- name: "[Pre-Warm] GHCR-Pull-Secret aus k8s lesen"
+  ansible.builtin.shell: |
+    kubectl --context {{ kubectl_context }} get secret \
+      -n {{ ghcr_pull_secret_namespace }} {{ ghcr_pull_secret_name }} \
+      -o jsonpath='{.data.\.dockerconfigjson}' 2>/dev/null | base64 -d
+  delegate_to: localhost
+  run_once: true
+  become: false
+  register: ghcr_dockerconfig_raw
+  no_log: true
+  failed_when: false
+  changed_when: false
+
+- name: "[Pre-Warm] GHCR-Auth-Variablen aus dockerconfigjson extrahieren"
+  ansible.builtin.set_fact:
+    ghcr_auth_user: "{{ (ghcr_dockerconfig_raw.stdout | from_json).auths['ghcr.io'].username | default('') }}"
+    ghcr_auth_pass: "{{ (ghcr_dockerconfig_raw.stdout | from_json).auths['ghcr.io'].password | default('') }}"
+  no_log: true
+  run_once: true
+  when:
+    - ghcr_dockerconfig_raw.rc | default(1) == 0
+    - ghcr_dockerconfig_raw.stdout | default('') | length > 0
+
+- name: "[Pre-Warm] GHCR-Auth-Status anzeigen"
+  ansible.builtin.debug:
+    msg: |
+      GHCR-Auth-Status:
+        Secret-Quelle:  {{ ghcr_pull_secret_namespace }}/{{ ghcr_pull_secret_name }}
+        Verfuegbar:     {{ 'JA (User=' + (ghcr_auth_user | default('')) + ', PassLen=' + ((ghcr_auth_pass | default('') | length) | string) + ')' if (ghcr_auth_user | default('') | length > 0) else 'NEIN - private GHCR-Images werden FAIL ergeben' }}
+  run_once: true
+
+# -----------------------------------------------------------------------------
+# 3) Pre-Warming pro Node (sequenziell durch serial: 1 in Play)
+# -----------------------------------------------------------------------------
+
+- name: "==== Pre-Warming startet fuer aktuellen Node ===="
+  ansible.builtin.debug:
+    msg: "==== Pre-Warming auf {{ inventory_hostname }} startet ===="
+
+- name: "[Pre-Warm] Image-Liste auf Node kopieren"
+  ansible.builtin.copy:
+    content: "{{ hostvars['localhost']['cluster_images']['stdout'] | default(cluster_images.stdout) }}\n"
+    dest: "/tmp/prewarm-images.txt"
+    mode: '0644'
+
+- name: "[Pre-Warm] Alle Images sequenziell auf Node pullen"
+  ansible.builtin.shell: |
+    set -u
+    SUCCESS=0
+    FAIL=0
+    SKIP=0
+    FAILED_IMAGES=""
+    while IFS= read -r IMG; do
+      [ -z "$IMG" ] && continue
+      if echo "$IMG" | grep -qE '{{ ghcr_private_image_pattern }}'; then
+        if [ -n "${GHCR_USER:-}" ] && [ -n "${GHCR_PASS:-}" ]; then
+          if sudo k3s ctr images pull --user "${GHCR_USER}:${GHCR_PASS}" "$IMG" >/dev/null 2>&1; then
+            SUCCESS=$((SUCCESS+1))
+          else
+            FAIL=$((FAIL+1))
+            FAILED_IMAGES="${FAILED_IMAGES}\n  - $IMG (auth-pull failed)"
+          fi
+        else
+          SKIP=$((SKIP+1))
+          FAILED_IMAGES="${FAILED_IMAGES}\n  - $IMG (kein GHCR-Auth verfuegbar)"
+        fi
+      else
+        if sudo k3s ctr images pull "$IMG" >/dev/null 2>&1; then
+          SUCCESS=$((SUCCESS+1))
+        else
+          FAIL=$((FAIL+1))
+          FAILED_IMAGES="${FAILED_IMAGES}\n  - $IMG (public-pull failed)"
+        fi
+      fi
+    done < /tmp/prewarm-images.txt
+    TOTAL=$((SUCCESS+FAIL+SKIP))
+    echo "TOTAL=$TOTAL OK=$SUCCESS FAIL=$FAIL SKIP=$SKIP"
+    if [ $FAIL -gt 0 ] || [ $SKIP -gt 0 ]; then
+      echo -e "Probleme:${FAILED_IMAGES}"
+    fi
+  environment:
+    GHCR_USER: "{{ ghcr_auth_user | default('') }}"
+    GHCR_PASS: "{{ ghcr_auth_pass | default('') }}"
+  register: prewarm_result
+  no_log: true
+  changed_when: false
+  failed_when: false
+
+- name: "[Pre-Warm] Statistik fuer aktuellen Node anzeigen"
+  ansible.builtin.debug:
+    msg: |
+      ============================================================
+      Pre-Warming auf {{ inventory_hostname }} abgeschlossen
+      ============================================================
+      {{ prewarm_result.stdout | default('(kein Output)') }}
+      ============================================================
+
+- name: "[Pre-Warm] Image-Liste auf Node loeschen (Cleanup)"
+  ansible.builtin.file:
+    path: /tmp/prewarm-images.txt
+    state: absent
+  changed_when: false
