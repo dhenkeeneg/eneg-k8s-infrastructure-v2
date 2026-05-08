@@ -58,6 +58,7 @@
 | 7 | Trivy in TEST + PROD ausrollen | Block 4 (Zot in PROD verfuegbar) | je 2-3h |
 | 8 | Helm Chart Update Review (alle Charts) | Phase 9 fertig | ~1 Tag Recherche |
 | 9 | ADR-002 Branch-per-Environment Migration | Optional, wann passt | 0,5-1 Tag |
+| 10 | ArgoCD Self-Management via Helm-Chart | Vorbereitend fuer ArgoCD-Upgrades | 1-2 Tage |
 
 ### 🟢 Niedrige Prioritaet / Reaktiv
 
@@ -243,6 +244,34 @@ Aktive Memory-Eintraege relevant fuer kommende Blocks:
 - **Phase 12b CoreDNS HA TEST DONE 06.05.2026 mit 5min DNS-Outage** — PROD-Lessons sind im Handoff eingearbeitet
 - **CNPG Barman Cloud Plugin** — `backups.postgresql.cnpg.io` (nicht short form)
 - **Trivy Mirror Fix in DEV (22.04.2026)** — wenn Trivy auf TEST/PROD ausgerollt wird, gleiche `configFile` Struktur uebernehmen mit env-spezifischen Zot-Endpunkten
+
+---
+
+## 8b. Backlog-Detail #10 — ArgoCD Self-Management via Helm-Chart
+
+**Hintergrund:** ArgoCD wurde via raw Manifests (`install.yaml`) installiert. Daraus folgen mehrere Patches die NICHT GitOps-managed sind, sondern manuell appliziert werden muessen:
+
+- `kubernetes/base/argocd/argocd-repo-server-ksops-patch.yaml` (KSOPS Init-Container)
+- `kubernetes/base/argocd/argocd-imagepullpolicy-patch.yaml` (imagePullPolicy IfNotPresent — neu 08.05.2026)
+- ggf. spaeter weitere
+
+**Re-Apply-Aufwand bei jedem ArgoCD-Versions-Upgrade:** beide Patch-Skripte pro Cluster ausfuehren (ksops manuell + `apply-argocd-imagepullpolicy.sh`).
+
+**Vorschlag:** Migration auf das offizielle `argo-cd` Helm-Chart (`argo/argo-cd`):
+- ArgoCD wuerde sich selbst syncen (Self-Management Pattern)
+- KSOPS-Init-Container und imagePullPolicy als Helm-Values pflegen, statt als out-of-band Patch
+- Versions-Upgrade waere reine `targetRevision`-Anpassung in der ArgoCD-App
+
+**Vorbedingungen / offene Punkte:**
+- ksops-Patch ist non-trivial — bestehende Volumes/Mounts sauber in Helm-Values uebersetzen
+- Migration muss ohne Downtime moeglich sein (DEV → TEST → PROD wie immer)
+- Bestehende `argocd-cm` Aenderungen via ArgoCD-Helm-Values `configs.cm.*` uebernehmen
+- `argocd-cmd-params-cm` wird in argocd-Charts ebenfalls behandelt
+- Self-Management-Bootstrap: Cluster-Admin muss ggf. einmalig manuell ueber `helm install`, danach uebernimmt ArgoCD sich selbst
+
+**Risiko:** mittel — keine eilige Aenderung, sinnvoll vor naechstem ArgoCD-Major-Upgrade (>v3.4) als Vorbereitung.
+
+**Doku-Referenz:** wird bei Umsetzung als eigene Phase im Repo angelegt.
 
 ---
 

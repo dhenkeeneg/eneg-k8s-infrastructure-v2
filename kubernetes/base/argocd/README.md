@@ -10,6 +10,7 @@ Dieses Verzeichnis enthält die ArgoCD-Konfiguration, die via App-of-Apps Self-M
 |-------|-------------|
 | `argocd-cm.yaml` | ConfigMap mit KSOPS/Kustomize Build-Options |
 | `argocd-repo-server-ksops-patch.yaml` | Strategic Merge Patch: KSOPS v4.4.0 im Repo-Server |
+| `argocd-imagepullpolicy-patch.yaml` | Strategic Merge Patches: imagePullPolicy=IfNotPresent fuer alle ArgoCD-Workloads |
 | `kustomization.yaml` | Kustomize Root (bindet alles zusammen) |
 | `secrets/` | SOPS-verschlüsselte Secrets |
 
@@ -58,3 +59,39 @@ Und in der `kustomization.yaml` referenziert:
 generators:
   - secret-generator.yaml
 ```
+
+## imagePullPolicy Patch
+
+Alle ArgoCD-Workloads werden mit `imagePullPolicy: IfNotPresent` gepatcht, damit
+beim Drain/Reschedule (z.B. Node-OS-Update) keine erneuten Image-Pulls erzwungen
+werden. Hintergrund: DEV-OS-Update am 30.04.2026 (siehe
+`docs/phases/phase-11-rolling-os-update-dev.md`) hat gezeigt, dass `Always` in
+Kombination mit Registry-Latenz/Ausfall zu kaskadierten Pull-Fehlern fuehren kann.
+
+### Pattern
+
+Wie der KSOPS-Patch wird auch dieser Patch **NICHT** ueber ArgoCD self-sync
+angewendet, sondern manuell. Quelle der Wahrheit ist
+`argocd-imagepullpolicy-patch.yaml` im Repo. Die Anwendung erfolgt per
+Helper-Skript:
+
+```bash
+./scripts/maintenance/apply-argocd-imagepullpolicy.sh <kube-context>
+```
+
+Beispiel:
+
+```bash
+./scripts/maintenance/apply-argocd-imagepullpolicy.sh k8s-dev
+./scripts/maintenance/apply-argocd-imagepullpolicy.sh k8s-test
+./scripts/maintenance/apply-argocd-imagepullpolicy.sh k8s-prod
+```
+
+### Wann re-applizieren?
+
+- Nach jedem ArgoCD-Reinstall
+- Nach jedem ArgoCD-Versions-Upgrade (wenn die Workload-Manifests neu deployed werden)
+- Nach Hinzufuegen weiterer ArgoCD-Komponenten
+
+Das Skript ist **idempotent** - Re-Apply bleibt ohne Effekt, wenn die Werte
+bereits korrekt sind.

@@ -1,0 +1,124 @@
+---
+# Strategic Merge Patches fuer ArgoCD-Workloads: imagePullPolicy
+# ===============================================================
+# Setzt imagePullPolicy: IfNotPresent fuer alle Hauptcontainer
+# (und einen InitContainer: argocd-dex-server.copyutil).
+#
+# HINTERGRUND
+# -----------
+# Default ArgoCD-Installation setzt imagePullPolicy: Always. Bei jedem
+# Pod-Restart wuerde das Image neu gepullt — Risiko bei Registry-Ausfall
+# oder Throttling (siehe DEV-Vorfall am 30.04.2026: Zot+CoreDNS SPOF mit
+# kaskadierendem Cluster-Ausfall, Doku: docs/phases/phase-11-rolling-os-update-dev.md).
+# Mit IfNotPresent wird der lokale containerd Image-Cache verwendet — das
+# ist deutlich resilienter bei Drain/Reschedule waehrend Wartungsfenstern.
+#
+# Image-Tags sind durchgaengig versionsspezifisch (v3.3.0, v2.43.0, 8.2.3-alpine),
+# also kein Risiko, dass ein "Always"-Pull "etwas Neues" bringen wuerde.
+#
+# Bei argocd-dex-server.copyutil verwendet der InitContainer das gleiche
+# quay.io/argoproj/argocd:v3.3.0 Image wie der Hauptcontainer — also bereits
+# im Cache, IfNotPresent ist sicher.
+#
+# WICHTIG: SELF-MANAGEMENT-LIMITIERUNG
+# ------------------------------------
+# Dieser Patch wird NICHT ueber ArgoCD synchronisiert (ArgoCD kann sich nicht
+# selbst patchen — gleiches Pattern wie argocd-repo-server-ksops-patch.yaml).
+#
+# RE-APPLY noetig bei:
+#   - Initialer Cluster-Bereitstellung (nach kubectl apply -n argocd -f install.yaml)
+#   - Jedem ArgoCD-Versions-Upgrade
+#
+# Aufruf:
+#   ./scripts/maintenance/apply-argocd-imagepullpolicy.sh <kubectl-context>
+# z.B.:
+#   ./scripts/maintenance/apply-argocd-imagepullpolicy.sh k8s-dev
+#
+# Re-Apply ist idempotent — kann beliebig oft ausgefuehrt werden.
+
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: argocd-applicationset-controller
+  namespace: argocd
+spec:
+  template:
+    spec:
+      containers:
+        - name: argocd-applicationset-controller
+          imagePullPolicy: IfNotPresent
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: argocd-dex-server
+  namespace: argocd
+spec:
+  template:
+    spec:
+      initContainers:
+        - name: copyutil
+          imagePullPolicy: IfNotPresent
+      containers:
+        - name: dex
+          imagePullPolicy: IfNotPresent
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: argocd-notifications-controller
+  namespace: argocd
+spec:
+  template:
+    spec:
+      containers:
+        - name: argocd-notifications-controller
+          imagePullPolicy: IfNotPresent
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: argocd-redis
+  namespace: argocd
+spec:
+  template:
+    spec:
+      containers:
+        - name: redis
+          imagePullPolicy: IfNotPresent
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: argocd-repo-server
+  namespace: argocd
+spec:
+  template:
+    spec:
+      containers:
+        - name: argocd-repo-server
+          imagePullPolicy: IfNotPresent
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: argocd-server
+  namespace: argocd
+spec:
+  template:
+    spec:
+      containers:
+        - name: argocd-server
+          imagePullPolicy: IfNotPresent
+---
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: argocd-application-controller
+  namespace: argocd
+spec:
+  template:
+    spec:
+      containers:
+        - name: argocd-application-controller
+          imagePullPolicy: IfNotPresent
