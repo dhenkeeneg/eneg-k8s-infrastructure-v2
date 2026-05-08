@@ -19,12 +19,18 @@
 #
 # Tags fuer gezielte Ausfuehrung:
 #   --tags pre-checks    : Nur Pre-Flight-Checks (kein Update, kein Snapshot)
+#   --tags prewarm       : Nur Image Pre-Warming (sequenziell pro Node)
+#   --skip-tags prewarm  : Pre-Warming ueberspringen
+#
+# Variablen-Override:
+#   -e enable_prewarm=false             : Pre-Warming deaktivieren
+#   -e snapshot_delete_on_success=false : Snapshots behalten (manuell loeschen)
 # =============================================================================
 
 # -----------------------------------------------------------------------------
-# Play 1/3: Pre-Flight Checks (run_once auf localhost)
+# Play 1/4: Pre-Flight Checks (run_once auf localhost)
 # -----------------------------------------------------------------------------
-- name: "[1/3] Pre-Flight Checks"
+- name: "[1/4] Pre-Flight Checks"
   hosts: localhost
   connection: local
   gather_facts: true
@@ -47,9 +53,38 @@
       tags: [pre-checks, always]
 
 # -----------------------------------------------------------------------------
-# Play 2/3: Per-Node Rolling Update (serial: 1, order: reverse_sorted)
+# Play 2/4: Cluster-weites Image Pre-Warming (vor Rolling-Update)
 # -----------------------------------------------------------------------------
-- name: "[2/3] Rolling OS Update (serial: 1)"
+# Sequenziell pro Node (serial: 1) damit DEV-Zot nicht durch parallele
+# OnDemand-Sync-Anfragen ueberlastet wird.
+# Ueberspringen mit -e enable_prewarm=false
+# -----------------------------------------------------------------------------
+- name: "[2/4] Image Pre-Warming (sequenziell pro Node)"
+  hosts: k3s_servers
+  serial: 1
+  order: sorted
+  become: true
+  any_errors_fatal: true
+  environment:
+    KUBECONFIG: "{{ kubeconfig_path | default('/home/admin-ubuntu/.kube/config') }}"
+
+  tasks:
+    - name: Image-Pre-Warming ausfuehren
+      ansible.builtin.import_role:
+        name: rolling_os_update
+        tasks_from: image_prewarm.yml
+      tags: [prewarm]
+      when: enable_prewarm | default(true) | bool
+
+    - name: "[Pre-Warm] Pre-Warming deaktiviert"
+      ansible.builtin.debug:
+        msg: "Pre-Warming uebersprungen (enable_prewarm=false)"
+      when: not (enable_prewarm | default(true) | bool)
+
+# -----------------------------------------------------------------------------
+# Play 3/4: Per-Node Rolling Update (serial: 1, order: reverse_sorted)
+# -----------------------------------------------------------------------------
+- name: "[3/4] Rolling OS Update (serial: 1)"
   hosts: k3s_servers
   serial: 1
   order: reverse_sorted
@@ -120,9 +155,9 @@
       tags: [cooldown]
 
 # -----------------------------------------------------------------------------
-# Play 3/3: Post-Verifikation (run_once auf localhost)
+# Play 4/4: Post-Verifikation (run_once auf localhost)
 # -----------------------------------------------------------------------------
-- name: "[3/3] Post-Update Verification"
+- name: "[4/4] Post-Update Verification"
   hosts: localhost
   connection: local
   gather_facts: false

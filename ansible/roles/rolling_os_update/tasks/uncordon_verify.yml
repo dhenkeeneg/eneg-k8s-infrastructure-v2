@@ -3,9 +3,14 @@
 # Uncordon, Pod-Verify und CNPG-Verify
 # =============================================================================
 # Wird auf localhost (mgmt-10) ausgefuehrt.
+# Task-Namen statisch (siehe Hinweis in drain.yml).
 # =============================================================================
 
-- name: Uncordon {{ inventory_hostname }}
+- name: "==== Uncordon-Phase fuer aktuellen Node ===="
+  ansible.builtin.debug:
+    msg: "==== Uncordon und Verify: {{ inventory_hostname }} ===="
+
+- name: Uncordon Node
   ansible.builtin.command:
     cmd: kubectl --context {{ kubectl_context }} uncordon {{ inventory_hostname }}
   delegate_to: localhost
@@ -15,7 +20,7 @@
   ansible.builtin.pause:
     seconds: 30
 
-- name: Pods auf {{ inventory_hostname }} pruefen
+- name: Pods auf Node pruefen
   ansible.builtin.command:
     argv:
       - kubectl

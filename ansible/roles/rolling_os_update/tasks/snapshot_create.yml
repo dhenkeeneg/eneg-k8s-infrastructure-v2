@@ -6,14 +6,14 @@
 # Setzt fact 'snapshot_name' fuer spaeteres snapshot_delete.
 # =============================================================================
 
-- name: Snapshot-Name fuer {{ inventory_hostname }} generieren
+- name: Snapshot-Name fuer aktuellen Node generieren
   ansible.builtin.set_fact:
     snapshot_name: >-
       ansible-osupdate-{{ target_env }}-{{ inventory_hostname }}-{{
       lookup('pipe', 'date +%Y%m%d-%H%M%S') }}
   when: enable_vsphere_snapshot
 
-- name: vSphere-Snapshot von {{ inventory_hostname }} erstellen
+- name: vSphere-Snapshot von aktuellem Node erstellen
   ansible.builtin.command:
     cmd: >-
       govc snapshot.create

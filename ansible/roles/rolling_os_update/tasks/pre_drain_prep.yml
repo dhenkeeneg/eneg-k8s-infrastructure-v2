@@ -19,7 +19,7 @@
 # 1) CNPG nodeMaintenanceWindow aktivieren
 # -----------------------------------------------------------------------------
 
-- name: "[CNPG] Liste aller CNPG-Cluster mit Pods auf {{ inventory_hostname }}"
+- name: "[CNPG] Liste aller CNPG-Cluster mit Pods auf aktuellem Node"
   ansible.builtin.command:
     argv:
       - kubectl
@@ -139,7 +139,7 @@
 # 3) MariaDB Galera PDB anpassen (nur wenn 2+ Pods auf Ziel-Node)
 # -----------------------------------------------------------------------------
 
-- name: "[Galera] Anzahl Galera-Pods auf {{ inventory_hostname }} ermitteln"
+- name: "[Galera] Anzahl Galera-Pods auf aktuellem Node ermitteln"
   ansible.builtin.command:
     argv:
       - kubectl

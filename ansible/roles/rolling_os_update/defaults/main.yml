@@ -83,3 +83,31 @@ mariadb_galera_namespace: "databases"
 mariadb_galera_pdb_name: "mariadb-galera"
 # Pod-Selector zum Zaehlen der Galera-Pods auf der Ziel-Node:
 mariadb_galera_pod_selector: "app.kubernetes.io/instance=mariadb-galera"
+
+# =============================================================================
+# Image Pre-Warming Variablen (fuer image_prewarm.yml)
+# =============================================================================
+# Vor jedem Rolling-Update werden alle aktuell genutzten Images aus dem
+# Cluster ermittelt und auf jeder Node sequenziell pre-gewarmed. Verhindert
+# ImagePullBackOff bei Pod-Reschedule waehrend Drain (Erfahrung aus
+# Phase 11 DEV/TEST OS-Updates).
+# =============================================================================
+
+# Pre-Warming aktivieren/deaktivieren
+# Default: true (immer pre-warmen)
+# Override: -e enable_prewarm=false (z.B. fuer Smoke-Tests)
+enable_prewarm: true
+
+# Audit-Trail-Pfad auf k8s-mgmt-10 (Image-Liste pro Lauf)
+prewarm_audit_dir: "/tmp"
+
+# Namespace + Secret-Name fuer GHCR-Pull-Secret
+# Wird zur Auth bei privaten ghcr.io/dhenkeeneg/* Images verwendet.
+# Falls Secret nicht vorhanden: private GHCR-Pulls schlagen fehl
+# (werden im Statistik-Output als FAIL gezaehlt, aber kein Show-Stopper).
+ghcr_pull_secret_namespace: "it-info-versand"
+ghcr_pull_secret_name: "ghcr-pull-secret"
+
+# Regex-Muster fuer Images, die Auth brauchen (private GHCR-Repos)
+# Aktuell: alle Images unter ghcr.io/dhenkeeneg/*
+ghcr_private_image_pattern: "^ghcr\\.io/dhenkeeneg/"

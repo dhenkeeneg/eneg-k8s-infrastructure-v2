@@ -3,15 +3,25 @@
 # Cordon und Drain der Ziel-Node
 # =============================================================================
 # Wird auf localhost (mgmt-10) ausgefuehrt.
+#
+# HINWEIS: Task-Namen sind statisch ("Cordon Node", "Drain Node"), weil
+# Ansible bei serial: 1 die Task-Namen mit {{ inventory_hostname }} nur
+# einmal beim Plan-Build evaluiert (mit dem ersten Host der Reihenfolge)
+# und nicht pro Host neu generiert. Der konkrete Host steht im
+# Banner-Task und im 'cmd:' (das wird pro Host korrekt evaluiert).
 # =============================================================================
 
-- name: Cordon {{ inventory_hostname }}
+- name: "==== Drain-Phase fuer aktuellen Node startet ===="
+  ansible.builtin.debug:
+    msg: "==== Bearbeite jetzt: {{ inventory_hostname }} ===="
+
+- name: Cordon Node
   ansible.builtin.command:
     cmd: kubectl --context {{ kubectl_context }} cordon {{ inventory_hostname }}
   delegate_to: localhost
   changed_when: true
 
-- name: Drain {{ inventory_hostname }}
+- name: Drain Node
   ansible.builtin.command:
     cmd: >-
       kubectl --context {{ kubectl_context }} drain {{ inventory_hostname }}
