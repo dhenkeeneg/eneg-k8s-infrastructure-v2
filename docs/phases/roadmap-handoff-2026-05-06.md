@@ -282,6 +282,7 @@ docs/
 ├── K8s-GitOps-Infrastruktur-Projektplanung_v2.20.md   # Master-Plan
 ├── phases/
 │   ├── roadmap-handoff-2026-05-06.md                  # DIESES DOKUMENT
+│   ├── imagepullpolicy-cleanup-2026-05-08.md          # NEU 08.05. (Mini-Block)
 │   ├── monitoring-thanos-pvc-resize-test-prod.md      # NEU 06.05.
 │   ├── phase-12-ha-improvements-completed.md          # DEV done 06.05.
 │   ├── phase-12b-coredns-test-prod-handoff.md         # PROD-Plan, 24h Burn-in laeuft
