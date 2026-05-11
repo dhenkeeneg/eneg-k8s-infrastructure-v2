@@ -36,6 +36,31 @@ spec:
     size: 20Gi
     storageClassName: longhorn-db
 
+  # ============================================================
+  # TEMPORAER: Recovery aus PhysicalBackup vom 2026-05-09 04:30 UTC
+  # Anlass: Storage-I/O-Stoerung am 2026-05-10 14:59 fuehrte zu Galera Split-Brain
+  # Doku:   docs/incidents/2026-05-11-mariadb-galera-recovery.md
+  # WICHTIG: Nach erfolgreichem Restore + Verifikation diese Sektion entfernen,
+  #          sonst initiiert der Operator den Restore bei jedem Reconcile erneut.
+  # ============================================================
+  bootstrapFrom:
+    backupContentType: Physical
+    s3:
+      endpoint: "nas10.eneg.de:8010"
+      bucket: k8s-dev-mariadb-backup
+      prefix: mariadb-galera/
+      accessKeyIdSecretKeyRef:
+        name: mariadb-credentials
+        key: S3_ACCESS_KEY_ID
+      secretAccessKeySecretKeyRef:
+        name: mariadb-credentials
+        key: S3_SECRET_ACCESS_KEY
+      tls:
+        enabled: false
+    targetRecoveryTime: "2026-05-09T05:00:00Z"
+    restoreJob:
+      backoffLimit: 3
+
   resources:
     requests:
       memory: "1Gi"
