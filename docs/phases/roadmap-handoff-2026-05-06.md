@@ -2,9 +2,27 @@
 
 **Status:** Aktueller Master-Plan fuer die naechsten ~2 Wochen
 **Erstellt:** 06.05.2026 (nach erfolgreichem Thanos-PVC-Resize TEST + PROD)
-**Aktualisiert:** 08.05.2026 (Block 2 — Phase 11 OS-Update TEST abgeschlossen, Bug-Fix + Pre-Warming-Integration)
+**Aktualisiert:** 12.05.2026 (Incident DEV 10.-12.05. recovered, Cluster wieder voll funktionsfaehig)
 **Owner:** Daniel Henke
-**Naechste Aktion:** Block 3 — Phase 11 Rolling OS-Update **PROD** (frueh. 09.05.2026 nachmittags nach 24h TEST-Burn-in)
+**Naechste Aktion:** Block 3 — Phase 11 Rolling OS-Update **PROD** (verschoben durch Incident; neuer Termin nach Daniels Entscheidung)
+
+---
+
+## 0. Incident DEV 2026-05-10 bis 2026-05-12 (NEU)
+
+Zwischen 08.05. (letzter Roadmap-Stand) und 12.05. ist ein groesserer Incident im DEV-Cluster aufgetreten und vollstaendig recovered worden. Details siehe **`docs/incidents/2026-05-11-mariadb-galera-recovery.md`** (komplette Tag-1-Tag-3-Doku + 16 Final Lessons Learned).
+
+**Stichworte:**
+- Ausloeser: EXT4 Medium-Errors auf Longhorn-Block-Device (sd 12:0:0:1) am 10.05. → K3s-Crashloops auf k8s-dev-21
+- Tag 2 (11.05.): MariaDB Galera Recovery via PhysicalBackup-Restore aus S3
+- Tag 3 (12.05.): Cnpg-shared (komplett DOWN ueber 22h) + cnpg-erp Recovery; 23 Longhorn-Zombie-Replicas Cleanup; 3 degraded Volumes via Replica-Delete-Trick gehealt; 2 orphan Volumes nach CNPG-Instance-Bump aufgeraeumt
+- Endzustand 12.05. ~18:00 MESZ: 37/37 Longhorn-Volumes healthy, alle 3 DB-Cluster 3/3 ready mit Optimal-Verteilung 1-pro-Node, Storage ausgewogen 60-65% pro Node, alle Apps validiert
+
+**Auswirkung auf Roadmap:**
+- Phase 11 Rolling OS-Update **PROD** war fuer 09.05. geplant — durch Incident verschoben. Neuer Termin nach Daniels Entscheidung.
+- **Empfehlung vor Phase 11 PROD:** Pod-Recovery-Test nach jedem Node-Reboot in das Playbook einbauen (Lessons aus Tag 3: kubelet kann Pod-Lifecycle nach Containerd/K3s-Restart verlieren ohne sichtbare Fehler — `crictl ps -a` + `journalctl -u k3s` als zusaetzliche Verify-Steps).
+
+---
 
 ---
 
