@@ -20,6 +20,10 @@ defaultRules:
 # --- Prometheus DEV ---
 prometheus:
   prometheusSpec:
+    # TEMP 2026-05-14: replicas=0 fuer Cluster-Recovery (Monitoring komplett aus).
+    # Operator scalt StatefulSet beim Sync auf 0 - WAL-Replay entfaellt.
+    # Reaktivierung: Zeile loeschen oder auf replicas=1 setzen.
+    replicas: 0
     # DEV-Retention: 7 Tage / max. 12 GB (Sicherheitsmarge zu 20Gi PVC, bevor TSDB Schreibstopp)
     retention: 7d
     retentionSize: 12GB
@@ -32,6 +36,11 @@ prometheus:
 
 # --- AlertManager Config ---
 alertmanager:
+  # TEMP 2026-05-14: replicas=0 fuer Cluster-Recovery (Monitoring komplett aus).
+  # Operator scalt StatefulSet beim Sync auf 0.
+  # Reaktivierung: alertmanagerSpec-Block loeschen oder replicas=1 setzen.
+  alertmanagerSpec:
+    replicas: 0
   config:
     global:
       resolve_timeout: 5m
@@ -96,3 +105,14 @@ alertmanager:
           - severity = info
         equal: ['namespace']
 
+# --- Grafana DEV ---
+# TEMP 2026-05-14: replicas=0 fuer Cluster-Recovery (Monitoring komplett aus).
+# Reaktivierung: replicas=1 setzen (oder ganzen Block loeschen, dann Default=1).
+grafana:
+  replicas: 0
+
+# --- kube-state-metrics DEV ---
+# TEMP 2026-05-14: replicas=0 fuer Cluster-Recovery (Monitoring komplett aus).
+# Reaktivierung: replicas=1 setzen (oder ganzen Block loeschen, dann Default=1).
+kube-state-metrics:
+  replicas: 0
