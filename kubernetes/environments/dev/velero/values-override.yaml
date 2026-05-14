@@ -2,6 +2,13 @@
 # Umgebungsspezifisch: S3-Endpoint, Bucket, Backup-Schedule
 
 # -----------------------------------------------------------------------
+# TEMP 2026-05-14: Velero Server + nodeAgent aus fuer Cluster-Recovery.
+# Verhindert auto-resumed Backups/Restores beim Boot.
+# Reaktivierung: replicaCount=1, nodeAgent.enable=true, disabled=false.
+# -----------------------------------------------------------------------
+replicaCount: 0
+
+# -----------------------------------------------------------------------
 # Backup Storage Location: DEV S3 Bucket auf NAS10
 # -----------------------------------------------------------------------
 configuration:
@@ -22,7 +29,9 @@ configuration:
 # -----------------------------------------------------------------------
 schedules:
   daily-backup:
-    disabled: false
+    # TEMP 2026-05-14: disabled=true fuer Recovery (sonst Auto-Backup-Start beim Boot).
+    # Reaktivierung: disabled=false setzen.
+    disabled: true
     schedule: "45 5 * * *"
     useOwnerReferencesInBackup: false
     template:
@@ -46,6 +55,9 @@ resources:
     memory: 2Gi
 
 nodeAgent:
+  # TEMP 2026-05-14: enable=false fuer Recovery (DaemonSet auf jedem Node aus).
+  # Reaktivierung: enable=true setzen.
+  enable: false
   resources:
     requests:
       cpu: 100m
