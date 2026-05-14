@@ -122,6 +122,9 @@ metadata:
     app.kubernetes.io/part-of: pilot-apps
     app.kubernetes.io/managed-by: argocd
 spec:
+  # TEMP 2026-05-14: suspend=true fuer Cluster-Recovery (siehe docs/incidents/2026-05-11-...)
+  # Reaktivierung: Zeile loeschen oder suspend=false.
+  suspend: true
   schedule: "30 6 * * *"
   timeZone: "Europe/Berlin"
   concurrencyPolicy: Forbid

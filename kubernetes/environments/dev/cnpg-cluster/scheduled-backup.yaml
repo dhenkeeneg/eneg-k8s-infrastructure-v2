@@ -10,6 +10,9 @@ metadata:
     app.kubernetes.io/part-of: cloudnative-pg
     app.kubernetes.io/managed-by: argocd
 spec:
+  # TEMP 2026-05-14: suspend=true fuer Cluster-Recovery (siehe docs/incidents/2026-05-11-...)
+  # Reaktivierung: Zeile loeschen oder suspend=false.
+  suspend: true
   cluster:
     name: cnpg-shared
   schedule: "45 4 * * *"
@@ -30,6 +33,9 @@ metadata:
     app.kubernetes.io/part-of: cloudnative-pg
     app.kubernetes.io/managed-by: argocd
 spec:
+  # TEMP 2026-05-14: suspend=true fuer Cluster-Recovery (siehe docs/incidents/2026-05-11-...)
+  # Reaktivierung: Zeile loeschen oder suspend=false.
+  suspend: true
   cluster:
     name: cnpg-erp
   schedule: "50 4 * * *"
