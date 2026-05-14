@@ -4,6 +4,11 @@
 # -- DEV: Scan-Intervall (alle 24h statt Default 6h, DEV braucht weniger)
 # Standard-Wert fuer regulaeren Betrieb.
 operator:
+  # TEMP 2026-05-14: replicas=0 fuer Cluster-Recovery (kein Image-Scanning).
+  # Verhindert ausserdem den bekannten docker.io-Rate-Limit-Issue beim Boot,
+  # falls der Mirror-Redirect mal nicht greift. Reaktivierung: replicas=1
+  # oder Zeile loeschen (Default ist 1).
+  replicas: 0
   scanJobsConcurrentLimit: 2
 
 # -- DEV: Memory-Limits angehoben (Base 256Mi/512Mi -> OOMKilled bei groesseren Image-Scans)
