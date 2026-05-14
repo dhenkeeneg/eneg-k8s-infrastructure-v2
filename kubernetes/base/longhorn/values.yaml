@@ -35,6 +35,28 @@ defaultSettings:
   # Automatisches Aufräumen von verwaisten Ressourcen
   orphanAutoDeletion: true
 
+  # --- Storm-Protection (Lessons Learned aus Incident 10.-12.05.2026) ----
+  # Siehe docs/incidents/2026-05-11-mariadb-galera-recovery.md
+  #
+  # Nur 1 Replica-Rebuild gleichzeitig pro Node statt Default 5.
+  # Verhindert SSD-Overload bei vielen degraded Volumes (z.B. nach
+  # Cluster-Restart oder transientem Storage-Storm). Mehrere parallele
+  # Rebuilds koennen bei kleinen ESXi-Datastores eine I/O-Kaskade
+  # ausloesen, die weitere Disks als "ausgefallen" markieren laesst.
+  concurrentReplicaRebuildPerNodeLimit: 1
+
+  # Wartezeit (Sekunden) bevor Longhorn fehlende Replicas auf einem
+  # anderen Node neu aufbaut. Default Helm: 600 (10 min).
+  # Hoher Wert gibt transienten Problemen (Node-Reboot, Netzwerk-Hickup,
+  # kurze Storage-Stutzen) Zeit, sich von selbst zu loesen, und vermeidet
+  # unnoetige Rebuilds. Hier explizit eingetragen, damit nicht versehentlich
+  # per kubectl patch dauerhaft reduziert wird.
+  replicaReplenishmentWaitInterval: 600
+
+  # Max 1 paralleler Backup-Restore pro Node (statt Default 5).
+  # Schuetzt Storage bei Velero-Mass-Restore (z.B. nach Cluster-Recovery).
+  concurrentVolumeBackupRestorePerNodeLimit: 1
+
 # -----------------------------------------------------------------------
 # Ingress (deaktiviert - wir nutzen Traefik IngressRoute)
 # -----------------------------------------------------------------------
