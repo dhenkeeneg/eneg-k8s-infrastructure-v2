@@ -12,7 +12,10 @@ metadata:
     app.kubernetes.io/managed-by: argocd
 spec:
   image: mariadb:11.8.6
-  replicas: 3
+  # TEMP 2026-05-14: replicas=0 fuer Cluster-Recovery nach Storage-Storm
+  # Siehe docs/incidents/2026-05-11-mariadb-galera-recovery.md
+  # Reaktivierung nach Stabilisierung -> replicas=3 (PVCs bleiben durch Operator-Default)
+  replicas: 0
   galera:
     enabled: true
     primary:
