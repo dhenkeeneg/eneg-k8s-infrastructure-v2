@@ -1,0 +1,5 @@
+Total active (non-suppressed) alerts: 7
+    3x  critical | ArgoCdAppDegraded
+    1x  none     | Watchdog
+    1x  warning  | NodeSystemSaturation
+    2x  warning  | TargetDown

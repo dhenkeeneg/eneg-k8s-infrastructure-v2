@@ -1,0 +1,3 @@
+NAMESPACE   NAME          AGE   INSTANCES   READY   STATUS                                       PRIMARY
+databases   cnpg-erp      75d   3                   Waiting for the instances to become active   cnpg-erp-4
+databases   cnpg-shared   75d   3                   Waiting for the instances to become active   cnpg-shared-3

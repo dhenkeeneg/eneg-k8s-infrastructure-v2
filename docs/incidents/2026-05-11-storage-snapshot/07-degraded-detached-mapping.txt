@@ -1,0 +1,15 @@
+Degraded volumes:
+  pvc-5a7a95a6-598b-46c1-b095-bb4b5a17d6 ns=monitoring pvc=prometheus-kube-prometheus-stack-prometheus-db-prometheus-kube-prometheus-stack-prometheus-0 node=k8s-dev-22 workload=prometheus-kube-prometheus-stack-prometheus-0
+  pvc-fc854505-9c18-4eaf-8826-953a48d9ee ns=monitoring pvc=thanos-compactor node=k8s-dev-21 workload=thanos-compactor-6f7b48dfb9-pj2qg
+
+Detached orphan volumes:
+  pvc-00a20ce1-5261-4ac0-87f3-8c33da497f ns=databases pvc=cnpg-shared-1 size=20G last=2026-05-04T08:02:05
+  pvc-0c04beeb-644c-436c-9d00-5a2a784451 ns=databases pvc=cnpg-erp-3-wal size=5G last=2026-05-11T14:31:06
+  pvc-26c80186-cb1c-4ab1-8d08-156f075872 ns=databases pvc=cnpg-shared-1-wal size=5G last=2026-05-04T08:02:05
+  pvc-3c293cee-6f50-409b-93b9-188107c340 ns=databases pvc=cnpg-erp-5-wal size=5G last=2026-05-11T03:12:33
+  pvc-53778479-a0f3-48c8-afe6-ac3dd12cce ns=databases pvc=cnpg-erp-5 size=20G last=2026-05-11T03:12:33
+  pvc-5914b3d3-af59-4f5a-9d49-0d189be814 ns=databases pvc=storage-mariadb-galera-2 size=20G last=2026-05-09T15:42:57
+  pvc-5de3170f-9933-40c4-bfea-acf498eced ns=databases pvc=cnpg-shared-2-wal size=5G last=2026-05-11T14:31:07
+  pvc-b1876290-f3eb-433d-9dad-68b12b9532 ns=databases pvc=cnpg-erp-3 size=20G last=2026-05-11T14:31:08
+  pvc-b3bf1bae-78d9-453b-8235-777636af10 ns=databases pvc=cnpg-shared-4-wal size=5G last=2026-05-11T04:39:33
+  pvc-ced56d47-c38e-4cbf-ab66-a657314d16 ns=databases pvc=cnpg-shared-4 size=20G last=2026-05-11T04:39:33

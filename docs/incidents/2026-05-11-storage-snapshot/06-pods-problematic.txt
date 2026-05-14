@@ -1,0 +1,16 @@
+NAMESPACE             NAME                                                              READY   STATUS                  RESTARTS          AGE
+cattle-system         cattle-cluster-agent-7d4ffc487d-hzqn4                             0/1     Error                   284 (3m26s ago)   25h
+databases             cnpg-erp-4                                                        1/2     PodInitializing         0                 11h
+databases             cnpg-shared-3                                                     1/2     PodInitializing         0                 11h
+databases             mariadb-galera-0                                                  1/2     Terminating             5                 5m2s
+databases             mariadb-galera-1                                                  1/2     CrashLoopBackOff        205 (27s ago)     9h
+databases             mariadb-galera-2                                                  1/2     CrashLoopBackOff        26 (3m20s ago)    47m
+it-info-versand       it-info-versand-c97975d5b-btxq5                                   0/1     Init:CrashLoopBackOff   19 (3m22s ago)    61m
+keycloak              keycloak-67b7c95c85-ttlgl                                         0/1     CrashLoopBackOff        393 (3m44s ago)   25h
+n8n                   n8n-648878887b-nz2sf                                              0/1     CrashLoopBackOff        5 (53s ago)       61m
+odoo                  odoo-8d8cbb7d8-btlhl                                              0/1     CrashLoopBackOff        319 (3m1s ago)    25h
+openproject           openproject-web-56ffcd87cc-7hq2r                                  0/1     CrashLoopBackOff        6 (27s ago)       58m
+openproject           openproject-worker-c669dc869-pqsf7                                0/1     CrashLoopBackOff        10 (3m11s ago)    61m
+velero                cattle-fleet-system-default-kopia-maintain-job-17785073610zgp58   0/1     Unknown                 0                 90m
+velero                registry-default-kopia-maintain-job-1778509681823-dmf9f           0/1     Unknown                 0                 51m
+velero                traefik-default-kopia-maintain-job-1778505072068-jrxbq            0/1     Unknown                 0                 128m

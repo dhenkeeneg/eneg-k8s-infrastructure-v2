@@ -1,0 +1,14 @@
+Total Replicas: 85
+
+Node k8s-dev-21 (total 8):
+  ('running', 'retry=0'): 3
+  ('stopped', 'retry=0'): 5
+
+Node k8s-dev-22 (total 31):
+  ('running', 'retry=0'): 28
+  ('stopped', 'retry=0'): 3
+
+Node k8s-dev-23 (total 46):
+  ('running', 'retry=0'): 39
+  ('running', 'retry=5'): 5
+  ('stopped', 'retry=0'): 2

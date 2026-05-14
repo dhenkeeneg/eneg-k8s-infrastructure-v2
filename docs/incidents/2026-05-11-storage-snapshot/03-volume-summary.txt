@@ -1,0 +1,3 @@
+   2 attached/degraded
+  28 attached/healthy
+  10 detached/unknown

@@ -1,0 +1,2 @@
+NAMESPACE   NAME             READY   STATUS                                                                                                                PRIMARY            UPDATES                    AGE
+databases   mariadb-galera   False   Error reconciling Galera: error restarting Pods: error restarting Pod 'mariadb-galera-0': context deadline exceeded   mariadb-galera-2   ReplicasFirstPrimaryLast   75d
