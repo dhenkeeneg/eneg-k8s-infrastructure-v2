@@ -38,12 +38,17 @@ defaultSettings:
   # --- Storm-Protection (Lessons Learned aus Incident 10.-12.05.2026) ----
   # Siehe docs/incidents/2026-05-11-mariadb-galera-recovery.md
   #
-  # Nur 1 Replica-Rebuild gleichzeitig pro Node statt Default 5.
+  # Nur 1-2 Replica-Rebuilds gleichzeitig pro Node statt Default 5.
   # Verhindert SSD-Overload bei vielen degraded Volumes (z.B. nach
   # Cluster-Restart oder transientem Storage-Storm). Mehrere parallele
   # Rebuilds koennen bei kleinen ESXi-Datastores eine I/O-Kaskade
   # ausloesen, die weitere Disks als "ausgefallen" markieren laesst.
-  concurrentReplicaRebuildPerNodeLimit: 1
+  #
+  # 2026-05-14: Erhoeht von 1 auf 2 nach erfolgreichem Cluster-Recovery
+  # (Node 23 wieder gesund, idle Cluster ohne Workload-Last). Halbiert
+  # die Rebuild-Restzeit (1 Rebuild ~ 60s pro Volume). Spaeter ggf.
+  # zurueck auf 1 wenn alle Workloads aktiv sind.
+  concurrentReplicaRebuildPerNodeLimit: 2
 
   # Wartezeit (Sekunden) bevor Longhorn fehlende Replicas auf einem
   # anderen Node neu aufbaut. Default Helm: 600 (10 min).
