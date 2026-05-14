@@ -27,7 +27,10 @@ metadata:
     app.kubernetes.io/part-of: openproject
     app.kubernetes.io/managed-by: argocd
 spec:
-  replicas: 1
+  # TEMP 2026-05-14: replicas=0 fuer Cluster-Recovery nach Storage-Storm
+  # Siehe docs/incidents/2026-05-11-mariadb-galera-recovery.md
+  # Reaktivierung Schritt fuer Schritt nach Stabilisierung -> replicas=1
+  replicas: 0
   selector:
     matchLabels:
       app.kubernetes.io/name: openproject-memcached
@@ -96,7 +99,10 @@ metadata:
     app.kubernetes.io/part-of: openproject
     app.kubernetes.io/managed-by: argocd
 spec:
-  replicas: 1
+  # TEMP 2026-05-14: replicas=0 fuer Cluster-Recovery nach Storage-Storm
+  # Siehe docs/incidents/2026-05-11-mariadb-galera-recovery.md
+  # Reaktivierung Schritt fuer Schritt nach Stabilisierung -> replicas=1
+  replicas: 0
   selector:
     matchLabels:
       app.kubernetes.io/name: openproject-hocuspocus
@@ -172,7 +178,10 @@ metadata:
     app.kubernetes.io/part-of: pilot-apps
     app.kubernetes.io/managed-by: argocd
 spec:
-  replicas: 1
+  # TEMP 2026-05-14: replicas=0 fuer Cluster-Recovery nach Storage-Storm
+  # Siehe docs/incidents/2026-05-11-mariadb-galera-recovery.md
+  # Reaktivierung Schritt fuer Schritt nach Stabilisierung -> replicas=1
+  replicas: 0
   strategy:
     type: Recreate
   selector:
@@ -349,7 +358,10 @@ metadata:
     app.kubernetes.io/part-of: pilot-apps
     app.kubernetes.io/managed-by: argocd
 spec:
-  replicas: 1
+  # TEMP 2026-05-14: replicas=0 fuer Cluster-Recovery nach Storage-Storm
+  # Siehe docs/incidents/2026-05-11-mariadb-galera-recovery.md
+  # Reaktivierung Schritt fuer Schritt nach Stabilisierung -> replicas=1
+  replicas: 0
   selector:
     matchLabels:
       app.kubernetes.io/name: openproject
