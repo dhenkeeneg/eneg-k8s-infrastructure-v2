@@ -7,22 +7,5 @@
 # 10Gi war zu klein und fuehrte zu KubePersistentVolumeFillingUp Alerts
 # und ThanosCompactionFailed.
 compactor:
-  # TEMP 2026-05-14: replicaCount=0 fuer Cluster-Recovery (Monitoring komplett aus).
-  # Verhindert Block-Re-Compaction beim Boot (sehr I/O-intensiv).
-  # Reaktivierung: replicaCount=1 setzen oder Zeile loeschen.
-  replicaCount: 0
   persistence:
     size: 30Gi
-
-# --- Query Gateway (Frontend fuer Grafana) ---
-# TEMP 2026-05-14: replicaCount=0 fuer Cluster-Recovery (Monitoring komplett aus).
-# Reaktivierung: replicaCount=1 setzen oder Block loeschen.
-query:
-  replicaCount: 0
-
-# --- Store Gateway (liest S3-Bloecke) ---
-# TEMP 2026-05-14: replicaCount=0 fuer Cluster-Recovery (Monitoring komplett aus).
-# Verhindert Index-Loading beim Boot.
-# Reaktivierung: replicaCount=1 setzen oder Block loeschen.
-storegateway:
-  replicaCount: 0
