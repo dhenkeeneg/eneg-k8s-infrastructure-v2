@@ -13,10 +13,8 @@ metadata:
     app.kubernetes.io/version: "18"
     app.kubernetes.io/managed-by: argocd
 spec:
-  # TEMP 2026-05-14: replicas=0 fuer Cluster-Recovery nach Storage-Storm
-  # Siehe docs/incidents/2026-05-11-mariadb-galera-recovery.md
-  # Reaktivierung Schritt fuer Schritt nach Stabilisierung -> replicas=1
-  replicas: 0
+  # Reaktiviert 2026-05-15: nach Cluster-Recovery wieder aktiv.
+  replicas: 1
   strategy:
     type: Recreate
   selector:
