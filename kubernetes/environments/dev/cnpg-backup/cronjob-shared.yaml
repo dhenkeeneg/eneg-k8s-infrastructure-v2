@@ -61,6 +61,12 @@ spec:
                     secretKeyRef:
                       name: cnpg-s3-credentials
                       key: SECRET_ACCESS_KEY
+                # WORKAROUND 2026-05-15: NAS10/QuObjects boto3 InvalidDigest
+                # Siehe docs/runbooks/cnpg-mariadb-recovery-from-storage-storm.md
+                - name: AWS_REQUEST_CHECKSUM_CALCULATION
+                  value: "when_required"
+                - name: AWS_RESPONSE_CHECKSUM_VALIDATION
+                  value: "when_required"
               volumeMounts:
                 - name: scripts
                   mountPath: /scripts
