@@ -12,15 +12,10 @@ metadata:
     app.kubernetes.io/managed-by: argocd
 spec:
   image: mariadb:11.8.6
-  # TEMP 2026-05-14: replicas=0 fuer Cluster-Recovery nach Storage-Storm
-  # Siehe docs/incidents/2026-05-11-mariadb-galera-recovery.md
-  # Reaktivierung nach Stabilisierung -> replicas=3 (PVCs bleiben durch Operator-Default)
-  #
-  # replicasAllowEvenNumber=true erlaubt replicas=0 (Operator validiert sonst
-  # auf "ungerade Anzahl wegen Split-Brain-Vermeidung"). Bei Reaktivierung mit
-  # replicas=3 koennte das Flag wieder raus, schadet aber nicht.
-  replicas: 0
-  replicasAllowEvenNumber: true
+  # Reaktiviert 2026-05-15: nach Cluster-Recovery wieder voller 3-Node-Betrieb.
+  # Galera-Recovery durch den Operator automatisch nach Operator-Hochfahren
+  # (Phase A): Bootstrap auf mariadb-galera-0 (Primary), SST-Sync der anderen.
+  replicas: 3
   galera:
     enabled: true
     primary:
