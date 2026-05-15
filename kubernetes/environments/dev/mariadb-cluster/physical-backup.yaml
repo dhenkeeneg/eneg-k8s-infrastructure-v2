@@ -14,9 +14,6 @@ spec:
     name: mariadb-galera
 
   schedule:
-    # TEMP 2026-05-14: suspend=true fuer Cluster-Recovery (siehe docs/incidents/2026-05-11-...)
-    # Reaktivierung: Zeile loeschen oder suspend=false.
-    suspend: true
     cron: "30 4 * * *"
 
   target: PreferReplica
