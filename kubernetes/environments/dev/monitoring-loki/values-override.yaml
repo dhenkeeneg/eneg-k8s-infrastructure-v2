@@ -6,10 +6,6 @@
 # Memory-Limit auf 2Gi angehoben, da 1Gi nach laengerer Offline-Phase
 # zu OOM-Kills fuehren kann (Backlog gepufferter Logs + WAL-Recovery + Compactor).
 singleBinary:
-  # TEMP 2026-05-14: replicas=0 fuer Cluster-Recovery (Monitoring komplett aus).
-  # Verhindert WAL-Recovery + Compactor beim Boot (sehr I/O-intensiv).
-  # Reaktivierung: Zeile loeschen oder replicas=1 setzen.
-  replicas: 0
   persistence:
     size: 10Gi
   resources:
@@ -18,16 +14,3 @@ singleBinary:
       memory: 256Mi
     limits:
       memory: 2Gi
-
-# --- Loki-Begleitkomponenten ausschalten (TEMP 2026-05-14) ---
-# Wenn singleBinary down ist, sind diese Komponenten nutzlos und wuerden
-# nur Crashloops oder Idle-Pods erzeugen. Reaktivierung gemeinsam mit
-# singleBinary durch Loeschen dieser Blocks.
-gateway:
-  enabled: false
-chunksCache:
-  enabled: false
-resultsCache:
-  enabled: false
-lokiCanary:
-  enabled: false
