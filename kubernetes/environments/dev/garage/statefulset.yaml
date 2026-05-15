@@ -14,10 +14,10 @@ metadata:
     app.kubernetes.io/managed-by: argocd
 spec:
   serviceName: garage-headless
-  # TEMP 2026-05-14: replicas=0 fuer Cluster-Recovery nach Storage-Storm
-  # Siehe docs/incidents/2026-05-11-mariadb-galera-recovery.md
-  # Reaktivierung nach Stabilisierung -> replicas=3 (PVCs bleiben durch StatefulSet-Default)
-  replicas: 0
+  # Reaktiviert 2026-05-15: nach Cluster-Recovery + NAS10-Reboot.
+  # 3 Nodes erforderlich fuer Garage RPC-Quorum (Bootstrap-peers in
+  # ConfigMap referenzieren alle 3 Node-IDs hart).
+  replicas: 3
   podManagementPolicy: Parallel
   selector:
     matchLabels:
