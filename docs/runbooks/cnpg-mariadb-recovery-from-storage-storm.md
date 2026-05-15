@@ -1,6 +1,6 @@
 # Runbook: K8s-Cluster Recovery nach Storage-Storm
 
-**Letzte Aktualisierung:** 2026-05-15 (v3 — Komplettes Recovery von Stateful + Apps)
+**Letzte Aktualisierung:** 2026-05-15 (v5 — Diagnose-Snippets, D.1+D.2 in einem Commit, Pre-Flight boto3-Check, Backup-Tool-Eingrenzung)
 **Erstmals verifiziert:** DEV-Cluster (k8s-dev), 2026-05-14/15
 **Status TEST/PROD:** ausstehend
 **Verwandte Docs:**
@@ -12,13 +12,15 @@
 ## 1. Zweck dieses Runbooks
 
 Komplette Recovery aller Cluster-Komponenten (Stateful Backend + Monitoring +
-Backup + Pilot-Apps) nach einem Storage-Storm oder vergleichbaren mehrtaegigen
-Ausfall.
+Backup + Pilot-Apps + Backup-Schedules) nach einem Storage-Storm oder
+vergleichbaren mehrtaegigen Ausfall.
 
-Das Runbook deckt drei Phasen ab:
+Das Runbook deckt vier Phasen ab:
 - **Phase A (Stateful):** CNPG-Cluster + MariaDB Galera wiederherstellen
-- **Phase B (Plumbing):** Monitoring + Velero reaktivieren (Sichtbarkeit + Sicherheit)
+- **Phase B (Plumbing):** Monitoring + Velero reaktivieren
 - **Phase C (Apps):** 6 Pilot-Apps in Abhaengigkeitsreihenfolge reaktivieren
+- **Phase D (Backups + Cleanup):** Backup-Schedules unsuspenden, alte
+  failed Jobs/orphaned Volumes aufraeumen
 
 Voraussetzung: NAS10 wieder erreichbar + gesund.
 
@@ -41,21 +43,74 @@ analog behandelt werden sollen.
    den letzten Push enthaelt, NICHT auf "gepushed" Bestaetigung blind vertrauen.
 10. **Selbst-Verifikation der Datei** vor Ausgabe des Commit-Befehls (NICHT `git diff` ausgeben).
 11. **Einzeilige Commit-Messages** als Default — Heredocs/Unicode/Multi-Liner
-    brechen in manchen Shells (verifiziert auf DEV-Recovery 2026-05-15).
+    brechen in manchen Shells.
+12. **boto3-Fix an ALLEN Stellen anwenden** — der NAS10-InvalidDigest-Bug
+    betrifft mehrere Komponenten (s. Abschnitt 3.1).
 
 ---
 
 ## 3. Root Causes (verifiziert auf DEV)
 
-### 3.1 NAS10 boto3 InvalidDigest
+### 3.1 NAS10 boto3 InvalidDigest — TAUCHT AN MEHREREN STELLEN AUF
 
 **Fehler:** `An error occurred (InvalidDigest) when calling the PutObject operation`
 
-**Ursache:** boto3 ≥ 1.36 (Jan 2025) sendet standardmaessig CRC32 Trailing-Checksums.
-QNAP QuObjects validiert das inkorrekt.
+**Ursache:** boto3/awscli ≥ Versionen mit CRC32-Trailing-Checksums senden
+diese standardmaessig (seit Jan 2025). QNAP QuObjects validiert das inkorrekt.
 
-**Fix:** `AWS_REQUEST_CHECKSUM_CALCULATION=when_required` in
-`spec.instanceSidecarConfiguration.env` der ObjectStore-CRs.
+**Betroffene Komponenten (Stand DEV-Recovery 2026-05-15):**
+
+| # | Komponente | Wo env-vars setzen | File |
+|---|---|---|---|
+| 1 | CNPG Plugin-Sidecar (WAL-Archive, Backup) | `spec.instanceSidecarConfiguration.env` der **ObjectStore-CRs** | `environments/$ENV/cnpg-cluster/objectstore-*.yaml` |
+| 2 | CNPG logical-backup CronJobs (pg_dumpall + aws s3 cp) | `spec.jobTemplate.spec.template.spec.containers[0].env` der **CronJob-CRs** | `environments/$ENV/cnpg-backup/cronjob-*.yaml` |
+
+**NICHT betroffen:** Backups mit `rclone` (eigener Go-S3-Client, keine
+boto3-Checksums). Bei DEV: garage-backup, idoit-backup, odoo-backup.
+
+**Fix (identisch fuer beide Stellen):**
+
+```yaml
+env:
+  # ... bestehende env-vars ...
+  - name: AWS_REQUEST_CHECKSUM_CALCULATION
+    value: "when_required"
+  - name: AWS_RESPONSE_CHECKSUM_VALIDATION
+    value: "when_required"
+```
+
+**Bei Recovery: BEIDE Stellen fixen** — eine ohne die andere fuehrt zu
+fehlgeschlagenen Backups (s. Phase A.2 fuer CNPG-Plugin, Phase D.2 fuer CronJobs).
+
+**Diagnose: woran erkenne ich den Bug?**
+
+- **Plugin-Sidecar (Stelle 1):** Im `plugin-barman-cloud`-Container-Log:
+  ```
+  ERROR: failed to upload WAL to S3 ... InvalidDigest
+  ```
+  Plus: WAL-pending steigt (`archive_status/*.ready > 0`).
+
+- **CronJob-Backup (Stelle 2):** Im Backup-Pod-Log:
+  ```
+  upload failed: tmp/cnpg-XYZ.sql.gz to s3://... An error occurred (InvalidDigest)
+  when calling the PutObject operation: The Content-MD5 or checksum value that you
+  specified is not valid.
+  ```
+  Plus: Job ist `Failed`, BackoffLimitExceeded.
+
+**Erfolgreicher Run nach Fix (DEV-Referenz):**
+```
+=== PostgreSQL Logical Backup ===
+Running pg_dumpall against cnpg-erp-r.databases.svc.cluster.local...
+Dump created: /tmp/cnpg-erp_2026-05-15_141533.sql.gz (1.4M)
+Installing awscli...
+awscli installed
+Uploading to s3://k8s-dev-postgres-backup/cnpg-erp/cnpg-erp_2026-05-15_141533.sql.gz...
+upload: tmp/cnpg-erp_... to s3://...
+Upload complete
+Cleaning backups older than 32 days...
+=== Backup completed ===
+```
 
 ### 3.2 Plugin-Sidecar-Cache
 
@@ -96,13 +151,31 @@ selfHeal patcht unsere imperativen Aenderungen sofort zurueck (z.B. Hibernation)
 
 ### 3.8 Helm-Chart-Drift bei laenger ausgeschalteten Apps
 
-Auf DEV haben wir entdeckt: viele Helm-Komponenten (Loki, Velero,
-Thanos-Compactor) liefen 1/1 obwohl Git replicas:0/enabled:false sagte. ArgoCD
-hatte den Drift seit Storm nicht reconciled.
+Vor der Reaktivierung Drift-Inventory machen, Git mit faktischem Cluster-Stand
+abgleichen, sonst Recovery-Schritte ueberfluessig oder gefaehrlich.
 
-**Bedeutung fuer Recovery:** Vor der Reaktivierung Drift-Inventory machen,
-Git mit faktischem Cluster-Stand abgleichen, sonst Recovery-Schritte ueberfluessig
-oder gefaehrlich (z.B. Schedule zu frueh aktivieren).
+### 3.9 ArgoCD CronJob Health-Check (Degraded trotz keiner failed jobs)
+
+Wenn ein CronJob nach Recovery weiter als **Degraded** in ArgoCD steht obwohl
+alle Failed Jobs entfernt sind:
+
+**Ursache:** ArgoCD's CronJob-Health-Check vergleicht `status.lastScheduleTime`
+mit `status.lastSuccessfulTime`. Wenn lastSchedule neuer ist als lastSuccessful
+(weil z.B. ein Test-Job beim Unsuspend gestartet und gefailt ist), bleibt die
+App Degraded — auch wenn man die failed Jobs nachher loescht.
+
+**Loesung:** Manuell einen Test-Job triggern (`kubectl create job --from=cronjob/...`).
+Wenn der erfolgreich durchlaeuft, aktualisiert sich `lastSuccessfulTime` →
+ArgoCD-Health wird automatisch Healthy.
+
+### 3.10 ArgoCD "Unknown" Sync bei SOPS-encrypted Secret-Apps
+
+Apps mit SOPS-encrypted Secrets (alle `*-secrets` Apps wie `cnpg-secrets`,
+`keycloak-secrets`, etc.) zeigen permanent `sync=Unknown`. **Das ist normal**
+— ArgoCD kann den Source-Diff bei encrypted Files nicht durchfuehren.
+`health=Healthy` bestaetigt: Secrets sind im Cluster vorhanden.
+
+Bei DEV: 17 von 60 Apps sind `*-secrets` (Stand 2026-05-15). Kein Handlungsbedarf.
 
 ---
 
@@ -115,13 +188,8 @@ ENV=test          # oder prod
 CTX=k8s-$ENV
 
 kubectl --context $CTX get nodes
-# Alle "Ready"
-
-kubectl --context $CTX get volume.longhorn.io -n longhorn-system | grep -cE "error|faulted"
-# Soll 0 sein
-
-kubectl --context $CTX get pvc -A | grep -v Bound
-# Soll leer sein
+kubectl --context $CTX get volume.longhorn.io -n longhorn-system | grep -cE "error|faulted"   # Soll 0
+kubectl --context $CTX get pvc -A | grep -v Bound                                              # Soll leer
 ```
 
 ### 4.2 NAS10 Performance (HART)
@@ -144,9 +212,8 @@ rm /tmp/nas10-precheck.bin
 Identifiziert "frozen" Apps bevor sie zum Problem werden.
 
 ```bash
-# Alle relevanten Apps inspizieren
-for app in cnpg-cluster mariadb-cluster mariadb-operator mariadb-operator-crds \
-           monitoring thanos loki velero \
+for app in cnpg-cluster cnpg-logical-backup mariadb-cluster mariadb-operator \
+           mariadb-operator-crds monitoring thanos loki velero \
            keycloak it-info-versand n8n openproject odoo idoit; do
   echo "=== $app ==="
   kubectl --context $CTX get app $app -n argocd -o jsonpath='
@@ -163,9 +230,9 @@ done
 **FROZEN (Fix noetig):**
 - `revision=` leer
 - `opStartedAt` Wochen alt
-- `sync=Unknown`
+- `sync=Unknown` (Ausnahme: `*-secrets` Apps, die sind immer Unknown — s. 3.10)
 
-**Fix wenn ≥ 1 App frozen:**
+**Fix wenn ≥ 1 echte App frozen:**
 
 ```bash
 kubectl --context $CTX rollout restart statefulset argocd-application-controller -n argocd
@@ -180,7 +247,7 @@ sleep 60
 ### 4.4 Drift-Inventory
 
 ```bash
-# Wo ist Cluster-State != Git?
+# Welche Komponenten haben Cluster-State != Git?
 # Helm-Apps: replicas/replicaCount
 echo "=== Drift-Check: Helm-Components ==="
 for ns_app in "monitoring kube-prometheus-stack-grafana" \
@@ -209,36 +276,66 @@ echo "=== Drift-Check: Stateful CRs ==="
 echo "  cnpg-erp hibernation: $(kubectl --context $CTX get cluster cnpg-erp -n databases -o jsonpath='{.metadata.annotations.cnpg\.io/hibernation}')"
 echo "  cnpg-shared hibernation: $(kubectl --context $CTX get cluster cnpg-shared -n databases -o jsonpath='{.metadata.annotations.cnpg\.io/hibernation}')"
 echo "  mariadb-galera replicas: $(kubectl --context $CTX get mariadb mariadb-galera -n databases -o jsonpath='{.spec.replicas}')"
+
+# CronJob-Suspend Status (NEU in v4)
+echo "=== Drift-Check: CronJob suspend ==="
+for cj in "databases cnpg-erp-logical-backup" "databases cnpg-shared-logical-backup" \
+          "garage garage-backup" "idoit idoit-backup" "odoo odoo-backup"; do
+  NS=$(echo $cj | cut -d' ' -f1)
+  NAME=$(echo $cj | cut -d' ' -f2)
+  echo -n "  $NS/$NAME: suspend="
+  kubectl --context $CTX get cronjob $NAME -n $NS -o jsonpath='{.spec.suspend}' 2>/dev/null
+  echo ""
+done
+
+# boto3-Fix in CronJobs schon vorhanden? (NEU in v4)
+echo "=== Drift-Check: boto3-env-vars im CronJob ==="
+for cj in cnpg-erp-logical-backup cnpg-shared-logical-backup; do
+  HAS_FIX=$(kubectl --context $CTX get cronjob $cj -n databases \
+    -o jsonpath='{.spec.jobTemplate.spec.template.spec.containers[0].env[?(@.name=="AWS_REQUEST_CHECKSUM_CALCULATION")].value}' 2>/dev/null)
+  if [ "$HAS_FIX" = "when_required" ]; then
+    echo "  $cj: boto3-fix vorhanden ✓"
+  else
+    echo "  $cj: boto3-fix FEHLT — Phase D.2 noetig!"
+  fi
+done
+
+# Failed Jobs / Pods
+echo "=== Drift-Check: Failed Jobs/Pods ==="
+kubectl --context $CTX get jobs -A --no-headers 2>/dev/null | awk '$4=="0/1"{print "  FAILED: "$1"/"$2}'
+kubectl --context $CTX get pods -A --field-selector=status.phase=Failed --no-headers 2>/dev/null | head -10
+
+# Orphaned Longhorn Volumes
+echo "=== Drift-Check: Detached Longhorn Volumes ==="
+kubectl --context $CTX get volume.longhorn.io -n longhorn-system --no-headers 2>/dev/null | awk '$2=="v1" && $3=="detached"{print "  "$1}'
 ```
 
-⚠️ Bei Drift mit "Apps laufen schon obwohl Git=0/false": Phase B+C koennen sich
+⚠️ Bei Drift "Apps laufen schon obwohl Git=0/false": Phase B+C koennen sich
 zu blossen Drift-Bereinigungen verkleinern. Phase A bleibt unveraendert kritisch.
 
 ### 4.5 Bestandsaufnahme + Sicherheit
 
 ```bash
-# Apps in Git noch auf 0?
 cd ~/git/eneg-k8s-infrastructure-v2
-grep -rln "replicas: 0\|replicaCount: 0\|enabled: false\|disabled: true" \
-  kubernetes/environments/$ENV/ | grep -v "TEMP 2026" | head -20
 
-# Wo hat TEMP-Kommentare?
+# Wo hat TEMP-Kommentare? (Stand DEV-Recovery 14.05.2026)
 grep -rln "TEMP 2026-05-14" kubernetes/environments/$ENV/
 
-# Longhorn-Backup-Snapshot existiert? (Sicherheit!)
+# Was steht suspended in Git? (Schedule-Drift)
+grep -rln "suspend: true" kubernetes/environments/$ENV/
+
+# Longhorn-Backup-Snapshot existiert? (Sicherheit fuer PROD!)
 kubectl --context $CTX get volumesnapshots -A | head -10
 ```
 
 **Fuer PROD zusaetzlich:**
 - Wartungsfenster mit Stakeholdern abgestimmt
-- Vorab-Velero-Backup oder Longhorn-Snapshot manuell ausloesen
+- Vorab-Velero-Backup oder Longhorn-Snapshot manuell ausgeloest
 - Mehrere Stunden ungestoerte Arbeitszeit
 
 ---
 
 ## 5. Helper: wait_argocd_sync()
-
-Vor Recovery diese Bash-Funktion definieren:
 
 ```bash
 wait_argocd_sync() {
@@ -282,9 +379,9 @@ Files: `kubernetes/environments/$ENV/cnpg-cluster/cnpg-erp.yaml` + `cnpg-shared.
 
 `metadata.annotations.cnpg.io/hibernation: "on"` Block entfernen.
 
-Commit + Push, dann `wait_argocd_sync cnpg-cluster <new-rev>`.
+Commit + Push + `wait_argocd_sync cnpg-cluster <rev>`.
 
-### A.2 NAS10 boto3-Fix in ObjectStore-CRs
+### A.2 NAS10 boto3-Fix in ObjectStore-CRs (CNPG Plugin-Sidecar)
 
 Files: `kubernetes/environments/$ENV/cnpg-cluster/objectstore-erp.yaml` + `objectstore-shared.yaml`
 
@@ -299,6 +396,9 @@ Nach `retentionPolicy:` ergaenzen:
         value: when_required
 ```
 
+⚠️ Das ist nur Stelle 1 von 2 fuer den boto3-Fix. Stelle 2 (Backup-CronJobs)
+folgt in Phase D.2.
+
 Commit + Push + wait_argocd_sync.
 
 ### A.3 Plugin-Operator-Pod restart
@@ -306,12 +406,9 @@ Commit + Push + wait_argocd_sync.
 ```bash
 kubectl --context $CTX delete pod -n cnpg-system -l app.kubernetes.io/name=plugin-barman-cloud
 sleep 30
-kubectl --context $CTX get pods -n cnpg-system
 ```
 
-### A.4 Pro CNPG-Cluster: Switchover
-
-Sequenz fuer cnpg-erp UND cnpg-shared:
+### A.4 Pro CNPG-Cluster: Switchover (cnpg-erp + cnpg-shared)
 
 ```bash
 CLUSTER=cnpg-erp
@@ -342,26 +439,23 @@ for pod in $(kubectl --context $CTX get pods -n databases -l cnpg.io/cluster=$CL
   kubectl --context $CTX delete pod $pod -n databases --force --grace-period=0
   sleep 75
 done
-
-kubectl --context $CTX get cluster $CLUSTER -n databases
 ```
 
 ### A.6 pg_rewind-Failure → komplett-Reset
 
-Falls Pod nach Force-Delete in 1/2 mit `pg_rewind exit 1`:
-
 ```bash
-POD=cnpg-shared-4
+POD=cnpg-shared-4    # der hängende Pod
 kubectl --context $CTX delete pod $POD -n databases --force --grace-period=0
 kubectl --context $CTX delete pvc $POD ${POD}-wal -n databases --wait=false
-# Operator erstellt neuen Pod mit naechstem freien Index (z.B. cnpg-shared-5)
 sleep 60
 ```
 
+⚠️ Nach komplett-Reset bleiben die alten PVCs als "orphaned detached Volumes"
+in Longhorn zurueck. Phase D.4 raeumt das auf.
+
 ### A.7 MariaDB-Operator reaktivieren
 
-Pre-Check: Galera-CR in Git auf `replicas: 0`? Falls 3 im Cluster: dort auch auf 0
-patchen.
+Pre-Check: Galera-CR in Git auf `replicas: 0`?
 
 File: `kubernetes/base/mariadb-galera/operator/values.yaml`
 
@@ -371,12 +465,7 @@ replicas: 1
 
 Commit + Push + wait_argocd_sync.
 
-Falls App "frozen" (kein Sync): imperativer Fallback
-`kubectl scale deployment mariadb-operator -n mariadb-operator --replicas=1`.
-
 ### A.8 MariaDB-Galera CR reaktivieren
-
-JETZT — Operator stabil.
 
 File: `kubernetes/environments/$ENV/mariadb-cluster/mariadb-galera.yaml`
 
@@ -400,19 +489,14 @@ done
 ### A.10 Phase A Verifikation
 
 ```bash
-kubectl --context $CTX get cluster -n databases
-# Beide READY=3, STATUS=Cluster in healthy state
-
+kubectl --context $CTX get cluster -n databases                                                  # READY=3 fuer beide
 for cluster in cnpg-erp cnpg-shared; do
   PRIMARY=$(kubectl --context $CTX get cluster $cluster -n databases -o jsonpath='{.status.currentPrimary}')
   echo -n "$cluster pending WALs: "
-  kubectl --context $CTX exec $PRIMARY -n databases -c postgres -- \
-    bash -c "ls /var/lib/postgresql/data/pgdata/pg_wal/archive_status/*.ready 2>/dev/null | wc -l"
+  kubectl --context $CTX exec $PRIMARY -n databases -c postgres -- bash -c \
+    "ls /var/lib/postgresql/data/pgdata/pg_wal/archive_status/*.ready 2>/dev/null | wc -l"     # 0
 done
-# Beide 0
-
-kubectl --context $CTX get mariadb mariadb-galera -n databases
-# READY=True, STATUS=Running
+kubectl --context $CTX get mariadb mariadb-galera -n databases                                  # READY=True
 ```
 
 ---
@@ -427,15 +511,13 @@ File: `kubernetes/environments/$ENV/monitoring/values-override.yaml`
 
 Diese 4 Blocks entfernen/anpassen:
 1. `prometheus.prometheusSpec.replicas: 0` → Zeile entfernen
-2. `alertmanager.alertmanagerSpec` Block entfernen (oder `replicas: 1`)
+2. `alertmanager.alertmanagerSpec.replicas: 0` Block entfernen (oder `replicas: 1`)
 3. `grafana:` Block (war nur replicas: 0) komplett entfernen
 4. `kube-state-metrics:` Block komplett entfernen
 
-Auch alle "TEMP 2026-MM-DD"-Kommentare entfernen.
+Alle "TEMP 2026-MM-DD" Kommentare entfernen.
 
-Commit + Push.
-
-Erwartete Zeit: ~3 Min bis alle 4 hochgefahren (Prometheus WAL-Replay).
+Commit + Push. ~3 Min bis alle hoch.
 
 ### B.2 Monitoring — Thanos
 
@@ -445,7 +527,7 @@ File: `kubernetes/environments/$ENV/monitoring-thanos/values-override.yaml`
 - `query:` Block entfernen
 - `storegateway:` Block entfernen
 
-Commit + Push. ~1 Min bis alle hochgefahren.
+Commit + Push. ~1 Min bis alle hoch.
 
 ### B.3 Loki Drift-Cleanup
 
@@ -459,31 +541,21 @@ File: `kubernetes/environments/$ENV/monitoring-loki/values-override.yaml`
 
 (Komponenten laufen meist schon — Drift wird bereinigt)
 
-Commit + Push.
-
 ### B.4 Velero reaktivieren
 
 File: `kubernetes/environments/$ENV/velero/values-override.yaml`
 
-- `replicaCount: 0` entfernen (Velero Server laeuft meist schon — Drift)
-- `nodeAgent.enable: false` entfernen (laeuft meist schon — Drift)
+- `replicaCount: 0` entfernen
+- `nodeAgent.enable: false` entfernen
 - In `schedules.daily-backup:`: `disabled: true` entfernen
 
-Alle TEMP-Kommentare entfernen.
-
-Commit + Push.
-
-⚠️ **Bei PROD:** Schedule wird sofort aktiv. Prüfen wann der naechste Run laeuft
-(cron) — ist das mitten in der Recovery? Ggf. cron-Time anpassen vor Push.
+Commit + Push. Velero-Daily-Schedule wird aktiv.
 
 ### B.5 Phase B Verifikation
 
 ```bash
-kubectl --context $CTX get deployment,sts -n monitoring | grep -v "0/0"
-# Alle Komponenten >= 1/1
-
-kubectl --context $CTX get schedules -n velero
-# velero-daily-backup STATUS=Enabled, PAUSED leer
+kubectl --context $CTX get deployment,sts -n monitoring | grep -v "0/0"   # alle >= 1/1
+kubectl --context $CTX get schedules -n velero                            # PAUSED leer
 ```
 
 ---
@@ -515,7 +587,6 @@ grep -n "replicas:" kubernetes/environments/$ENV/apps/<APP>/deployment.yaml
 grep -n "replicas:" kubernetes/environments/$ENV/apps/<APP>/deployment.yaml
 
 # 4. EINZEILIGER Commit (keine Heredocs!)
-cd ~/git/eneg-k8s-infrastructure-v2
 git add kubernetes/environments/$ENV/apps/<APP>/deployment.yaml
 git commit -m "feat($ENV/<APP>): Reaktivierung replicas 0 -> 1"
 git push
@@ -528,19 +599,19 @@ sleep 60
 kubectl --context $CTX get pods -n <APP>
 ```
 
-### C.2 Spezialfaelle
+### C.2 Spezialfall openproject
 
 **openproject** hat 4 Deployments — alle 4 mit unique `metadata.name`
 als Anker patchen (gleichzeitiger Commit):
 
-- openproject-memcached (Cache)
-- openproject-hocuspocus (Collaborative Editing)
-- openproject-web (Rails Frontend, `strategy: Recreate`)
-- openproject-worker (Background-Jobs)
+- openproject-memcached
+- openproject-hocuspocus
+- openproject-web (`strategy: Recreate`)
+- openproject-worker
 
 PostSync-Job `openproject-seeder` laeuft automatisch.
 
-**Voraussetzungen Pro App:**
+### C.3 Voraussetzungen pro App
 
 | App | Postgres | MariaDB | Keycloak | S3 (Garage) | Longhorn-PVC |
 |---|---|---|---|---|---|
@@ -551,30 +622,193 @@ PostSync-Job `openproject-seeder` laeuft automatisch.
 | odoo | cnpg-erp | – | – | – | odoo-filestore (10Gi) |
 | idoit | – | ja | – | – | idoit-data |
 
-### C.3 Phase C Verifikation
+---
+
+## 9. PHASE D — Backup-Schedules + Cleanup (NEU in v4)
+
+**Dauer DEV: ~30-60 Min.**
+
+Nach Phase C sind Apps healthy aber die Backup-Schedules (CronJobs +
+ScheduledBackups) sind oft noch suspended aus dem Recovery-Beginn. Plus
+es bleiben Artefakte (Failed Jobs, orphaned Volumes).
+
+⚠️ **WICHTIG — Reihenfolge in v4 optimiert:**
+D.1 (Unsuspend) und D.2 (boto3-Fix in CronJobs) **MUESSEN in einem
+gemeinsamen Commit** erfolgen — sonst triggern die CronJobs bei Unsuspend
+durch `startingDeadlineSeconds` automatische Nachholversuche, die ohne den
+boto3-Fix fehlschlagen → Failed Jobs → ArgoCD Degraded.
+
+**Erlebt bei DEV-Recovery 2026-05-15:** Phase D.1 zuerst gemacht, dann erst
+beim Test (D.3) entdeckt dass auch in den CronJobs der boto3-Fix fehlt.
+Dadurch entstanden 2 unnoetige Failed Jobs + 1 Stunde extra Diagnose.
+Bei TEST/PROD: D.1 + D.2 zusammen!
+
+### D.1 Backup-Schedules unsuspenden — Git-Patches
+
+**8 Files anpassen** (Stand DEV 2026-05-15), suspend-Eintraege entfernen:
+
+| File | Schedule | Was wird unsuspendet |
+|---|---|---|
+| `environments/$ENV/cnpg-backup/cronjob-erp.yaml` | 05:15 | CNPG-erp logical backup (pg_dumpall) |
+| `environments/$ENV/cnpg-backup/cronjob-shared.yaml` | 05:00 | CNPG-shared logical backup |
+| `environments/$ENV/garage-backup/cronjob.yaml` | 05:30 | Garage S3 → NAS10 |
+| `environments/$ENV/mariadb-cluster/physical-backup.yaml` | 04:30 | MariaDB Physical Backup |
+| `environments/$ENV/apps/idoit/backup/cronjob.yaml` | 06:30 | i-doit Backup |
+| `environments/$ENV/apps/odoo/backup/cronjob.yaml` | 06:15 | Odoo Filestore Backup |
+| `environments/$ENV/cnpg-cluster/scheduled-backup.yaml` | 04:45 + 04:50 | **2 Stellen!** cnpg-shared-full + cnpg-erp-full |
+
+Aus jedem Block den TEMP-Kommentar + `suspend: true` (oder `suspend: true`
+im `schedule:`-Block bei MariaDB physical) entfernen.
+
+Commit + Push + wait_argocd_sync.
+
+⚠️ Bei PROD: Schedule-Times pruefen — laufen nicht mitten in Recovery!
+
+### D.2 boto3-Fix in Backup-CronJobs (Stelle 2 von 2!)
+
+Files: `environments/$ENV/cnpg-backup/cronjob-erp.yaml` + `cronjob-shared.yaml`
+
+Im `spec.jobTemplate.spec.template.spec.containers[0].env` Block, NACH den
+AWS_*-Secrets, ergaenzen:
+
+```yaml
+                - name: AWS_ACCESS_KEY_ID
+                  valueFrom: { secretKeyRef: { name: cnpg-s3-credentials, key: ACCESS_KEY_ID } }
+                - name: AWS_SECRET_ACCESS_KEY
+                  valueFrom: { secretKeyRef: { name: cnpg-s3-credentials, key: SECRET_ACCESS_KEY } }
+                # WORKAROUND: NAS10/QuObjects boto3 InvalidDigest
+                - name: AWS_REQUEST_CHECKSUM_CALCULATION
+                  value: "when_required"
+                - name: AWS_RESPONSE_CHECKSUM_VALIDATION
+                  value: "when_required"
+```
+
+⚠️ **NUR bei Backup-CronJobs die awscli/boto3 nutzen** (CNPG logical-backup).
+Rclone-basierte Backups (garage, idoit, odoo) sind nicht betroffen.
+
+Commit + Push + wait_argocd_sync.
+
+### D.3 Test-Job triggern + verifizieren
+
+Bevor die naechtlichen Schedules laufen, manuell verifizieren:
 
 ```bash
-kubectl --context $CTX get pods -A | grep -E "keycloak|it-info-versand|n8n|openproject|odoo|idoit"
-# Alle 1/1 (oder 2/2 falls Sidecars), 0 Restarts, AGE < 1h
+TS=$(date +%H%M%S)
+kubectl --context $CTX create job --from=cronjob/cnpg-erp-logical-backup -n databases cnpg-erp-test-$TS
+sleep 90
+kubectl --context $CTX get jobs -n databases -l app.kubernetes.io/part-of=cloudnative-pg --sort-by=.metadata.creationTimestamp | tail -3
+# Soll Complete 1/1 zeigen
+
+# Pod-Logs auf "Upload complete" pruefen
+POD=$(kubectl --context $CTX get pods -n databases -l batch.kubernetes.io/job-name=cnpg-erp-test-$TS --no-headers | head -1 | awk '{print $1}')
+kubectl --context $CTX logs $POD -n databases | grep -E "InvalidDigest|Upload complete"
+# Soll "Upload complete" zeigen, KEIN "InvalidDigest"
+```
+
+Wenn erfolgreich: ArgoCD-CronJob-Health wird automatisch Healthy (siehe 3.9).
+
+Test analog fuer `cnpg-shared-logical-backup`.
+
+### D.4 Failed Jobs aufraeumen
+
+```bash
+# Failed Jobs aus dem Storm-Zeitraum loeschen
+kubectl --context $CTX get jobs -A --no-headers | awk '$4=="0/1"{print $1, $2}' | while read NS NAME; do
+  kubectl --context $CTX delete job -n $NS $NAME
+done
+```
+
+### D.5 Orphaned Longhorn Volumes aufraeumen
+
+```bash
+# Detached Volumes ohne zugehoerige PVC
+kubectl --context $CTX get volume.longhorn.io -n longhorn-system --no-headers | awk '$3=="detached"{print $1}'
+
+# Pro Volume: pruefen ob PVC noch existiert
+for vol in <volume-names>; do
+  PVC_NAME=$(kubectl --context $CTX get volume.longhorn.io $vol -n longhorn-system -o jsonpath='{.status.kubernetesStatus.pvcName}')
+  PVC_NS=$(kubectl --context $CTX get volume.longhorn.io $vol -n longhorn-system -o jsonpath='{.status.kubernetesStatus.namespace}')
+  if ! kubectl --context $CTX get pvc $PVC_NAME -n $PVC_NS &>/dev/null; then
+    echo "ORPHANED: $vol (was $PVC_NS/$PVC_NAME)"
+    # → ueber Longhorn GUI loeschen (sicherer) oder:
+    # kubectl --context $CTX delete volume.longhorn.io $vol -n longhorn-system
+  fi
+done
+```
+
+**Empfehlung:** Loeschen ueber Longhorn-GUI (Safe-Delete-Workflow).
+
+### D.6 ArgoCD Drift-Cleanup
+
+Nach allen Phasen pruefen ob noch ArgoCD-Apps OutOfSync oder Degraded:
+
+```bash
+kubectl --context $CTX get app -n argocd --no-headers | awk '$2!="Synced" || $3!="Healthy" {print "  "$1": "$2"/"$3}'
+```
+
+**Erwartet bleibt:** 17x `*-secrets` Apps mit `Unknown/Healthy` (s. 3.10).
+
+Falls eine `cnpg-logical-backup` App noch Degraded ist trotz Phase D.3: ein
+Test-Job hat noch keinen Erfolgs-Run produziert. Test-Run wiederholen.
+
+### D.7 Alertmanager-Notifications verifizieren
+
+```bash
+# Prufen ob Notifications versendet werden (Logs)
+kubectl --context $CTX logs deployment/prometheus-msteams -n monitoring --since=10m | grep "status\":200"
+
+# Email-Verifikation: Mailbox d.henke@eneg.de checken
+```
+
+Auf DEV waren Mails ab 15:58 nachweisbar (User-Bestaetigung).
+
+---
+
+## 10. Verifikation (Post-Recovery Komplett-Check)
+
+```bash
+# CNPG
+kubectl --context $CTX get cluster -n databases
+for cluster in cnpg-erp cnpg-shared; do
+  PRIMARY=$(kubectl --context $CTX get cluster $cluster -n databases -o jsonpath='{.status.currentPrimary}')
+  echo -n "$cluster pending WALs: "
+  kubectl --context $CTX exec $PRIMARY -n databases -c postgres -- bash -c \
+    "ls /var/lib/postgresql/data/pgdata/pg_wal/archive_status/*.ready 2>/dev/null | wc -l"
+done
+
+# MariaDB
+kubectl --context $CTX get mariadb mariadb-galera -n databases
+
+# Apps
+for ns in keycloak it-info-versand n8n openproject odoo idoit; do
+  kubectl --context $CTX get deployment -n $ns --no-headers
+done
+
+# Backup-Schedules
+kubectl --context $CTX get cronjobs --all-namespaces --no-headers | grep -v kube-system | awk '$5=="True"{print "  STILL SUSPENDED: "$1"/"$2}'
+
+# ArgoCD
+kubectl --context $CTX get app -n argocd --no-headers | grep -v "Synced.*Healthy" | grep -v "Unknown.*Healthy"
+
+# Aktive Alerts
+kubectl --context $CTX exec -n monitoring prometheus-kube-prometheus-stack-prometheus-0 -c prometheus -- \
+  wget -qO- 'http://localhost:9090/api/v1/alerts'
 ```
 
 ---
 
-## 9. Rollback
+## 11. Rollback
 
 ```bash
-# 1. selfHeal aus
 for app in cnpg-cluster mariadb-cluster mariadb-operator; do
   kubectl --context $CTX patch app $app -n argocd --type=merge \
     -p '{"spec":{"syncPolicy":{"automated":null}}}'
 done
 
-# 2. Git revert + push
 cd ~/git/eneg-k8s-infrastructure-v2
 git revert <commit-sha>...HEAD
 git push
 
-# 3. Manuelle Syncs
 TARGET_REV=$(git rev-parse HEAD)
 for app in cnpg-cluster mariadb-cluster mariadb-operator; do
   kubectl --context $CTX patch app $app -n argocd --type=merge \
@@ -582,77 +816,107 @@ for app in cnpg-cluster mariadb-cluster mariadb-operator; do
   wait_argocd_sync $app $TARGET_REV
 done
 
-# 4. Hibernation re-enable falls noetig
 kubectl --context $CTX annotate cluster cnpg-erp -n databases cnpg.io/hibernation=on --overwrite
 kubectl --context $CTX annotate cluster cnpg-shared -n databases cnpg.io/hibernation=on --overwrite
 ```
 
 ---
 
-## 10. Persistente Learnings
+## 12. Persistente Learnings
 
-1. **NAS10/QuObjects boto3 ≥ 1.36 InvalidDigest.** Workaround
-   `AWS_REQUEST_CHECKSUM_CALCULATION=when_required`.
+1. **NAS10/QuObjects boto3 InvalidDigest TAUCHT AN 2 STELLEN AUF.** Beide
+   muessen unabhaengig gefixt werden:
+   a) CNPG Plugin-Sidecar (Phase A.2)
+   b) CNPG Logical-Backup CronJobs (Phase D.2)
+   Rclone-basierte Backups sind NICHT betroffen.
 
-2. **CNPG plugin-barman-cloud Architektur** — env-vars propagieren nur bei
-   Pod-Recreate.
+2. **CNPG plugin-barman-cloud** — env-vars propagieren nur bei Pod-Recreate.
 
 3. **CNPG Switchover ohne kubectl-cnpg-plugin** via subresource-Patch.
 
 4. **CNPG pg_rewind Fallback** — komplett-Reset, pg_basebackup mit neuem Index.
+   Hinterlaesst orphaned Longhorn-Volumes → Phase D.5 aufraeumen.
 
-5. **ArgoCD selfHeal patcht Hibernation aus Git zurueck** — daher Git-Patch.
+5. **ArgoCD selfHeal patcht Hibernation aus Git zurueck.**
 
-6. **Helm-Chart-Defaults unsichtbar fuer ArgoCD ServerSideApply** — explizit setzen.
+6. **Helm-Chart-Defaults unsichtbar fuer ArgoCD ServerSideApply.**
 
-7. **ArgoCD "frozen"/Unknown Apps** — Application-Controller-Restart.
+7. **ArgoCD "frozen" Apps** — Application-Controller-Restart.
 
-8. **selfHeal AUS waehrend Recovery** — verhindert ungewollte Rollbacks.
+8. **selfHeal AUS waehrend Recovery** — verhindert Rollbacks.
 
 9. **Reihenfolge:** Hibernation → env-vars → Plugin-Restart → Standby-Restart →
    Switchover → restliche Standbys.
 
 10. **Galera-Operator-Reihenfolge:** CR replicas=0 BEVOR Operator hoch.
 
-11. **Helm-Charts haben oft Drift** seit Storm — Drift-Inventory in Pre-Flight machen.
+11. **Helm-Charts haben oft Drift** seit Storm — Drift-Inventory in Pre-Flight.
 
 12. **`git diff --stat` ist unnoetig** — vor Commit selbst die Datei pruefen
-    (grep -n "replicas:" file).
+    (`grep -n "replicas:" file`).
 
 13. **Einzeilige Commit-Messages** — Heredocs/Unicode brechen in manchen Shells.
 
-14. **HEAD-Check vor Beobachtungs-Loop** — "gepushed" Bestaetigung blind vertrauen
-    kann irrefuehren (Datei evtl. nicht committet, nur in Working-Dir).
+14. **HEAD-Check vor Beobachtungs-Loop** — "gepushed" Bestaetigung verifizieren.
 
-15. **App-Reihenfolge** = Abhaengigkeitsreihenfolge:
-    OIDC-Provider → OIDC-Konsumenten, DB-abhaengige nach DB-Recovery.
+15. **App-Reihenfolge** = Abhaengigkeitsreihenfolge: OIDC-Provider → Konsumenten.
+
+16. **ArgoCD CronJob Health-Check** vergleicht lastSchedule vs lastSuccessful.
+    Nach Recovery: 1 erfolgreicher Test-Job pro CronJob → ArgoCD wird Healthy.
+
+17. **17 Unknown ArgoCD Apps** sind alle `*-secrets` (SOPS) — das ist NORMAL.
+
+18. **CronJob startingDeadlineSeconds**: Beim Unsuspend versucht der CronJob
+    verpasste Schedule-Runs nachzuholen. Bei NAS10/boto3-Bug failen diese
+    sofort → Failed Jobs entstehen → ArgoCD wird Degraded.
+    **Konsequenz:** D.1 (Unsuspend) und D.2 (boto3-Fix in CronJobs) IMMER in
+    einem gemeinsamen Commit pushen — nicht nacheinander.
+
+19. **Backup-Stack: 8 Schedule-Files** wurden auf DEV suspended (5 CronJobs +
+    1 MariaDB-PhysicalBackup + 2 CNPG-ScheduledBackups). Alle 8 muessen bei
+    Reaktivierung in Git unsuspendet werden.
+
+20. **boto3-Bug-Eingrenzung nach Backup-Tool:**
+    - **boto3/awscli-basiert** (BETROFFEN): CNPG-Plugin Sidecars, CNPG
+      logical-backup CronJobs
+    - **rclone-basiert** (NICHT betroffen): garage-backup, idoit-backup,
+      odoo-backup (rclone hat eigenen Go-S3-Client)
+    - **MariaDB-Operator** (vermutlich nicht betroffen, Go-basiert)
+    Pre-Flight: `grep -E "image:|aws s3|rclone|awscli" cronjob.yaml`
+
+21. **Alertmanager-Notifications verifizieren nach Recovery:**
+    - **Teams:** `prometheus-msteams` Pod-Logs → `"status":200` Eintraege
+    - **Email:** Pruefung NUR via Mailbox d.henke@eneg.de (Alertmanager loggt
+      SMTP-Sends nicht detailliert; nur Fehler erscheinen im Log)
+    Bei DEV-Recovery: Mails ab 15:58 nachweisbar.
 
 ---
 
-## 11. ENV-spezifische Vorbereitung
+## 13. ENV-spezifische Vorbereitung
 
 ### TEST
 
 - [ ] Pre-Flight Phase 4 komplett
 - [ ] NAS10 16 MB Write < 5s
-- [ ] ArgoCD Apps NICHT frozen
+- [ ] ArgoCD Apps NICHT frozen (echte Apps, nicht `*-secrets`)
 - [ ] Drift-Inventory durchgegangen (Vergleich DEV-Drift-Muster)
+- [ ] Backup-Suspend-Inventar erstellt
 - [ ] Mehrere Stunden ungestoerte Arbeitszeit
-- [ ] Stakeholder informiert (TEST-Down ist niedrig-impactful)
 
 ### PROD
 
 - [ ] Wartungsfenster mit Stakeholdern abgestimmt
 - [ ] Vorab-Velero-Backup oder Longhorn-Snapshot manuell ausgeloest
-- [ ] Wartungsfenster-Banner in betroffenen Apps (idoit, openproject, odoo)
-- [ ] Notfall-Kontakte erreichbar (Daniel + ggf. Vertretung)
-- [ ] Pre-Flight Phase 4 STRIKT (kein "wir schauen mal")
-- [ ] DEV + TEST muessen vorher erfolgreich recovered + verifiziert sein
+- [ ] Wartungsfenster-Banner in betroffenen Apps
+- [ ] Notfall-Kontakte erreichbar
+- [ ] Pre-Flight Phase 4 STRIKT
+- [ ] DEV + TEST erfolgreich + verifiziert
 - [ ] Mind. 4-6 Stunden ungestoerte Arbeitszeit
+- [ ] **Backup-Schedule-Times pruefen** — laufen nicht waehrend Recovery
 
 ---
 
-## 12. Aenderungshistorie
+## 14. Aenderungshistorie
 
 | Datum       | Aenderung                                                | Quelle |
 |-------------|----------------------------------------------------------|--------|
@@ -660,3 +924,12 @@ kubectl --context $CTX annotate cluster cnpg-shared -n databases cnpg.io/hiberna
 | 2026-05-15  | v2: Retro-Optimierungen (selfHeal-Storm, ArgoCD-frozen)  | DEV-Retro |
 | 2026-05-15  | v3: App-Reaktivierungs-Phasen B+C ergaenzt, Drift-Inventory, | DEV komplett |
 |             | Workflow-Lerning (HEAD-check, einzeilige Commits)        |        |
+| 2026-05-15  | v4: Phase D (Backup-Schedules + Cleanup) ergaenzt,       | DEV Schedule-Reakt. |
+|             | boto3-Bug-Fix an 2 Stellen dokumentiert, ArgoCD-CronJob- |        |
+|             | Health-Check, 17 Unknown=SOPS Erklaerung, orphaned       |        |
+|             | Volumes aus pg_rewind-Reset                              |        |
+| 2026-05-15  | v5: Diagnose-Snippets fuer beide boto3-Bug-Stellen,      | DEV Backup-Test |
+|             | Phase D Reihenfolge optimiert (D.1+D.2 in einem Commit), | + Notification- |
+|             | Pre-Flight 4.4 Check ob boto3-env-vars schon vorhanden,  | Verifikation |
+|             | Backup-Tool-Eingrenzung (boto3 vs rclone),               |        |
+|             | Alertmanager-Notification-Verifikations-Workflow         |        |
