@@ -21,3 +21,20 @@ spec:
         name: cnpg-s3-credentials
         key: SECRET_ACCESS_KEY
   retentionPolicy: "7d"
+  # WORKAROUND 2026-05-15: NAS10 (QNAP QuObjects) ist nicht kompatibel mit
+  # boto3 >= 1.36 Default-Verhalten "request_checksum_calculation=when_supported".
+  # boto3 sendet seit Jan 2025 standardmaessig CRC32 Trailing-Checksums mit jedem
+  # PutObject. QuObjects validiert den Header falsch und antwortet mit:
+  #   InvalidDigest: The Content-MD5 or checksum value that you specified is not valid
+  # -> barman-cloud-wal-archive scheitert mit exit 4 -> kein WAL-Archive moeglich.
+  #
+  # Fix: AWS_REQUEST_CHECKSUM_CALCULATION=when_required (sendet Checksum nur wenn
+  # API es explizit erfordert). Verifiziert mit cnpg-erp Switchover 15.05.2026
+  # 10:48 - WAL-Archive funktioniert seitdem zuverlaessig (~300-650ms per WAL).
+  # Quelle: https://aws.amazon.com/blogs/developer/new-default-checksum-behavior-in-aws-sdks/
+  instanceSidecarConfiguration:
+    env:
+      - name: AWS_REQUEST_CHECKSUM_CALCULATION
+        value: when_required
+      - name: AWS_RESPONSE_CHECKSUM_VALIDATION
+        value: when_required
