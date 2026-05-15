@@ -10,12 +10,9 @@ metadata:
   labels:
     app.kubernetes.io/part-of: cloudnative-pg
     app.kubernetes.io/managed-by: argocd
-  annotations:
-    # TEMP 2026-05-14: Hibernation aktiv fuer Cluster-Recovery nach Storage-Storm
-    # Siehe docs/incidents/2026-05-11-mariadb-galera-recovery.md
-    # Operator loescht alle Pods, PVCs bleiben erhalten.
-    # Reaktivierung: Annotation auf "off" oder entfernen.
-    cnpg.io/hibernation: "on"
+  # Reaktiviert 2026-05-15: NAS10 boto3 InvalidDigest-Fix (siehe
+  # objectstore-shared.yaml instanceSidecarConfiguration) erlaubt jetzt
+  # erfolgreiches WAL-Archiving. Cluster wieder voll aktiv.
 spec:
   description: "Shared PostgreSQL Cluster fuer leichtgewichtige Apps"
   imageName: ghcr.io/cloudnative-pg/postgresql:17.9-standard-bookworm
