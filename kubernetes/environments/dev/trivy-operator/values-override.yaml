@@ -4,11 +4,12 @@
 # -- DEV: Scan-Intervall (alle 24h statt Default 6h, DEV braucht weniger)
 # Standard-Wert fuer regulaeren Betrieb.
 operator:
-  # TEMP 2026-05-14: replicas=0 fuer Cluster-Recovery (kein Image-Scanning).
-  # Verhindert ausserdem den bekannten docker.io-Rate-Limit-Issue beim Boot,
-  # falls der Mirror-Redirect mal nicht greift. Reaktivierung: replicas=1
-  # oder Zeile loeschen (Default ist 1).
-  replicas: 0
+  # Reaktiviert 2026-05-15: nach Cluster-Recovery + NAS10-Reboot.
+  # Mirror-Redirect (containerd config) zeigt auf Zot (registry-dev.eneg.de).
+  # Bekannter Issue: Trivy ruft selbst direkt docker.io fuer Image-Scans
+  # (umgeht Mirror). Wenn docker.io Rate-Limits aufrtreten -> TRIVY_REGISTRY_MIRROR
+  # in env setzen (siehe Phase 9 open item).
+  replicas: 1
   scanJobsConcurrentLimit: 2
 
 # -- DEV: Memory-Limits angehoben (Base 256Mi/512Mi -> OOMKilled bei groesseren Image-Scans)
