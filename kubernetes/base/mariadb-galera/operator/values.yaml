@@ -5,6 +5,12 @@
 #
 # Minimale Konfiguration fuer DEV
 
+# Operator als Singleton (Default des Charts, explizit gesetzt damit
+# ArgoCD selfHeal den State sauber erkennen kann - bei ServerSideApply
+# ist ein nicht-gesetztes Feld kein Drift, was beim Storage-Storm zu
+# Operator-Scale=0 ohne selbstaendiges Recovery fuehrte).
+replicas: 1
+
 # Monitoring: Wird in Phase 7 aktiviert
 metrics:
   enabled: false
