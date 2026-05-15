@@ -7,6 +7,16 @@
 # sondern manuell per kubectl patch (ArgoCD kann sich nicht selbst patchen).
 # Bei Neuinstallation: kubectl patch -f dieses-file oder den Befehl aus
 # docs/phases/phase-04-setup.md verwenden.
+#
+# HISTORIE:
+# - 2026-05-15 (v2): Robustifizierung des Init-Containers nach Vorfall in DEV:
+#   * `set -euo pipefail` fail-fast bei Download-Fehler (war silent vorher)
+#   * `curl -fSL --retry 5` statt BusyBox `wget` (folgte GitHub-Redirects unzuverlaessig)
+#   * `test -x` nach jeder Install-Phase als Sanity-Check
+#   * apk add --no-cache curl als ersten Schritt
+#   Symptom des Vorfalls: ksops-Download warf 404 (transient), init-container
+#   lief silent weiter, main container startete OHNE ksops → alle *-secrets
+#   Apps zeigten ArgoCD sync=Unknown mit ComparisonError "ksops not found".
 apiVersion: apps/v1
 kind: Deployment
 metadata:
@@ -21,18 +31,31 @@ spec:
           command: ["/bin/sh", "-c"]
           args:
             - |
+              set -euo pipefail
+              echo "Installing curl (BusyBox wget folgt Redirects unzuverlaessig)..."
+              apk add --no-cache curl
               echo "Installing KSOPS v4.4.0..."
-              wget -q -O /tmp/ksops.tar.gz https://github.com/viaduct-ai/kustomize-sops/releases/download/v4.4.0/ksops_4.4.0_Linux_x86_64.tar.gz
+              curl -fSL --retry 5 --retry-delay 5 --retry-all-errors \
+                -o /tmp/ksops.tar.gz \
+                https://github.com/viaduct-ai/kustomize-sops/releases/download/v4.4.0/ksops_4.4.0_Linux_x86_64.tar.gz
               tar -xzf /tmp/ksops.tar.gz -C /custom-tools/ ksops
               chmod +x /custom-tools/ksops
+              test -x /custom-tools/ksops
               echo "Installing Kustomize v5.6.0..."
-              wget -q -O /tmp/kustomize.tar.gz https://github.com/kubernetes-sigs/kustomize/releases/download/kustomize%2Fv5.6.0/kustomize_v5.6.0_linux_amd64.tar.gz
+              curl -fSL --retry 5 --retry-delay 5 --retry-all-errors \
+                -o /tmp/kustomize.tar.gz \
+                https://github.com/kubernetes-sigs/kustomize/releases/download/kustomize%2Fv5.6.0/kustomize_v5.6.0_linux_amd64.tar.gz
               tar -xzf /tmp/kustomize.tar.gz -C /custom-tools/ kustomize
               chmod +x /custom-tools/kustomize
+              test -x /custom-tools/kustomize
               echo "Installing SOPS v3.9.4..."
-              wget -q -O /custom-tools/sops https://github.com/getsops/sops/releases/download/v3.9.4/sops-v3.9.4.linux.amd64
+              curl -fSL --retry 5 --retry-delay 5 --retry-all-errors \
+                -o /custom-tools/sops \
+                https://github.com/getsops/sops/releases/download/v3.9.4/sops-v3.9.4.linux.amd64
               chmod +x /custom-tools/sops
-              echo "Done."
+              test -x /custom-tools/sops
+              echo "All tools installed successfully:"
+              ls -lh /custom-tools/
           volumeMounts:
             - mountPath: /custom-tools
               name: custom-tools

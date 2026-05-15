@@ -1,6 +1,6 @@
 # Runbook: K8s-Cluster Recovery nach Storage-Storm
 
-**Letzte Aktualisierung:** 2026-05-15 (v5 — Diagnose-Snippets, D.1+D.2 in einem Commit, Pre-Flight boto3-Check, Backup-Tool-Eingrenzung)
+**Letzte Aktualisierung:** 2026-05-15 (v6 — ksops-Defekt im Repo-Server dokumentiert, Section 3.10 korrigiert: Unknown *-secrets ist KEIN Normalzustand)
 **Erstmals verifiziert:** DEV-Cluster (k8s-dev), 2026-05-14/15
 **Status TEST/PROD:** ausstehend
 **Verwandte Docs:**
@@ -170,12 +170,69 @@ ArgoCD-Health wird automatisch Healthy.
 
 ### 3.10 ArgoCD "Unknown" Sync bei SOPS-encrypted Secret-Apps
 
-Apps mit SOPS-encrypted Secrets (alle `*-secrets` Apps wie `cnpg-secrets`,
-`keycloak-secrets`, etc.) zeigen permanent `sync=Unknown`. **Das ist normal**
-— ArgoCD kann den Source-Diff bei encrypted Files nicht durchfuehren.
-`health=Healthy` bestaetigt: Secrets sind im Cluster vorhanden.
+Wenn alle (oder die meisten) `*-secrets` Apps `sync=Unknown` zeigen,
+liegt das **NICHT** an einer SOPS-Eigenheit (haeufiger Irrglaube), sondern
+am defekten **ksops-Binary im argocd-repo-server**. Siehe 3.11.
 
-Bei DEV: 17 von 60 Apps sind `*-secrets` (Stand 2026-05-15). Kein Handlungsbedarf.
+**Korrekte Erwartung:** `*-secrets` Apps sollen `Synced/Healthy` zeigen,
+genau wie alle anderen Apps. KSOPS+SOPS rendern die encrypted Manifests
+zur Diff-Vergleichszeit und liefern ArgoCD vollwertige Plain-Resources.
+
+Wenn nur Einzelne `*-secrets` Apps Unknown sind: anderes Problem (z.B.
+fehlender Secret-Key im Age-Keyring, falscher Pfad in kustomization.yaml).
+
+### 3.11 ksops-Binary im Repo-Server defekt (silent install-failure)
+
+**Symptom:** Viele/alle `*-secrets` Apps zeigen `sync=Unknown` mit
+ComparisonError:
+```
+ComparisonError: Failed to load target state: failed to generate manifest
+for source 1 of 1: rpc error: code = Unknown desc =
+`kustomize build ... --enable-alpha-plugins --enable-exec` failed:
+Error: couldn't execute function: exec: "ksops": executable file not found in $PATH
+```
+
+**Ursache:** Der Init-Container `install-ksops` im
+`argocd-repo-server` Pod laedt ksops, kustomize und SOPS bei jedem
+Pod-Start von GitHub-Releases. Bei transientem 404 / Redirect-Issue mit
+BusyBox `wget` (alpine) schlaegt der Download fehl, der Init-Container
+laeuft aber **silent weiter** (kein `set -e`), endet "successfully" und
+der main-Container startet ohne ksops.
+
+**Diagnose:**
+
+```bash
+POD=$(kubectl --context $CTX get pods -n argocd \
+  -l app.kubernetes.io/name=argocd-repo-server --no-headers \
+  | head -1 | awk '{print $1}')
+
+# Init-Container-Log auf wget-Fehler pruefen
+kubectl --context $CTX logs -n argocd $POD -c install-ksops | \
+  grep -E "404|Not Found|No such file|tar:"
+
+# ksops im main-Container vorhanden?
+kubectl --context $CTX exec -n argocd $POD -c argocd-repo-server -- \
+  ls -la /usr/local/bin/ksops 2>&1
+```
+
+**Quick-Fix:** Pod loeschen + neuer Pod-Start, oft funktioniert der
+Download beim Retry (GitHub-CDN-Glitch).
+
+```bash
+kubectl --context $CTX delete pod -n argocd -l app.kubernetes.io/name=argocd-repo-server
+sleep 30
+# Init-Container-Log pruefen, ksops-Existenz verifizieren
+```
+
+**Permanent-Fix (ab Patch-v2, 2026-05-15):** Der Patch
+`kubernetes/base/argocd/argocd-repo-server-ksops-patch.yaml` nutzt jetzt
+`set -euo pipefail` + `curl -fSL --retry 5` + `test -x` nach jeder
+Install-Phase. Bei Download-Fehler schlaegt der Pod nun in
+`CrashLoopBackoff` fehl (sichtbar) statt silent ohne ksops zu laufen.
+
+Bei Recovery: Diese Patch-Version muss im Cluster aktiv sein. Pruefen mit
+`kubectl get deploy argocd-repo-server -n argocd -o yaml | grep "set -euo"`.
+Wenn nicht: `kubectl apply -f kubernetes/base/argocd/argocd-repo-server-ksops-patch.yaml`
 
 ---
 
@@ -230,7 +287,18 @@ done
 **FROZEN (Fix noetig):**
 - `revision=` leer
 - `opStartedAt` Wochen alt
-- `sync=Unknown` (Ausnahme: `*-secrets` Apps, die sind immer Unknown — s. 3.10)
+- `sync=Unknown` bei einer Einzel-App: anderes Problem
+
+**KSOPS-DEFEKT (Fix s. 3.11):**
+- Mehrere/alle `*-secrets` Apps zeigen `sync=Unknown` → KEIN Normalzustand!
+- Pruefen mit:
+  ```bash
+  POD=$(kubectl --context $CTX get pods -n argocd \
+    -l app.kubernetes.io/name=argocd-repo-server --no-headers | head -1 | awk '{print $1}')
+  kubectl --context $CTX exec -n argocd $POD -c argocd-repo-server -- \
+    ls /usr/local/bin/ksops 2>&1
+  ```
+  Wenn "No such file" → Quick-Fix (Pod loeschen) oder Patch-v2 anwenden.
 
 **Fix wenn ≥ 1 echte App frozen:**
 
@@ -746,7 +814,8 @@ Nach allen Phasen pruefen ob noch ArgoCD-Apps OutOfSync oder Degraded:
 kubectl --context $CTX get app -n argocd --no-headers | awk '$2!="Synced" || $3!="Healthy" {print "  "$1": "$2"/"$3}'
 ```
 
-**Erwartet bleibt:** 17x `*-secrets` Apps mit `Unknown/Healthy` (s. 3.10).
+**Erwartet:** Alle Apps `Synced/Healthy`. Falls mehrere `*-secrets` Apps
+`Unknown` zeigen → ksops-Defekt im Repo-Server (siehe 3.11).
 
 Falls eine `cnpg-logical-backup` App noch Degraded ist trotz Phase D.3: ein
 Test-Job hat noch keinen Erfolgs-Run produziert. Test-Run wiederholen.
@@ -864,7 +933,10 @@ kubectl --context $CTX annotate cluster cnpg-shared -n databases cnpg.io/hiberna
 16. **ArgoCD CronJob Health-Check** vergleicht lastSchedule vs lastSuccessful.
     Nach Recovery: 1 erfolgreicher Test-Job pro CronJob → ArgoCD wird Healthy.
 
-17. **17 Unknown ArgoCD Apps** sind alle `*-secrets` (SOPS) — das ist NORMAL.
+17. **`*-secrets` Apps `sync=Unknown` ist KEIN Normalzustand**, sondern
+    starkes Indiz fuer defektes ksops-Binary im argocd-repo-server (siehe
+    3.11). Pre-Flight pruefen: `ls /usr/local/bin/ksops` im Repo-Server-Pod.
+    Korrekturen v6 dieses Runbooks fixen die fruehere Fehl-Annahme aus v3-v5.
 
 18. **CronJob startingDeadlineSeconds**: Beim Unsuspend versucht der CronJob
     verpasste Schedule-Runs nachzuholen. Bei NAS10/boto3-Bug failen diese
@@ -933,3 +1005,8 @@ kubectl --context $CTX annotate cluster cnpg-shared -n databases cnpg.io/hiberna
 |             | Pre-Flight 4.4 Check ob boto3-env-vars schon vorhanden,  | Verifikation |
 |             | Backup-Tool-Eingrenzung (boto3 vs rclone),               |        |
 |             | Alertmanager-Notification-Verifikations-Workflow         |        |
+| 2026-05-15  | v6: KORREKTUR fruehere Annahme "Unknown=normal" fuer     | DEV ksops-Vorfall |
+|             | *-secrets Apps. Neue Section 3.11 (ksops silent install- |        |
+|             | failure), Pre-Flight 4.3 mit ksops-Existenz-Check,       |        |
+|             | Quick-Fix + Permanent-Fix (Patch-v2 mit set -e + curl).  |        |
+|             | Learning 17 + Phase D.6 Erwartung korrigiert.            |        |
