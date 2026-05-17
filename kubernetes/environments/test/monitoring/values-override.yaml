@@ -10,6 +10,14 @@
 coreDns:
   enabled: false
 
+# --- Default Rules: TEST-spezifische Anpassungen ---
+# KubeJobFailed Default deaktiviert, Custom-Version excludiert Velero
+# Kopia-Maintain-Jobs (transient bei NAS10-Mikroausfaellen) und alarmiert
+# nur bei persistenten Failures (>=3 fuer 2h) - siehe kube-job-failed-test.yaml
+defaultRules:
+  disabled:
+    KubeJobFailed: true
+
 # --- Prometheus TEST ---
 prometheus:
   prometheusSpec:

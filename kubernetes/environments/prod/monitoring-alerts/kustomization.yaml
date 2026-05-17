@@ -7,3 +7,4 @@ resources:
   - ../../../base/monitoring/dashboards
   - ../../../base/monitoring/prometheus-msteams
   - cnpg-podmonitors.yaml
+  - kube-job-failed-prod.yaml

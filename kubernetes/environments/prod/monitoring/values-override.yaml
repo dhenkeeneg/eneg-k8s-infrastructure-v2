@@ -10,6 +10,14 @@
 coreDns:
   enabled: false
 
+# --- Default Rules: PROD-spezifische Anpassungen ---
+# KubeJobFailed Default deaktiviert, Custom-Version excludiert Velero
+# Kopia-Maintain-Jobs (transient bei NAS10-Mikroausfaellen) und alarmiert
+# nur bei persistenten Failures (>=3 fuer 2h) - siehe kube-job-failed-prod.yaml
+defaultRules:
+  disabled:
+    KubeJobFailed: true
+
 # --- Prometheus PROD (groessere PVCs) ---
 prometheus:
   prometheusSpec:

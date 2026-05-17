@@ -7,6 +7,7 @@ resources:
   - ../../../base/monitoring/dashboards
   - ../../../base/monitoring/prometheus-msteams
   - kube-cpu-overcommit-dev.yaml
+  - kube-job-failed-dev.yaml
 
 # DEV-Patches auf Base-Rules
 patches:

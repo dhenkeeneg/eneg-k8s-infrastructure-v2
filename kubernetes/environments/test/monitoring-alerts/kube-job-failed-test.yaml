@@ -1,0 +1,40 @@
+---
+# PrometheusRule: KubeJobFailed (TEST-Anpassung)
+# Ersetzt die Default-Rule mit zwei Varianten:
+# 1. KubeJobFailed (Default-Pendant): excludiert Velero Kopia-Maintain-Jobs
+#    (transient bei NAS10-Mikroausfaellen, regulaere Jobs weiterhin streng alarmieren)
+# 2. VeleroKopiaMaintainPersistentFailures: count-basiert, for: 2h
+#    Alarmiert nur wenn >=3 Maintain-Jobs ueber 2h hinweg failed bleiben.
+#    Da Maintain-Job-TTL 1h ist, filtert die for-Klausel transiente NAS10-Spikes,
+#    bei persistenten Repository-Problemen feuert der Alert nach 2h.
+apiVersion: monitoring.coreos.com/v1
+kind: PrometheusRule
+metadata:
+  name: kube-job-failed-test
+  namespace: monitoring
+  labels:
+    app: kube-prometheus-stack
+    release: kube-prometheus-stack
+spec:
+  groups:
+    - name: kube-job-failed-test.rules
+      rules:
+        - alert: KubeJobFailed
+          expr: kube_job_failed{job="kube-state-metrics", job_name!~".*-kopia-maintain-job-.*"} > 0
+          for: 15m
+          labels:
+            severity: warning
+          annotations:
+            summary: "Job failed to complete."
+            description: "Job {{ $labels.namespace }}/{{ $labels.job_name }} failed to complete. Removing failed job after investigation should clear this alert on cluster {{ $labels.cluster }}."
+            runbook_url: "https://runbooks.prometheus-operator.dev/runbooks/kubernetes/kubejobfailed"
+
+        - alert: VeleroKopiaMaintainPersistentFailures
+          expr: count(kube_job_failed{job="kube-state-metrics", namespace="velero", job_name=~".*-kopia-maintain-job-.*"} > 0) >= 3
+          for: 2h
+          labels:
+            severity: warning
+          annotations:
+            summary: "Persistente Velero Kopia-Maintain-Failures ({{ $value }} Jobs)"
+            description: "{{ $value }} Velero Kopia-Maintain-Jobs sind seit >=2h fehlgeschlagen. Persistentes NAS10/Repository-Problem moeglich. Transiente NAS10-Mikroausfaelle werden durch die for-Klausel gefiltert (Job-TTL = 1h)."
+            runbook_url: "https://runbooks.prometheus-operator.dev/runbooks/kubernetes/kubejobfailed"
