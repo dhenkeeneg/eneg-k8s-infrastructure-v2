@@ -2,7 +2,8 @@
 
 **Status:** Active
 **Letzte Aktualisierung:** 17.05.2026
-**Gilt fuer:** DEV (ab Phase 2). TEST/PROD nach Rollout siehe Aenderungshistorie.
+**Gilt fuer:** DEV (verifiziert), TEST und PROD (GitOps-konfiguriert, Erst-Lauf
+nach Cluster-Reaktivierung steht aus).
 
 ## Kontext
 
@@ -174,4 +175,4 @@ Dann manuell zur Disaster-Recovery-Umgebung kopieren.
 
 | Datum | Aenderung |
 |------|-----------|
-| 17.05.2026 | Initial fuer DEV (Phase 2 Tarball-Refactor). TEST/PROD noch im sync-Modus. |
+| 17.05.2026 | Initial fuer DEV (Phase 2 Tarball-Refactor). TEST + PROD Files identisch in Git (k8s-test-idoit / k8s-prod-idoit), Aktivierung mit erstem Cron-Lauf nach Cluster-Reaktivierung. |
