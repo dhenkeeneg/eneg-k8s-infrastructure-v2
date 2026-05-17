@@ -46,7 +46,7 @@ data:
       "nas10:k8s-dev-idoit/upload" \
       --backup-dir "nas10:k8s-dev-idoit/_backups/${BACKUP_DATE}/upload" \
       --config /config/rclone.conf \
-      --checksum \
+      --fast-list \
       --transfers 2 \
       --checkers 2 \
       --retries 10 \
@@ -72,7 +72,7 @@ data:
         "nas10:k8s-dev-idoit/src" \
         --backup-dir "nas10:k8s-dev-idoit/_backups/${BACKUP_DATE}/src" \
         --config /config/rclone.conf \
-        --checksum \
+        --fast-list \
         --transfers 2 \
         --checkers 2 \
         --retries 10 \
@@ -89,10 +89,10 @@ data:
       echo "--- src/-Backup heute uebersprungen (Wochentag ${DAY_OF_WEEK}, laeuft nur So oder bei BACKUP_FORCE_SRC=yes) ---"
     fi
 
-    # Alte Backup-Dirs aufraemen (aelter als 32 Tage)
+    # Alte Backup-Dirs aufraemen (aelter als 7 Tage, Phase 1 - Reduzierung von 32 -> 7)
     echo ""
-    echo "--- Alte Backups aufraemen (>32 Tage) ---"
-    CUTOFF_DATE=$(date -d "@$(($(date +%s) - 32*86400))" +%Y-%m-%d)
+    echo "--- Alte Backups aufraemen (>7 Tage) ---"
+    CUTOFF_DATE=$(date -d "@$(($(date +%s) - 7*86400))" +%Y-%m-%d)
 
     if [ -n "$CUTOFF_DATE" ]; then
       rclone lsd "nas10:k8s-dev-idoit/_backups/" --config /config/rclone.conf 2>/dev/null | awk '{print $NF}' | while read DIR; do
@@ -111,7 +111,7 @@ data:
 ---
 # CronJob: i-doit Backup auf NAS10 (DEV)
 # Taegliche Sicherung von Upload + src auf NAS10 QuObject S3
-# Retention: 32 Tage via --backup-dir Pattern
+# Retention: 7 Tage via --backup-dir Pattern (Phase 1 - rclone-Optimierung, Tarball-Refactor folgt in Phase 2)
 apiVersion: batch/v1
 kind: CronJob
 metadata:
