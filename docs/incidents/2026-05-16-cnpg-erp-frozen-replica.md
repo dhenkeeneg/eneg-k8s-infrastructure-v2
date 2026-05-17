@@ -322,27 +322,24 @@ gibt ergänzend Auskunft, ob überhaupt Streaming versucht wird (leer = nein).
 
 ## Offene Folgepunkte
 
-### A) Backup-Subsystem reparieren (Problem B)
+### A) Backup-Subsystem reparieren (Problem B) — ✅ behoben am 17.05.2026
 
-Status: offen. Plan in Phase 2:
-1. **Bucket aufräumen:** Alte `base/`-Backups manuell via `s3cmd` von k8s-mgmt-10
-   löschen, sodass die LIST-Operation auf `cnpg-erp/cnpg-erp/base/` wieder in
-   Sekunden statt Minuten antwortet (Teufelskreis brechen).
-2. **NAS-Backupjobs prüfen:** Daniel bestätigte, dass parallele Backup-Jobs auf
-   der NAS aktuell die QNAP-QuObjects-Performance temporär degradieren — Punkt
-   nach Abschluss dieser Jobs erneut verifizieren.
-3. **Operator-Timeouts erhöhen:** Falls notwendig, Plugin/Operator-Timeouts für
-   Show- und Delete-Operationen großzügiger setzen.
-4. **Strategische Optionen** (für eigene Session):
-   - Migration `NAS10 QuObjects → Garage S3` für CNPG-Backups
-   - Dual-Backup (Primary Garage, Cold-Copy NAS via rclone)
+Siehe Folge-Incident `docs/incidents/2026-05-17-cnpg-backup-subsystem-repair.md`.
+Kernursache war kein temporäres NAS-Last-Problem, sondern strukturell:
+ein **Cron-Format-Bug** in den ScheduledBackup-Schedules (5-Feld statt CNPG's
+erwartetes 6-Feld) hatte seit Mitte April täglich 24 Backup-Runs statt 1
+ausgelöst — entsprechend war der Bucket so überfüllt, dass QuObjects' LIST-API
+ins Rate-Limit lief. Reparatur: Schedule-Korrektur per GitOps in allen 3 Environments
++ kompletter Bucket-Reset für DEV. TEST/PROD-Buckets noch zu prüfen sobald die
+Cluster wieder up sind (siehe Folge-Doc).
 
-### B) Object Storage Cleanup: TL17-History prüfen
+### B) Object Storage Cleanup: TL17-History prüfen — ✅ erledigt am 17.05.2026
 
-Die verwaiste `00000011.history` im Bucket `s3://k8s-dev-postgres-wal/cnpg-erp/cnpg-erp/`
-prüfen und ggf. löschen. Solange der Cluster nicht erneut über TL17
-hinaussteigt, ist sie inaktiv — sie könnte aber bei einem weiteren Promote auf
-eine TL18+ noch einmal als Stolperfalle wirken (analoge Logik).
+Durch den kompletten Bucket-Reset von `cnpg-erp/cnpg-erp/` im Zuge der
+Backup-Subsystem-Reparatur am 17.05. wurde die verwaiste `00000011.history`
+mitentfernt. Neue WAL-Archivierung läuft seither auf Timeline 18 (`00000012.history`),
+nachdem inzwischen ein weiterer Auto-Failback Promote stattgefunden hat
+(Primary wieder cnpg-erp-3). Siehe `docs/incidents/2026-05-17-cnpg-backup-subsystem-repair.md`.
 
 ### C) PrometheusRule für Replication-Lag erwägen
 
