@@ -1,6 +1,8 @@
 ---
 # ScheduledBackup: cnpg-shared Full Backup (Barman Physical)
 # Taeglich um 02:00 UTC, 30 Tage Retention
+# Hinweis: CNPG verwendet 6-Feld-Cron (Sekunde Minute Stunde Tag Monat Wochentag).
+# 5-Feld-Cron wird als 6-Feld interpretiert und triggert dann jede Stunde.
 apiVersion: postgresql.cnpg.io/v1
 kind: ScheduledBackup
 metadata:
@@ -12,7 +14,7 @@ metadata:
 spec:
   cluster:
     name: cnpg-shared
-  schedule: "0 2 * * *"
+  schedule: "0 0 2 * * *"
   backupOwnerReference: cluster
   method: barmanObjectStore
   immediate: true
@@ -30,7 +32,7 @@ metadata:
 spec:
   cluster:
     name: cnpg-erp
-  schedule: "15 2 * * *"
+  schedule: "0 15 2 * * *"
   backupOwnerReference: cluster
   method: barmanObjectStore
   immediate: true

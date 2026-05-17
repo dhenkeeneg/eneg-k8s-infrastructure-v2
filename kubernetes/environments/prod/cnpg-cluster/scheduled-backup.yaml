@@ -1,6 +1,8 @@
 ---
 # ScheduledBackup: cnpg-shared Full Backup (Barman Cloud Plugin)
-# Taeglich um 02:00 UTC
+# Taeglich um 00:15 UTC (PROD-Backup-Fenster 00:01-02:00 UTC)
+# Hinweis: CNPG verwendet 6-Feld-Cron (Sekunde Minute Stunde Tag Monat Wochentag).
+# 5-Feld-Cron wird als 6-Feld interpretiert und triggert dann jede Stunde.
 apiVersion: postgresql.cnpg.io/v1
 kind: ScheduledBackup
 metadata:
@@ -12,7 +14,7 @@ metadata:
 spec:
   cluster:
     name: cnpg-shared
-  schedule: "15 0 * * *"
+  schedule: "0 15 0 * * *"
   backupOwnerReference: cluster
   method: plugin
   pluginConfiguration:
@@ -20,7 +22,7 @@ spec:
   immediate: true
 ---
 # ScheduledBackup: cnpg-erp Full Backup (Barman Cloud Plugin)
-# Taeglich um 02:15 UTC (versetzt zu shared)
+# Taeglich um 00:20 UTC (versetzt zu shared)
 apiVersion: postgresql.cnpg.io/v1
 kind: ScheduledBackup
 metadata:
@@ -32,7 +34,7 @@ metadata:
 spec:
   cluster:
     name: cnpg-erp
-  schedule: "20 0 * * *"
+  schedule: "0 20 0 * * *"
   backupOwnerReference: cluster
   method: plugin
   pluginConfiguration:
