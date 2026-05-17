@@ -341,12 +341,16 @@ mitentfernt. Neue WAL-Archivierung läuft seither auf Timeline 18 (`00000012.his
 nachdem inzwischen ein weiterer Auto-Failback Promote stattgefunden hat
 (Primary wieder cnpg-erp-3). Siehe `docs/incidents/2026-05-17-cnpg-backup-subsystem-repair.md`.
 
-### C) PrometheusRule für Replication-Lag erwägen
+### C) PrometheusRule für Replication-Lag erwägen — ✅ erledigt am 17.05.2026
 
-Aktuell warnt das System nur, wenn das WAL-Volume voll wird. Eine zusätzliche
-Regel auf Basis von `cnpg_pg_replication_slots_safe_wal_size` oder
-`pg_replication_slots_active == 0` (für CNPG-internen Slot-Namen) würde Frozen-
-Replicas früher erkennen, bevor der WAL-Stau eskaliert.
+Neuer Alert `CnpgReplicationSlotInactive` in `kubernetes/base/monitoring/alert-rules/cnpg-alerts.yaml`
+ergänzt. Trigger: Slot `cnpg_pg_replication_slots_active == 0` auf einem Pod mit
+`cnpg_pg_replication_in_recovery == 0` (Primary-Filter, ignoriert die lokalen
+Slot-Spiegelungen auf Standby-Pods), `for: 10m` (filtert kurze Pod-Restarts und
+Failovers heraus). Severity: warning. Annotations verweisen direkt auf
+`docs/runbooks/cnpg-frozen-replica-stale-slot.md`. Damit wird das Frozen-Replica-
+Pattern bereits ~10 Min nach Eintreten erkannt, lange bevor das WAL-Volume bei
+70% (`CnpgWalVolumeWarning`) ankommt.
 
 ### D) Runbook erstellen
 

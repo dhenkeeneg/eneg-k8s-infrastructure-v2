@@ -343,10 +343,15 @@ Nach Cluster-Start:
 3. Aktuellen Backup-Run beobachten — läuft er sauber durch?
 4. Falls nicht: Analog zu DEV — Cleanup-CRs + Bucket-Reset
 
-### C) PrometheusRule für Replication-Lag (aus 16.05.-Doc übernommen)
+### C) PrometheusRule für Replication-Lag (aus 16.05.-Doc übernommen) — ✅ erledigt am 17.05.2026
 
-Geplant aber noch nicht umgesetzt. Würde frozen-Replica-Pattern wie am 16.05.
-früher erkennen, bevor der WAL-Stau eskaliert.
+Neuer Alert `CnpgReplicationSlotInactive` in `kubernetes/base/monitoring/alert-rules/cnpg-alerts.yaml`
+ergänzt. Trigger: Slot inaktiv auf Primary (Filter via `cnpg_pg_replication_in_recovery == 0`,
+um lokale Slot-Spiegelungen auf Standby-Pods auszublenden), `for: 10m`,
+severity: warning. Annotation verlinkt direkt auf das Runbook
+`docs/runbooks/cnpg-frozen-replica-stale-slot.md`. Damit wird das Frozen-Replica-
+Pattern ~10 Min nach Eintreten erkannt, lange bevor `CnpgWalVolumeWarning` bei
+70% greift.
 
 ### D) Schedule-Linter im PR-Workflow (siehe LL-5)
 

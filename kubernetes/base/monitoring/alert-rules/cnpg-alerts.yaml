@@ -81,3 +81,20 @@ spec:
           annotations:
             summary: "CNPG WAL-Archivierung fehlgeschlagen fuer {{ $labels.cluster }}"
             description: "WAL-Archivierung fuer Cluster {{ $labels.cluster }} hat in den letzten 5 Minuten Fehler. S3-Endpoint pruefen!"
+
+        # CNPG Replication Slot inaktiv auf Primary (Frozen-Replica-Pattern)
+        # Siehe Incident 2026-05-16: Inaktive Slots halten WALs auf dem Primary
+        # zurueck und sind Vorbote eines vollen WAL-Volumes (CnpgWalVolume*).
+        # Filter via cnpg_pg_replication_in_recovery == 0 (nur Primary, ignoriert
+        # die lokalen Slot-Spiegelungen auf Standby-Pods).
+        - alert: CnpgReplicationSlotInactive
+          expr: |
+            (cnpg_pg_replication_slots_active{namespace="databases", slot_type="physical"} == 0)
+            and on (pod, namespace)
+            (cnpg_pg_replication_in_recovery == 0)
+          for: 10m
+          labels:
+            severity: warning
+          annotations:
+            summary: "CNPG Replication Slot {{ $labels.slot_name }} inaktiv auf Primary {{ $labels.pod }}"
+            description: "Slot {{ $labels.slot_name }} auf Primary {{ $labels.pod }} (Namespace {{ $labels.namespace }}) seit 10 Minuten inaktiv. Replica streamt nicht und WALs koennen sich auf dem Primary stauen. Diagnose: pg_stat_wal_receiver auf der Replica pruefen, Pod-Status, Timeline-Konflikte. Runbook: docs/runbooks/cnpg-frozen-replica-stale-slot.md"
