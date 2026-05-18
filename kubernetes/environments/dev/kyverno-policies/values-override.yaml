@@ -1,0 +1,42 @@
+# Kyverno Policies DEV Override Values
+# Chart: kyverno/kyverno-policies v3.7.1
+# Wird nach base/kyverno-policies/values.yaml geladen.
+#
+# Aenderungshistorie:
+# 2026-05-18: failurePolicy=Ignore + Per-Policy-Excludes
+#   Root Cause: kyverno-resource-validating-webhook-cfg mit failurePolicy=Fail
+#   blockiert API-Calls bei Kyverno-Pod-Outage. longhorn-manager crashed
+#   wiederholt mit "no endpoints available for service kyverno-svc".
+#   Loesung: failurePolicy=Ignore (da alle Policies im Audit-Mode) +
+#   Excludes fuer Komponenten die hostPath/privileged von Design her brauchen.
+#   Siehe: docs/decisions/ADR-003-kyverno-webhook-hardening.md
+#          docs/phases/phase-13-kyverno-longhorn-stabilization-dev.md
+
+# -- Global failurePolicy fuer alle Pod-Security-Policies
+# Ignore = bei Kyverno-Outage werden Requests durchgelassen (kein Cluster-Lockout).
+# Da alle Policies validationFailureAction=Audit sind, ist Ignore semantisch korrekt:
+# Audit-Reports werden im Hintergrund erstellt, Live-API-Calls duerfen nie blockieren.
+failurePolicy: Ignore
+
+# -- Per-Policy Excludes
+# Schema folgt offiziellem kyverno-policies values.yaml Beispiel.
+# Diese Komponenten benoetigen hostPath/privileged-Mode by-design.
+policyExclude:
+  disallow-host-path:
+    any:
+    - resources:
+        kinds:
+        - Pod
+        namespaces:
+        - longhorn-system
+        - velero
+        - monitoring
+  disallow-privileged-containers:
+    any:
+    - resources:
+        kinds:
+        - Pod
+        namespaces:
+        - longhorn-system
+        - velero
+        - monitoring

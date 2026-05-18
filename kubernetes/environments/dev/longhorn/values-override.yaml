@@ -1,0 +1,16 @@
+# Longhorn DEV Override Values
+# Chart: longhorn/longhorn v1.9.2
+# Wird nach base/longhorn/values.yaml geladen und ueberschreibt nur dort definierte Werte
+#
+# Aenderungshistorie:
+# 2026-05-18: replicaAutoBalance auf least-effort
+#   Begruendung: best-effort triggert permanente Rebuild-Operationen
+#   fuer 1-Replica-Volumes (CNPG WAL etc.), was zu staendigen System-Snapshots
+#   mit Meldung 'becomes not ready to use' und unnoetiger IO-Last fuehrt.
+#   least-effort balanciert nur bei echten degraded Volumes.
+#   Siehe: docs/decisions/ADR-003-kyverno-webhook-hardening.md
+#          docs/phases/phase-13-kyverno-longhorn-stabilization-dev.md
+
+defaultSettings:
+  # DEV: Conservatives Auto-Balance (nur bei echten degraded Volumes)
+  replicaAutoBalance: least-effort

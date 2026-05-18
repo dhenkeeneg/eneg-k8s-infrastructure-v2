@@ -24,6 +24,7 @@ spec:
         releaseName: longhorn
         valueFiles:
           - $values/kubernetes/base/longhorn/values.yaml
+          - $values/kubernetes/environments/dev/longhorn/values-override.yaml
 
     # Source 2: Values aus Git Repository
     - repoURL: git@github.com:dhenkeeneg/eneg-k8s-infrastructure-v2.git

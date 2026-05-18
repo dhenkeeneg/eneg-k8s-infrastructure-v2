@@ -24,6 +24,7 @@ spec:
         releaseName: kyverno-policies
         valueFiles:
           - $values/kubernetes/base/kyverno-policies/values.yaml
+          - $values/kubernetes/environments/dev/kyverno-policies/values-override.yaml
 
     # Source 2: Git Repository Referenz fuer Values
     - repoURL: git@github.com:dhenkeeneg/eneg-k8s-infrastructure-v2.git
