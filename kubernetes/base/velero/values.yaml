@@ -48,6 +48,12 @@ configuration:
 
   # Backup Storage Location (S3-kompatibel)
   # Umgebungsspezifische Werte (bucket, s3Url) im Override
+  #
+  # HINWEIS: Helm merged Listen NICHT element-weise - der Override
+  # ersetzt diese ganze Liste. Eintraege hier wirken nur, wenn das
+  # Environment-Override `backupStorageLocation` nicht definiert.
+  # Daher: `checksumAlgorithm` muss zusaetzlich in jedem Override
+  # gesetzt werden, um wirksam zu sein. Hier dokumentiert als Default.
   backupStorageLocation:
     - name: default
       provider: aws
@@ -56,6 +62,11 @@ configuration:
       config:
         region: us-east-1
         s3ForcePathStyle: "true"
+        # Workaround fuer S3-Compat-Provider (z.B. QNAP QuObjects),
+        # die x-amz-sdk-checksum-algorithm / Trailing-Checksums nicht
+        # unterstuetzen. Leer-String unterdrueckt SDK-side Checksum.
+        # Ref: velero-io/velero#8265, #8742
+        checksumAlgorithm: ""
 
 # -----------------------------------------------------------------------
 # Credentials: Verweis auf bestehendes SOPS-Secret
