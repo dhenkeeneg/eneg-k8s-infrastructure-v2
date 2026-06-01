@@ -154,13 +154,84 @@ abraeumt.
 
 ## 7. Verifikation
 
-Nach Rollout:
-- Velero-Pod wurde neu erstellt mit neuer Backup-Storage-Location-Config
-- `kubectl describe backupstoragelocation default -n velero` zeigt
-  `checksumAlgorithm: ""` in spec.config
-- Test-Backup `test-checksum-fix-001` erfolgt mit Phase `Completed`
-- Naechster Daily-Run am 20.05.2026 05:45 ist `Completed`
-- 10 alte Failed/PartiallyFailed/FailedValidation-Backups sind geloescht
+### 7.1 Rollout-Sequenz
+
+| Schritt | Aktion | Ergebnis |
+|---------|--------|----------|
+| 1 | `git push` der Aenderungen (Base + DEV-Override + Phase-Doku) | OK |
+| 2 | ArgoCD Auto-Reconcile | `Synced + Healthy`, neue Revision `e2e7bd9...` registriert |
+| 3 | BSL-Pruefung im Cluster | **Initial fehlte `checksumAlgorithm: ""`** trotz Synced-Status |
+| 4 | `argocd.argoproj.io/refresh=hard` Annotation-Patch | BSL hat `spec.config.checksumAlgorithm: ""`, `phase: Available` |
+| 5 | `kubectl rollout restart deployment/velero` | Neuer Pod `velero-57b475fccc-5k6xj` Running, 0 Restarts |
+
+### 7.2 Subtilitaet: ArgoCD-Diff bei Helm-Sub-Map-Aenderungen
+
+Beim ersten Reconcile erkannte ArgoCD die Aenderung an `backupStorageLocation[0].config`
+**nicht** als Diff — Status war `Synced` aber die `checksumAlgorithm`-Property fehlte im
+Cluster. Erst ein **Hard-Refresh** via `argocd.argoproj.io/refresh=hard` Annotation hat
+den Helm-Template neu gerendert und den BSL-Diff materialisiert.
+
+Dieses Verhalten kann bei Helm-Charts mit `range`-Iteration ueber Map-Werte (wie im
+Velero-Chart-Template `backupstoragelocation.yaml`) auftreten. **Standardvorgehen
+in solchen Faellen:** nach `git push` zusaetzlich Hard-Refresh-Annotation triggern,
+nicht nur auf Auto-Sync warten.
+
+### 7.3 Test-Backup 1 (Schnelltest — Resource-Only)
+
+| Parameter | Wert |
+|-----------|------|
+| Name | `test-checksum-fix-001` |
+| Includes | Namespace `velero` only |
+| `defaultVolumesToFsBackup` | `false` |
+| Start | 2026-05-19T10:50:35Z |
+| Ende | 2026-05-19T10:50:42Z |
+| Dauer | **7 Sekunden** |
+| Items | **1350 / 1350** |
+| Phase | `Completed` |
+| Errors | none |
+
+**Kritischer Pruefpunkt:** `velero-backup.json`-Upload nach NAS10 (das war die Stelle,
+an der alle Daily-Backups seit 14.05. failed sind). Velero-Server-Logs zeigen
+`Setting up backup store to persist the backup` → `Initial backup processing
+complete, moving to Finalizing` ohne `InvalidDigest`-Fehler. **Fix verifiziert
+fuer Resource-/Metadata-Pfad.**
+
+### 7.4 Test-Backup 2 (Vollbackup mit fs-backup)
+
+| Parameter | Wert |
+|-----------|------|
+| Name | `test-checksum-fix-002-full` |
+| Includes | `*` (alle Namespaces) |
+| `defaultVolumesToFsBackup` | `true` |
+| Start | 2026-05-19T10:57:36Z |
+| PVBs gesamt | **65** |
+| PVBs `Completed` | **65** (Stand 11:51:00Z) |
+| PVBs `Failed` | **0** |
+| Daten nach NAS10 hochgeladen | ~5–6 GB (groesste PVB: 771 MB, 704 MB, 671 MB, 620 MB, 603 MB, 587 MB) |
+
+Bei den historischen Failed-Backups vor dem Fix gab es **100 Warnings** und PutObject-
+Errors entlang des Kopia-Pfads. **Hier: 0 Errors, 0 Warnings auf PVB-Ebene** — der
+Fix wirkt auch fuer fs-backup-Datenuploads (jede der 65 PVBs hat erfolgreich nach
+NAS10 geschrieben).
+
+Hinweis: `itemsBackedUp` im Backup-CR-Status steigt bei aktivem fs-backup sehr
+langsam, weil Velero auf PVB-Completion pro Pod wartet, bevor Cluster-Resources
+weitergetraversiert werden. Das ist kein Hinweis auf einen Fehler — der eigentliche
+S3-Pfad (PVB-Datenuploads + ueber Server-Side `velero-backup.json`) ist nachweislich
+sauber.
+
+### 7.5 Daily-Schedule
+
+Der Schedule `velero-daily-backup` (05:45 Europe/Berlin) bleibt unveraendert aktiv.
+Der naechste regulaere Lauf zeigt die Wirkung live.
+
+### 7.6 Naechste Verifikations-Pruefpunkte
+
+- [ ] Naechster Daily-Run (20.05.2026 05:45 CEST): Phase muss `Completed` sein
+- [ ] PVBs des Daily-Runs: alle `Completed`, 0 `Failed`
+- [ ] BSL bleibt `Available` (`status.phase`)
+- [ ] Keine `InvalidDigest`-Errors mehr in Velero-Server-Logs
+
 
 ---
 
@@ -184,6 +255,7 @@ Nach Rollout:
 
 ## 9. Aenderungshistorie
 
-| Datum      | Aenderung                                              |
-|------------|--------------------------------------------------------|
-| 19.05.2026 | Initiale Anlage, DEV-Fix per `checksumAlgorithm: ""`  |
+| Datum      | Aenderung                                                                                                      |
+|------------|----------------------------------------------------------------------------------------------------------------|
+| 19.05.2026 | Initiale Anlage, DEV-Fix per `checksumAlgorithm: ""`                                                           |
+| 19.05.2026 | Verifikation: Test-Backup 1 (Resource-only) Completed in 7s, Test-Backup 2 (full + fs-backup) 65/65 PVBs Completed, 0 Failed. ArgoCD-Hard-Refresh-Subtilitaet dokumentiert (Section 7.2). Cleanup der 10 Failed-Backups via DeleteBackupRequest gestartet. |
