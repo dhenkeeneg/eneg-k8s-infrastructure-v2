@@ -1,5 +1,5 @@
 ---
-# PhysicalBackup: MariaDB Galera auf S3 (DEV)
+# PhysicalBackup: MariaDB Galera auf S3 (DEV) - NAS20, TLS verifiziert (Sectigo Wildcard)
 # Taeglich um 02:30 UTC (versetzt zu CNPG Backups)
 apiVersion: k8s.mariadb.com/v1alpha1
 kind: PhysicalBackup
@@ -18,11 +18,11 @@ spec:
 
   target: PreferReplica
   compression: gzip
-  maxRetention: 168h
+  maxRetention: 120h
 
   storage:
     s3:
-      endpoint: "nas10.eneg.de:8010"
+      endpoint: "nas20.eneg.de:8010"
       bucket: k8s-dev-mariadb-backup
       prefix: mariadb-galera/
       accessKeyIdSecretKeyRef:
@@ -32,7 +32,7 @@ spec:
         name: mariadb-credentials
         key: S3_SECRET_ACCESS_KEY
       tls:
-        enabled: false
+        enabled: true
 
   backoffLimit: 3
   successfulJobsHistoryLimit: 3
