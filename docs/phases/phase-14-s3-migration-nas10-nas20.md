@@ -162,3 +162,39 @@ k8s-{env}-odoo-backup, k8s-{env}-idoit, k8s-{env}-registry
 | Datum | Was |
 |-------|-----|
 | 11.06.2026 | Phase 14 angelegt, Strategie + Migrationsmatrix dokumentiert |
+| 11.06.2026 | ERKENNTNIS: NAS20 spricht HTTPS auf Port 8010 (NAS10 war HTTP). Alle Configs muessen von http:// auf https:// + skip-verify. Siehe Abschnitt 8. |
+
+---
+
+## 8. WICHTIG: NAS20 nutzt HTTPS (nicht HTTP wie NAS10)
+
+Bei der Velero-Verifikation (14a) zeigte sich: NAS20 (QuObjects 2.5.629) lauscht
+auf Port 8010 mit HTTPS/TLS, waehrend NAS10 reines HTTP nutzte.
+
+Diagnose (Test-Pod im DEV-Cluster):
+- DNS OK: nas20.eneg.de -> 192.168.161.62 (NAS10: .61, gleiches Subnetz)
+- Routing/Firewall OK: TCP-Connect auf 8010 erfolgreich
+- HTTP-Test: "Empty reply from server" (curl 52) - Server kappt Klartext
+- HTTPS-Test: TLS-Handshake OK, Server-Zert = QNAP-Default (CN=QNAP NAS,
+  selbstsigniert, O=QNAP Systems)
+
+ENTSCHEIDUNG: Cluster-Configs auf HTTPS umstellen (Option B). NAS20 behaelt
+das selbstsignierte QNAP-Default-Zertifikat; alle Clients nutzen skip-verify
+(wie bei NAS10 bereits konfiguriert, dort ueber HTTP ungenutzt).
+
+### Endpoint-Schreibweise + skip-verify je Dienst
+
+| Dienst | Endpoint-Feld | Schema noetig | skip-verify Flag |
+|--------|---------------|---------------|------------------|
+| Velero | s3Url | https:// | insecureSkipTLSVerify: "true" (vorhanden) |
+| CNPG ObjectStore | endpointURL | https:// | (Barman nutzt endpointURL-Schema) |
+| pg_dumpall | S3_ENDPOINT | https:// | boto3: verify via Schema |
+| MariaDB | storage.s3.endpoint | OHNE Schema | tls.enabled: true + tls.caSecretRef ODER skip |
+| Loki | loki.storage.s3.endpoint | https:// | insecure: false + s3 verify; ggf. http_config |
+| Thanos | endpoint (im Secret) | OHNE Schema | insecure: false + http_config insecure_skip_verify |
+| garage/odoo/idoit | rclone.conf endpoint | https:// | no_check_certificate ODER --no-check-certificate |
+| Registry (Zot) | regionendpoint | OHNE Schema | secure: true + skipverify: true |
+
+ACHTUNG: Die Schreibweise (mit/ohne Schema) und das skip-verify-Flag sind je
+Dienst unterschiedlich. Pro Dienst einzeln verifizieren! Diese Tabelle ist
+Arbeitsannahme - bei jedem Cutover-Schritt am echten Verhalten pruefen.

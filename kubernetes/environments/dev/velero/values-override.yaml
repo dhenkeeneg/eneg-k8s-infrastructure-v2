@@ -14,7 +14,7 @@ configuration:
       config:
         region: us-east-1
         s3ForcePathStyle: "true"
-        s3Url: http://nas20.eneg.de:8010
+        s3Url: https://nas20.eneg.de:8010
         insecureSkipTLSVerify: "true"
         # Workaround fuer NAS10 QuObjects: AWS-SDK-go-v2 sendet seit
         # ~v1.30 Trailing-Checksums (x-amz-sdk-checksum-algorithm), die
