@@ -20,7 +20,6 @@ data:
     region = us-east-1
     force_path_style = true
     no_check_bucket = true
-    no_check_certificate = true
     list_chunk = 100
     disable_http2 = true
 
@@ -161,6 +160,11 @@ spec:
                     secretKeyRef:
                       name: idoit-backup-credentials
                       key: NAS_SECRET_ACCESS_KEY
+                # NAS20 QuObjects nutzt selbstsigniertes QNAP-Default-Zert
+                # (gueltig fuer keinen Namen). rclone conf-Option greift nicht
+                # zuverlaessig -> globale Env-Var erzwingt skip-verify.
+                - name: RCLONE_NO_CHECK_CERTIFICATE
+                  value: "true"
                 # src/ wird nur Sonntags gesichert. Fuer manuellen Force-Run:
                 # CronJob temporaer patchen mit BACKUP_FORCE_SRC=yes,
                 # einmal triggern (kubectl create job --from=cronjob/idoit-backup),

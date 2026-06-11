@@ -19,7 +19,6 @@ data:
     region = us-east-1
     force_path_style = true
     no_check_bucket = true
-    no_check_certificate = true
 
   backup.sh: |
     #!/bin/sh
@@ -120,6 +119,11 @@ spec:
                     secretKeyRef:
                       name: odoo-backup-credentials
                       key: NAS_SECRET_ACCESS_KEY
+                # NAS20 QuObjects nutzt selbstsigniertes QNAP-Default-Zert
+                # (gueltig fuer keinen Namen). rclone conf-Option greift nicht
+                # zuverlaessig -> globale Env-Var erzwingt skip-verify.
+                - name: RCLONE_NO_CHECK_CERTIFICATE
+                  value: "true"
               volumeMounts:
                 - name: config
                   mountPath: /config/rclone.conf
