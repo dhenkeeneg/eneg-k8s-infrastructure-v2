@@ -2,7 +2,7 @@
 # Umgebungsspezifisch: S3-Endpoint, Bucket, Backup-Schedule
 
 # -----------------------------------------------------------------------
-# Backup Storage Location: DEV S3 Bucket auf NAS10
+# Backup Storage Location: DEV S3 Bucket auf NAS20
 # -----------------------------------------------------------------------
 configuration:
   backupStorageLocation:
@@ -14,7 +14,7 @@ configuration:
       config:
         region: us-east-1
         s3ForcePathStyle: "true"
-        s3Url: http://nas10.eneg.de:8010
+        s3Url: http://nas20.eneg.de:8010
         insecureSkipTLSVerify: "true"
         # Workaround fuer NAS10 QuObjects: AWS-SDK-go-v2 sendet seit
         # ~v1.30 Trailing-Checksums (x-amz-sdk-checksum-algorithm), die
@@ -25,14 +25,14 @@ configuration:
         checksumAlgorithm: ""
 
 # -----------------------------------------------------------------------
-# Backup Schedule: Taeglich 04:30 Europe/Berlin, 14 Tage Retention
+# Backup Schedule: Taeglich 05:45 Europe/Berlin, 5 Tage Retention (NAS20)
 # -----------------------------------------------------------------------
 schedules:
   daily-backup:
     schedule: "45 5 * * *"
     useOwnerReferencesInBackup: false
     template:
-      ttl: "336h0m0s"
+      ttl: "120h0m0s"
       storageLocation: default
       defaultVolumesToFsBackup: true
       includedNamespaces:
