@@ -164,6 +164,8 @@ k8s-{env}-odoo-backup, k8s-{env}-idoit, k8s-{env}-registry
 | 11.06.2026 | Phase 14 angelegt, Strategie + Migrationsmatrix dokumentiert |
 | 11.06.2026 | ERKENNTNIS: NAS20 spricht HTTPS auf Port 8010 (NAS10 war HTTP). Alle Configs muessen von http:// auf https:// + skip-verify. Siehe Abschnitt 8. |
 | 11.06.2026 | 14a Velero DEV Cutover ABGESCHLOSSEN: s3Url https://nas20.eneg.de:8010, Retention 120h (5d), checksumAlgorithm-Workaround erhalten. BSL Available, Test-Backup test-nas20-001 Completed (4349/4349 Items, 0 Errors, 15 unkritische Warnings, ~33GB auf NAS20). Hard-Refresh nach Helm-Sub-Map-Change noetig. |
+| 11.06.2026 | 14a rclone-Jobs (garage/odoo/idoit) DEV Cutover ABGESCHLOSSEN: https/nas20, NAS_*-Keys, Retention 5d, --checksum entfernt. Alle drei verifiziert (garage 17KiB, odoo 9.7MiB, idoit src-Tarball 4.5MiB auf NAS20 geschrieben). TLS-Fix: RCLONE_NO_CHECK_CERTIFICATE Env-Var noetig (conf-Option no_check_certificate greift NICHT). |
+| 11.06.2026 | ERKENNTNIS (generell): ArgoCD meldet bei gemounteten ConfigMap-/Secret-Aenderungen in diesem Repo "Synced", wendet sie aber NICHT an. Hard-Refresh (annotate refresh=hard) ist bei JEDEM Cutover-Schritt noetig - nicht nur Helm. |
 
 ---
 
