@@ -33,6 +33,9 @@ spec:
         key: S3_SECRET_ACCESS_KEY
       tls:
         enabled: true
+        caSecretKeyRef:
+          name: mariadb-s3-ca
+          key: ca.crt
 
   backoffLimit: 3
   successfulJobsHistoryLimit: 3
