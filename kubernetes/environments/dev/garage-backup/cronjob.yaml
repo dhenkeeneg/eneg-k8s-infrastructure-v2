@@ -22,14 +22,15 @@ data:
     force_path_style = true
     no_check_bucket = true
 
-    [nas10]
+    [nas20]
     type = s3
     provider = Other
     env_auth = true
-    endpoint = http://nas10.eneg.de:8010
+    endpoint = https://nas20.eneg.de:8010
     region = us-east-1
     force_path_style = true
     no_check_bucket = true
+    no_check_certificate = true
 
   backup.sh: |
     #!/bin/sh
@@ -39,8 +40,8 @@ data:
 
     export RCLONE_CONFIG_GARAGE_ACCESS_KEY_ID="${GARAGE_ACCESS_KEY_ID}"
     export RCLONE_CONFIG_GARAGE_SECRET_ACCESS_KEY="${GARAGE_SECRET_ACCESS_KEY}"
-    export RCLONE_CONFIG_NAS10_ACCESS_KEY_ID="${NAS10_ACCESS_KEY_ID}"
-    export RCLONE_CONFIG_NAS10_SECRET_ACCESS_KEY="${NAS10_SECRET_ACCESS_KEY}"
+    export RCLONE_CONFIG_NAS20_ACCESS_KEY_ID="${NAS_ACCESS_KEY_ID}"
+    export RCLONE_CONFIG_NAS20_SECRET_ACCESS_KEY="${NAS_SECRET_ACCESS_KEY}"
 
     BACKUP_DATE=$(date +%Y-%m-%d)
 
@@ -59,10 +60,9 @@ data:
       echo "--- Sichere Bucket: ${BUCKET} ---"
       rclone sync \
         "garage:${BUCKET}" \
-        "nas10:k8s-dev-garage-backup/${BUCKET}" \
-        --backup-dir "nas10:k8s-dev-garage-backup/_backups/${BACKUP_DATE}/${BUCKET}" \
+        "nas20:k8s-dev-garage-backup/${BUCKET}" \
+        --backup-dir "nas20:k8s-dev-garage-backup/_backups/${BACKUP_DATE}/${BUCKET}" \
         --config /config/rclone.conf \
-        --checksum \
         --fast-list \
         --transfers 4 \
         --checkers 8 \
@@ -73,14 +73,14 @@ data:
     done
 
     echo ""
-    echo "--- Alte Backups aufraemen (>32 Tage) ---"
-    CUTOFF_DATE=$(date -d "@$(($(date +%s) - 32*86400))" +%Y-%m-%d)
+    echo "--- Alte Backups aufraemen (>5 Tage) ---"
+    CUTOFF_DATE=$(date -d "@$(($(date +%s) - 5*86400))" +%Y-%m-%d)
 
     if [ -n "$CUTOFF_DATE" ]; then
-      rclone lsd "nas10:k8s-dev-garage-backup/_backups/" --config /config/rclone.conf 2>/dev/null | awk '{print $NF}' | while read DIR; do
+      rclone lsd "nas20:k8s-dev-garage-backup/_backups/" --config /config/rclone.conf 2>/dev/null | awk '{print $NF}' | while read DIR; do
         if [ "$DIR" \< "$CUTOFF_DATE" ] || [ "$DIR" = "$CUTOFF_DATE" ]; then
           echo "Loesche altes Backup: _backups/${DIR}"
-          rclone purge "nas10:k8s-dev-garage-backup/_backups/${DIR}" \
+          rclone purge "nas20:k8s-dev-garage-backup/_backups/${DIR}" \
             --config /config/rclone.conf
         fi
       done
@@ -91,7 +91,7 @@ data:
     echo ""
     echo "=== Garage S3 Backup abgeschlossen: $(date -Iseconds) ==="
 ---
-# CronJob: Garage S3 Backup auf NAS10 (DEV)
+# CronJob: Garage S3 Backup auf NAS20 (DEV)
 apiVersion: batch/v1
 kind: CronJob
 metadata:
@@ -136,16 +136,16 @@ spec:
                     secretKeyRef:
                       name: garage-backup-credentials
                       key: GARAGE_SECRET_ACCESS_KEY
-                - name: NAS10_ACCESS_KEY_ID
+                - name: NAS_ACCESS_KEY_ID
                   valueFrom:
                     secretKeyRef:
                       name: garage-backup-credentials
-                      key: NAS10_ACCESS_KEY_ID
-                - name: NAS10_SECRET_ACCESS_KEY
+                      key: NAS_ACCESS_KEY_ID
+                - name: NAS_SECRET_ACCESS_KEY
                   valueFrom:
                     secretKeyRef:
                       name: garage-backup-credentials
-                      key: NAS10_SECRET_ACCESS_KEY
+                      key: NAS_SECRET_ACCESS_KEY
               volumeMounts:
                 - name: config
                   mountPath: /config/rclone.conf

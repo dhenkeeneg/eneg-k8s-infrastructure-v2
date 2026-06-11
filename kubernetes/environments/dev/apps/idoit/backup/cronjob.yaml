@@ -12,14 +12,15 @@ metadata:
     app.kubernetes.io/managed-by: argocd
 data:
   rclone.conf: |
-    [nas10]
+    [nas20]
     type = s3
     provider = Other
     env_auth = true
-    endpoint = http://nas10.eneg.de:8010
+    endpoint = https://nas20.eneg.de:8010
     region = us-east-1
     force_path_style = true
     no_check_bucket = true
+    no_check_certificate = true
     list_chunk = 100
     disable_http2 = true
 
@@ -29,9 +30,9 @@ data:
 
     echo "=== i-doit Backup gestartet: $(date -Iseconds) ==="
 
-    # rclone ENV-Variablen fuer Destination (NAS10)
-    export RCLONE_CONFIG_NAS10_ACCESS_KEY_ID="${NAS10_ACCESS_KEY_ID}"
-    export RCLONE_CONFIG_NAS10_SECRET_ACCESS_KEY="${NAS10_SECRET_ACCESS_KEY}"
+    # rclone ENV-Variablen fuer Destination (NAS20)
+    export RCLONE_CONFIG_NAS20_ACCESS_KEY_ID="${NAS_ACCESS_KEY_ID}"
+    export RCLONE_CONFIG_NAS20_SECRET_ACCESS_KEY="${NAS_SECRET_ACCESS_KEY}"
 
     BACKUP_DATE=$(date +%Y-%m-%d)
     DAY_OF_WEEK=$(date +%u)
@@ -59,8 +60,8 @@ data:
       echo "Verifiziere Tarball-Integrity..."
       tar -tzf "${TARBALL}" >/dev/null
 
-      echo "Upload nach nas10:k8s-dev-idoit/upload/upload-${BACKUP_DATE}.tar.gz"
-      rclone copyto "${TARBALL}" "nas10:k8s-dev-idoit/upload/upload-${BACKUP_DATE}.tar.gz" \
+      echo "Upload nach nas20:k8s-dev-idoit/upload/upload-${BACKUP_DATE}.tar.gz"
+      rclone copyto "${TARBALL}" "nas20:k8s-dev-idoit/upload/upload-${BACKUP_DATE}.tar.gz" \
         --timeout 300s ${RCLONE_OPTS}
       rm -f "${TARBALL}"
       echo "Upload-Tarball abgeschlossen"
@@ -85,8 +86,8 @@ data:
       echo "Verifiziere Tarball-Integrity..."
       tar -tzf "${TARBALL}" >/dev/null
 
-      echo "Upload nach nas10:k8s-dev-idoit/src/src-${BACKUP_DATE}.tar.gz"
-      rclone copyto "${TARBALL}" "nas10:k8s-dev-idoit/src/src-${BACKUP_DATE}.tar.gz" \
+      echo "Upload nach nas20:k8s-dev-idoit/src/src-${BACKUP_DATE}.tar.gz"
+      rclone copyto "${TARBALL}" "nas20:k8s-dev-idoit/src/src-${BACKUP_DATE}.tar.gz" \
         --timeout 600s ${RCLONE_OPTS}
       rm -f "${TARBALL}"
       echo "src-Tarball abgeschlossen"
@@ -94,21 +95,21 @@ data:
       echo "--- src-Backup heute uebersprungen (Wochentag ${DAY_OF_WEEK}, laeuft nur So oder bei BACKUP_FORCE_SRC=yes) ---"
     fi
 
-    # === Cleanup: alte Tarballs >7 Tage loeschen ===
+    # === Cleanup: alte Tarballs >5 Tage loeschen ===
     echo
-    echo "--- Cleanup alte Tarballs (>7 Tage) ---"
+    echo "--- Cleanup alte Tarballs (>5 Tage) ---"
     for PREFIX in upload src; do
-      echo "Pruefe nas10:k8s-dev-idoit/${PREFIX}/"
-      rclone delete "nas10:k8s-dev-idoit/${PREFIX}/" --min-age 7d ${RCLONE_OPTS} || \
+      echo "Pruefe nas20:k8s-dev-idoit/${PREFIX}/"
+      rclone delete "nas20:k8s-dev-idoit/${PREFIX}/" --min-age 5d ${RCLONE_OPTS} || \
         echo "WARNUNG: cleanup ${PREFIX} hatte Fehler (nicht fatal)"
     done
 
     echo
     echo "=== i-doit Backup abgeschlossen: $(date -Iseconds) ==="
 ---
-# CronJob: i-doit Backup auf NAS10 (DEV)
+# CronJob: i-doit Backup auf NAS20 (DEV)
 # Phase 2: Tarball-basiertes Backup - 1 PUT/Verzeichnis statt N tausend
-# Retention: 7 Tage via rclone delete --min-age 7d
+# Retention: 5 Tage via rclone delete --min-age 5d
 apiVersion: batch/v1
 kind: CronJob
 metadata:
@@ -150,16 +151,16 @@ spec:
                 - /bin/sh
                 - /scripts/backup.sh
               env:
-                - name: NAS10_ACCESS_KEY_ID
+                - name: NAS_ACCESS_KEY_ID
                   valueFrom:
                     secretKeyRef:
                       name: idoit-backup-credentials
-                      key: NAS10_ACCESS_KEY_ID
-                - name: NAS10_SECRET_ACCESS_KEY
+                      key: NAS_ACCESS_KEY_ID
+                - name: NAS_SECRET_ACCESS_KEY
                   valueFrom:
                     secretKeyRef:
                       name: idoit-backup-credentials
-                      key: NAS10_SECRET_ACCESS_KEY
+                      key: NAS_SECRET_ACCESS_KEY
                 # src/ wird nur Sonntags gesichert. Fuer manuellen Force-Run:
                 # CronJob temporaer patchen mit BACKUP_FORCE_SRC=yes,
                 # einmal triggern (kubectl create job --from=cronjob/idoit-backup),
