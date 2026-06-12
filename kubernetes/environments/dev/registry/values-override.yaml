@@ -44,6 +44,25 @@ env:
       secretKeyRef:
         name: registry-s3-credentials
         key: secretkey
+  # CA-Trust fuer NAS20 (Sectigo Leaf-only) UND Sync-Upstreams (docker.io etc.).
+  # Zot S3-Driver (Go) hat kein ca_file-Feld -> kombiniertes Bundle via SSL_CERT_FILE.
+  # ACHTUNG: SSL_CERT_FILE ERSETZT den System-Trust-Store (Go-Verhalten), daher
+  # MUSS das Bundle System-CAs + Sectigo R36/R46 enthalten (ConfigMap registry-ca-bundle,
+  # 152 Zerts, beide Verify-Pfade gegen NAS20 + ghcr.io getestet rc=0).
+  - name: SSL_CERT_FILE
+    value: /etc/ssl-ca/ca-certificates.crt
+
+# --- CA-Bundle-Mount (ConfigMap registry-ca-bundle, via Kustomization deployt) ---
+# Kombiniertes Bundle (System-CAs + Sectigo R36/R46) nach /etc/ssl-ca,
+# referenziert von SSL_CERT_FILE oben.
+extraVolumes:
+  - name: ca-bundle
+    configMap:
+      name: registry-ca-bundle
+extraVolumeMounts:
+  - name: ca-bundle
+    mountPath: /etc/ssl-ca
+    readOnly: true
 
 # --- Config-Injection ---
 mountConfig: true
@@ -61,9 +80,9 @@ configFiles:
           "name": "s3",
           "rootdirectory": "/zot",
           "region": "us-east-1",
-          "regionendpoint": "nas10.eneg.de:8010",
+          "regionendpoint": "nas20.eneg.de:8010",
           "bucket": "k8s-dev-registry",
-          "secure": false,
+          "secure": true,
           "skipverify": false,
           "forcepathstyle": true
         }
