@@ -1,13 +1,14 @@
 # Phase 14: S3-Migration NAS10 -> NAS20
 
-**Status:** In Bearbeitung (14a DEV: 9 von 11 Diensten migriert)
+**Status:** 14a DEV ABGESCHLOSSEN (11 von 11 Dienste, sauberes TLS, NAS10-Karteileichen bereinigt). Naechste Etappe: 14b TEST.
 **Beginn:** 11.06.2026
 **Bearbeiter:** Daniel Henke
 **Methode:** Clean Cutover ueber GitOps (kein Daten-Sync), Ausnahme: Registry
 
 **14a DEV Fortschritt:** Velero, garage/odoo/idoit-backup, MariaDB, CNPG (erp+shared,
-ObjectStore+pg_dumpall+basebackup), Loki, Thanos, Registry/Zot = FERTIG. Offen:
-14a-cleanup (skip-verify -> CA-Bundle bei Velero+rclone, NAS10_*-Karteileichen).
+ObjectStore+pg_dumpall+basebackup), Loki, Thanos, Registry/Zot = FERTIG.
+14a-cleanup (sauberes TLS via CA-Bundle bei Velero+rclone, NAS10_*-Karteileichen
+aus Live-Secrets entfernt) = FERTIG. 14a DEV vollstaendig abgeschlossen.
 
 ---
 
@@ -183,6 +184,8 @@ k8s-{env}-odoo-backup, k8s-{env}-idoit, k8s-{env}-registry
 | 12.06.2026 | ERKENNTNIS (Compactor RWO-PVC Rollout-Konflikt): Beim Thanos-Refresh zeigte der Compactor (Singleton, Longhorn-RWO-PVC) kurz zwei Pods gleichzeitig in ContainerCreating (restarts=0, KEIN CrashLoop). Ursache: alter Pod haelt das RWO-Volume, neuer Pod wartet auf Freigabe (Multi-Attach). Loest sich nach PVC-Uebergabe von selbst (~1-2 min), KEIN Eingriff noetig. Bei TEST/PROD einplanen: kurz Geduld statt Aktionismus. |
 | 12.06.2026 | 14a Registry (Zot) DEV Cutover ABGESCHLOSSEN (#11, Sonderfall Live-Daten): Daten vorab per rclone nach NAS20 synchronisiert (3488 Dateien, ~25GB) - KEIN Clean Cutover. config.json storageDriver: regionendpoint https/nas20, secure:true, skipverify:false. registry-s3-credentials accesskey/secretkey (Format user:token) auf NAS20. CA-Loesung: Zot S3-Driver (Go/distribution) hat KEIN ca_file-Feld -> kombiniertes Bundle (System-CAs + Sectigo R36/R46, 152 Zerts) als ConfigMap registry-ca-bundle, gemountet /etc/ssl-ca via extraVolumes/extraVolumeMounts, referenziert per ENV SSL_CERT_FILE. Verifiziert: 3 Pods Ready, GC liest NAS20-Blobs, Catalog + Manifest + Blob-Pull (Layer+Config HTTP 200) erfolgreich. Runbook: docs/runbooks/registry-ca-bundle-bauen.md |
 | 12.06.2026 | ERKENNTNIS (Zot/Go SSL_CERT_FILE ersetzt System-Trust): Gos crypto/x509 behandelt SSL_CERT_FILE und SSL_CERT_DIR als OVERRIDE der System-Defaults, NICHT additiv (root_unix.go). Folge fuer Zot: das via SSL_CERT_FILE eingebundene Bundle MUSS sowohl die oeffentlichen System-CAs (fuer Sync-Upstreams docker.io/quay.io/ghcr.io/registry.k8s.io, alle tlsVerify:true) ALS AUCH die Sectigo-Kette (NAS20 Leaf-only) enthalten. Beide Verify-Pfade vor Cutover per openssl getestet (NAS20 + ghcr.io, je rc=0). Zot-Image ist distroless: cat/ls unbrauchbar, Bundle extern in Debian-Pod bauen. |
+| 12.06.2026 | 14a-cleanup DEV ABGESCHLOSSEN: Velero (#5) + rclone-Backups garage/odoo/idoit (#8/#9/#10) von skip-verify auf sauberes verifiziertes TLS umgestellt. Je eigenes CA-Secret pro Namespace (velero-s3-ca, garage-s3-ca, odoo-s3-ca, idoit-s3-ca; Sectigo R36+R46, base64 identisch zu cnpg-s3-ca). Velero: AWS_CA_BUNDLE=/etc/ca/ca.crt via extraEnvVars + extraVolumes, insecureSkipTLSVerify entfernt, Test-Backup Completed (871 Items, 0 Errors). rclone: RCLONE_CA_CERT=/etc/ca/ca.crt statt RCLONE_NO_CHECK_CERTIFICATE, CA als Volume nach /etc/ca. Verifiziert: garage+odoo Sync (nothing to transfer, kein x509), idoit Force-SRC echter 4.5MiB PUT (Copied new). NAS10_*-Karteileichen aus den drei Live-Secrets (garage/odoo/idoit-backup-credentials) per kubectl patch (merge, null) entfernt - Repo-.enc.yaml waren bereits sauber, ArgoCD stellt sie nicht wieder her (nicht im Git-Soll). checksumAlgorithm-Workaround (Velero) bleibt erhalten. |
+| 12.06.2026 | ERKENNTNIS (rclone RCLONE_CA_CERT additiv): Anders als Gos SSL_CERT_FILE (Zot: ersetzt System-Trust) ist rclones eigene Env-Var RCLONE_CA_CERT ADDITIV zum System-Trust-Store. Folge: fuer NAS20 genuegt das reine Sectigo-Bundle (R36+R46), kein kombiniertes Bundle noetig - interne HTTP-Endpunkte (Garage-S3) und etwaige kuenftige oeffentliche Upstreams bleiben ueber den System-Trust erreichbar. conf-Option no_check_certificate griff frueher nicht; RCLONE_CA_CERT als Env-Var greift zuverlaessig (rclone 1.73.1). |
 
 ---
 
@@ -243,6 +246,10 @@ Diensten des Namespace geteilt (Option 2). Inhalt ist ueberall identisch
 | databases | cnpg-s3-ca | CNPG (ObjectStore + pg_dumpall) |
 | monitoring | eneg-s3-ca | Loki, Thanos (Store Gateway + Compactor + Prometheus-Sidecar) |
 | registry | registry-ca-bundle (ConfigMap) | Zot (kombiniertes Bundle: System-CAs + Sectigo) |
+| velero | velero-s3-ca | Velero AWS-Plugin (AWS_CA_BUNDLE) |
+| garage | garage-s3-ca | garage-backup (rclone, RCLONE_CA_CERT) |
+| odoo | odoo-s3-ca | odoo-backup (rclone, RCLONE_CA_CERT) |
+| idoit | idoit-s3-ca | idoit-backup (rclone, RCLONE_CA_CERT) |
 
 OFFEN (spaetere Konsolidierung): mariadb-s3-ca + cnpg-s3-ca koennten zu einem
 eneg-s3-ca im NS databases zusammengefuehrt werden. Ziel-Architektur fuer
@@ -261,6 +268,8 @@ trust-manager). Bewusst NACH der Migration, nicht waehrenddessen.
 | Thanos Go-SDK (Store Gateway + Compactor) | objstore.yml http_config.tls_config.ca_file + Bitnami extraVolumes/extraVolumeMounts (pro Komponente) | /etc/ca/ca.crt |
 | Thanos Sidecar (im Prometheus-Pod) | objstore.yml http_config.tls_config.ca_file + prometheusSpec.volumes + prometheusSpec.thanos.volumeMounts | /etc/ca/ca.crt |
 | Zot S3-Driver (Registry) | ENV SSL_CERT_FILE -> kombiniertes Bundle + ConfigMap-Mount | /etc/ssl-ca/ca-certificates.crt |
+| Velero AWS-Plugin | ENV AWS_CA_BUNDLE + Volume-Mount (Secret) | /etc/ca/ca.crt |
+| rclone (garage/odoo/idoit) | ENV RCLONE_CA_CERT + Volume-Mount (Secret); additiv zum System-Trust | /etc/ca/ca.crt |
 
 Kein Client macht AIA-Fetching -> Bundle MUSS clientseitig liegen.
 
