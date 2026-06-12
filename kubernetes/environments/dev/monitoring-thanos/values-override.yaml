@@ -6,6 +6,28 @@
 # benoetigen ~14-20 GB lokalen Working-Space (Source-Bloecke + Output).
 # 10Gi war zu klein und fuehrte zu KubePersistentVolumeFillingUp Alerts
 # und ThanosCompactionFailed.
+# CA-Bundle fuer NAS20 TLS (Secret eneg-s3-ca, NS monitoring, namespace-weit).
+# Nur in DEV gemountet - TEST/PROD bleiben auf NAS10/insecure (eigenes Secret
+# pro Env). Pfad /etc/ca/ca.crt deckt sich mit http_config.tls_config.ca_file
+# im objstore.yml (thanos-objstore-config Secret).
 compactor:
   persistence:
     size: 30Gi
+  extraVolumes:
+    - name: s3-ca
+      secret:
+        secretName: eneg-s3-ca
+  extraVolumeMounts:
+    - name: s3-ca
+      mountPath: /etc/ca
+      readOnly: true
+
+storegateway:
+  extraVolumes:
+    - name: s3-ca
+      secret:
+        secretName: eneg-s3-ca
+  extraVolumeMounts:
+    - name: s3-ca
+      mountPath: /etc/ca
+      readOnly: true
