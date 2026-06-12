@@ -3,5 +3,8 @@ kind: Kustomization
 
 namespace: garage
 
+resources:
+  - garage-s3-ca.yaml
+
 generators:
   - secret-generator.yaml

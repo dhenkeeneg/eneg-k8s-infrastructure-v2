@@ -145,11 +145,12 @@ spec:
                     secretKeyRef:
                       name: garage-backup-credentials
                       key: NAS_SECRET_ACCESS_KEY
-                # NAS20 QuObjects nutzt selbstsigniertes QNAP-Default-Zert
-                # (gueltig fuer keinen Namen). rclone conf-Option greift nicht
-                # zuverlaessig -> globale Env-Var erzwingt skip-verify.
-                - name: RCLONE_NO_CHECK_CERTIFICATE
-                  value: "true"
+                # Sauberes TLS gegen NAS20: kein skip-verify mehr. QuObjects
+                # (8010) sendet nur das Leaf-Zert -> Sectigo-Bundle (R36+R46)
+                # clientseitig via RCLONE_CA_CERT (additiv zum System-Trust).
+                # Secret garage-s3-ca (NS garage), Mount /etc/ca/ca.crt. (14a-cleanup)
+                - name: RCLONE_CA_CERT
+                  value: /etc/ca/ca.crt
               volumeMounts:
                 - name: config
                   mountPath: /config/rclone.conf
@@ -158,6 +159,9 @@ spec:
                 - name: scripts
                   mountPath: /scripts/backup.sh
                   subPath: backup.sh
+                  readOnly: true
+                - name: s3-ca
+                  mountPath: /etc/ca
                   readOnly: true
               resources:
                 requests:
@@ -180,3 +184,6 @@ spec:
                 items:
                   - key: backup.sh
                     path: backup.sh
+            - name: s3-ca
+              secret:
+                secretName: garage-s3-ca
