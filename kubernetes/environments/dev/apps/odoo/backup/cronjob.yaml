@@ -119,11 +119,12 @@ spec:
                     secretKeyRef:
                       name: odoo-backup-credentials
                       key: NAS_SECRET_ACCESS_KEY
-                # NAS20 QuObjects nutzt selbstsigniertes QNAP-Default-Zert
-                # (gueltig fuer keinen Namen). rclone conf-Option greift nicht
-                # zuverlaessig -> globale Env-Var erzwingt skip-verify.
-                - name: RCLONE_NO_CHECK_CERTIFICATE
-                  value: "true"
+                # Sauberes TLS gegen NAS20: kein skip-verify mehr. QuObjects
+                # (8010) sendet nur das Leaf-Zert -> Sectigo-Bundle (R36+R46)
+                # clientseitig via RCLONE_CA_CERT (additiv zum System-Trust).
+                # Secret odoo-s3-ca (NS odoo), Mount /etc/ca/ca.crt. (14a-cleanup)
+                - name: RCLONE_CA_CERT
+                  value: /etc/ca/ca.crt
               volumeMounts:
                 - name: config
                   mountPath: /config/rclone.conf
@@ -135,6 +136,9 @@ spec:
                   readOnly: true
                 - name: filestore
                   mountPath: /filestore
+                  readOnly: true
+                - name: s3-ca
+                  mountPath: /etc/ca
                   readOnly: true
               resources:
                 requests:
@@ -160,3 +164,6 @@ spec:
             - name: filestore
               persistentVolumeClaim:
                 claimName: odoo-filestore
+            - name: s3-ca
+              secret:
+                secretName: odoo-s3-ca
