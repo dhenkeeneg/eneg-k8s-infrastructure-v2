@@ -27,6 +27,9 @@ spec:
               configMap:
                 name: cnpg-logical-backup-script
                 defaultMode: 0755
+            - name: ca
+              secret:
+                secretName: cnpg-s3-ca
           containers:
             - name: pg-backup
               image: postgres:17
@@ -48,9 +51,9 @@ spec:
                 - name: S3_PREFIX
                   value: "cnpg-shared/"
                 - name: S3_ENDPOINT
-                  value: "http://nas10.eneg.de:8010"
+                  value: "https://nas20.eneg.de:8010"
                 - name: RETENTION_DAYS
-                  value: "32"
+                  value: "5"
                 - name: AWS_ACCESS_KEY_ID
                   valueFrom:
                     secretKeyRef:
@@ -67,9 +70,17 @@ spec:
                   value: "when_required"
                 - name: AWS_RESPONSE_CHECKSUM_VALIDATION
                   value: "when_required"
+                # NAS20 QuObjects sendet nur das Leaf-Zert (nicht die Sectigo-Kette).
+                # awscli (botocore) macht kein AIA-Fetching -> CA-Bundle clientseitig
+                # noetig. Greift automatisch fuer alle aws-Aufrufe im backup.sh.
+                - name: AWS_CA_BUNDLE
+                  value: "/etc/ca/ca.crt"
               volumeMounts:
                 - name: scripts
                   mountPath: /scripts
+                - name: ca
+                  mountPath: /etc/ca
+                  readOnly: true
               resources:
                 requests:
                   memory: "256Mi"
