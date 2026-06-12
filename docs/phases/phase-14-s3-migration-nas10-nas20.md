@@ -1,12 +1,12 @@
 # Phase 14: S3-Migration NAS10 -> NAS20
 
-**Status:** In Bearbeitung (14a DEV: 8 von 11 Diensten migriert)
+**Status:** In Bearbeitung (14a DEV: 9 von 11 Diensten migriert)
 **Beginn:** 11.06.2026
 **Bearbeiter:** Daniel Henke
 **Methode:** Clean Cutover ueber GitOps (kein Daten-Sync), Ausnahme: Registry
 
 **14a DEV Fortschritt:** Velero, garage/odoo/idoit-backup, MariaDB, CNPG (erp+shared,
-ObjectStore+pg_dumpall+basebackup), Loki, Thanos = FERTIG. Offen: Registry (#11),
+ObjectStore+pg_dumpall+basebackup), Loki, Thanos, Registry/Zot = FERTIG. Offen:
 14a-cleanup (skip-verify -> CA-Bundle bei Velero+rclone, NAS10_*-Karteileichen).
 
 ---
@@ -242,6 +242,7 @@ Diensten des Namespace geteilt (Option 2). Inhalt ist ueberall identisch
 | databases | mariadb-s3-ca | MariaDB |
 | databases | cnpg-s3-ca | CNPG (ObjectStore + pg_dumpall) |
 | monitoring | eneg-s3-ca | Loki, Thanos (Store Gateway + Compactor + Prometheus-Sidecar) |
+| registry | registry-ca-bundle (ConfigMap) | Zot (kombiniertes Bundle: System-CAs + Sectigo) |
 
 OFFEN (spaetere Konsolidierung): mariadb-s3-ca + cnpg-s3-ca koennten zu einem
 eneg-s3-ca im NS databases zusammengefuehrt werden. Ziel-Architektur fuer
@@ -259,6 +260,7 @@ trust-manager). Bewusst NACH der Migration, nicht waehrenddessen.
 | Loki Go-SDK | loki.storage.s3.http_config.ca_file + Volume-Mount | /etc/ca/ca.crt |
 | Thanos Go-SDK (Store Gateway + Compactor) | objstore.yml http_config.tls_config.ca_file + Bitnami extraVolumes/extraVolumeMounts (pro Komponente) | /etc/ca/ca.crt |
 | Thanos Sidecar (im Prometheus-Pod) | objstore.yml http_config.tls_config.ca_file + prometheusSpec.volumes + prometheusSpec.thanos.volumeMounts | /etc/ca/ca.crt |
+| Zot S3-Driver (Registry) | ENV SSL_CERT_FILE -> kombiniertes Bundle + ConfigMap-Mount | /etc/ssl-ca/ca-certificates.crt |
 
 Kein Client macht AIA-Fetching -> Bundle MUSS clientseitig liegen.
 
