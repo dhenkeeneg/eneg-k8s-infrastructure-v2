@@ -1,9 +1,13 @@
 # Phase 14: S3-Migration NAS10 -> NAS20
 
-**Status:** In Bearbeitung
+**Status:** In Bearbeitung (14a DEV: 7 von 11 Diensten migriert)
 **Beginn:** 11.06.2026
 **Bearbeiter:** Daniel Henke
 **Methode:** Clean Cutover ueber GitOps (kein Daten-Sync), Ausnahme: Registry
+
+**14a DEV Fortschritt:** Velero, garage/odoo/idoit-backup, MariaDB, CNPG (erp+shared,
+ObjectStore+pg_dumpall+basebackup), Loki = FERTIG. Offen: Thanos (#7), Registry (#11),
+14a-cleanup (skip-verify -> CA-Bundle bei Velero+rclone, NAS10_*-Karteileichen).
 
 ---
 
@@ -171,6 +175,10 @@ k8s-{env}-odoo-backup, k8s-{env}-idoit, k8s-{env}-registry
 | 11.06.2026 | ERKENNTNIS (QuObjects-Kette): QuObjects-Webserver auf 8010 sendet NUR das Leaf-Zert, nicht die Intermediate-Kette (bekanntes QuObjects-Limit, serverseitig NICHT loesbar - QTS-Webserver wuerde Kette senden, QuObjects-eigener nicht). Folge: Clients mit strikter Verifikation (z.B. MariaDB-Operator) brauchen das CA-Bundle clientseitig. |
 | 11.06.2026 | 14a MariaDB DEV Cutover ABGESCHLOSSEN: PhysicalBackup endpoint https/nas20, tls.enabled:true + caSecretKeyRef (mariadb-s3-ca), maxRetention 120h. CA-Bundle = Sectigo Intermediate DV R36 + Root R46 (von crt.sectigo.com, openssl Verify rc=0). Secret mariadb-s3-ca UNVERSCHLUESSELT (oeffentliche CA) als resources-Eintrag neben ksops-generator. mariadb-credentials S3-Keys auf NAS20. WICHTIG: PhysicalBackup spec.storage IMMUTABLE -> Objekt loeschen+ArgoCD-SelfHeal legt neu an. Backup-Pod completed, kein x509-Fehler, Push+Cleanup ok. |
 | 11.06.2026 | ERKENNTNIS (CNPG Init:1/2 = KEIN Fehler): CNPG-Pods zeigen in `kubectl get pods` Kurzanzeige `Init:1/2`, sind aber tatsaechlich 2/2 Running + Ready. Grund: Barman-Plugin-Sidecar (plugin-barman-cloud) ist ein NATIVER Sidecar (initContainer mit restartPolicy:Always) - laeuft dauerhaft und zaehlt daher in der Init-Spalte als "nicht abgeschlossen". Detailstatus (.status.phase=Running, conditions Ready=True) pruefen, nicht die Kurzanzeige. Verifiziert: alle 6 Pods (cnpg-erp-3/4/7, cnpg-shared-2/3/5) 2/2 Running. -> CNPG gesund, bereit fuer Migration. |
+| 12.06.2026 | 14a CNPG DEV Cutover ABGESCHLOSSEN (#1/#2/#3/#3b, gekoppelter Block): ObjectStores erp+shared endpointURL https/nas20 + endpointCA (Secret cnpg-s3-ca), retention 7d->5d. pg_dumpall-CronJobs erp+shared S3_ENDPOINT https/nas20, RETENTION_DAYS 32->5, AWS_CA_BUNDLE=/etc/ca/ca.crt + ca-Volume-Mount (Secret cnpg-s3-ca). cnpg-s3-credentials: SECRET_ACCESS_KEY + S3_ENDPOINT auf NAS20 (ACCESS_KEY_ID bleibt s3-k8s-dev). Eigenes Secret cnpg-s3-ca statt mariadb-s3-ca (Entkopplung). Verifiziert: WAL-Archiving beide Primaries (~0,65-0,98s/WAL, kein x509/InvalidDigest), pg_dumpall beide Cluster (Upload complete), basebackup beide (Backup-CR completed). Rolling-Restart aller 6 Pods durch Operator (transientes Degraded, normal). |
+| 12.06.2026 | ERKENNTNIS (CNPG Cloud-Plugin Status-Writeback): firstRecoverabilityPoint + lastSuccessfulBackup im Cluster-Objekt werden vom Barman Cloud Plugin NICHT zuverlaessig/sofort zurueckgeschrieben (zeigten nach Cutover noch alte NAS10-Werte). Autoritativ ist das Backup-CR (.status.phase=completed + beginWal/endWal) + erfolgreiche WAL-Archive-Logs, NICHT die Cluster-Status-Felder. barman-cloud-backup-list per manuellem exec scheitert mit "Unable to locate credentials" (Sidecar-Env wird nicht vererbt) - kein Datenproblem. |
+| 12.06.2026 | 14a Loki DEV Cutover ABGESCHLOSSEN (#6, B1-Variante): base/monitoring/loki/values.yaml auf https/nas20 + insecure:false + http_config.ca_file (Quelle der Wahrheit). DEV-Override: extraVolumes/Mounts (Secret eneg-s3-ca, NS monitoring, namespace-weit fuer Loki+Thanos) + retention 120h. TEST/PROD-Overrides DEFENSIV auf NAS10/HTTP zurueckgezogen (endpoint + insecure:true), bis deren Migration. CA-Mount NUR im DEV-Override (nicht base!), sonst haengen TEST/PROD-Pods am fehlenden Secret. loki-s3-credentials S3_SECRET_KEY auf NAS20. Verifiziert: Pod 2/2, S3 Read (download ~1-2,5ms) + Write (flushing stream bis 4MB, kein failed to flush), kein x509. |
+| 12.06.2026 | ERKENNTNIS (Env-Staleness bei Secret-Cutover): Dienste die S3-Credentials via extraEnvFrom/secretRef als ENV laden (Loki), bekommen Secret-Aenderungen NICHT live - Pod laedt ENV nur beim Start. Wenn Hard-Refresh den Pod VOR dem Secret-Sync neu startet, traegt er alte Credentials (Folge: InvalidAccessKeyId trotz korrektem Cluster-Secret). LEHRE: Reihenfolge = erst *-secrets-App syncen + Cluster-Secret pruefen, DANN Dienst-Pod (neu)starten. Bei Loki war ein zweiter manueller Pod-Restart noetig. |
 
 ---
 
@@ -206,3 +214,60 @@ das selbstsignierte QNAP-Default-Zertifikat; alle Clients nutzen skip-verify
 ACHTUNG: Die Schreibweise (mit/ohne Schema) und das skip-verify-Flag sind je
 Dienst unterschiedlich. Pro Dienst einzeln verifizieren! Diese Tabelle ist
 Arbeitsannahme - bei jedem Cutover-Schritt am echten Verhalten pruefen.
+
+
+---
+
+## 9. CA-Bundle-Muster (sauberes TLS) - dienstuebergreifend
+
+Ab MariaDB wird sauberes TLS gefahren. Da QuObjects auf 8010 nur das Leaf-Zert
+sendet (siehe Historie 11.06.), braucht JEDER strikt verifizierende Client das
+Sectigo-Bundle (Intermediate DV R36 + Root R46) clientseitig. Empirisch
+bestaetigt (CNPG-Test-Pod, openssl + awscli): System-Trust-Store allein
+schlaegt fehl (Verify rc=21 / "unable to get local issuer certificate"),
+mit Bundle rc=0 bzw. nur noch Auth-Fehler (= TLS ok).
+
+### CA-Secret-Strategie (Stufe 1)
+
+Secrets sind namespace-gebunden -> ein Bundle-Secret pro Namespace, von allen
+Diensten des Namespace geteilt (Option 2). Inhalt ist ueberall identisch
+(oeffentliche CA -> UNVERSCHLUESSELT, kein SOPS, als resources-Eintrag).
+
+| Namespace | CA-Secret | genutzt von |
+|-----------|-----------|-------------|
+| databases | mariadb-s3-ca | MariaDB |
+| databases | cnpg-s3-ca | CNPG (ObjectStore + pg_dumpall) |
+| monitoring | eneg-s3-ca | Loki, spaeter Thanos |
+
+OFFEN (spaetere Konsolidierung): mariadb-s3-ca + cnpg-s3-ca koennten zu einem
+eneg-s3-ca im NS databases zusammengefuehrt werden. Ziel-Architektur fuer
+zentrale Pflege bei Zert-Erneuerung (12.09.2026!): EINE Quell-Datei +
+automatische Replikation in alle NS (Kyverno generate-Policy oder
+trust-manager). Bewusst NACH der Migration, nicht waehrenddessen.
+
+### CA-Einbindung je Client-Typ (verifiziert)
+
+| Client (Dienst) | Feld/Mechanismus | Pfad |
+|-----------------|------------------|------|
+| MariaDB-Operator | tls.caSecretKeyRef | (Operator-intern) |
+| Barman Go-SDK (CNPG ObjectStore) | spec.configuration.endpointCA {name,key} | (Plugin-intern) |
+| awscli/botocore (pg_dumpall) | ENV AWS_CA_BUNDLE + Volume-Mount | /etc/ca/ca.crt |
+| Loki Go-SDK | loki.storage.s3.http_config.ca_file + Volume-Mount | /etc/ca/ca.crt |
+
+Kein Client macht AIA-Fetching -> Bundle MUSS clientseitig liegen.
+
+### Multi-Env-Falle bei base-Konfiguration (Loki-Lehre, B1-Muster)
+
+Wenn die S3-Config in einer von DEV/TEST/PROD GETEILTEN base liegt (z.B. Loki),
+zieht eine base-Umstellung auf NAS20 sofort alle Envs mit. Sauberes Muster (B1):
+- base = Ziel (NAS20 + ca_file-PFAD als String, inert solange env HTTP nutzt)
+- DEV-Override = CA-Volume-Mount (Secret) + retention; nur hier, weil das Secret
+  nur in DEV existiert (sonst Pod-Haenger in TEST/PROD)
+- TEST/PROD-Override = DEFENSIV endpoint+insecure:true auf NAS10 zurueck,
+  bis deren Migration ansteht (dann Rueckhol-Block entfernen)
+
+### Cutover-Reihenfolge bei ENV-getriebenen Credentials (Loki-Lehre)
+
+Erst *-secrets-App syncen + Cluster-Secret pruefen (kubectl get secret -o
+jsonpath), DANN Dienst-Pod (neu)starten. Sonst laedt der Pod beim
+Hard-Refresh-Restart alte ENV-Credentials (extraEnvFrom ist nicht live).
