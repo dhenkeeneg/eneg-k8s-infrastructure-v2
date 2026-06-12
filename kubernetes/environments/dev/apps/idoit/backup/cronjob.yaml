@@ -160,11 +160,12 @@ spec:
                     secretKeyRef:
                       name: idoit-backup-credentials
                       key: NAS_SECRET_ACCESS_KEY
-                # NAS20 QuObjects nutzt selbstsigniertes QNAP-Default-Zert
-                # (gueltig fuer keinen Namen). rclone conf-Option greift nicht
-                # zuverlaessig -> globale Env-Var erzwingt skip-verify.
-                - name: RCLONE_NO_CHECK_CERTIFICATE
-                  value: "true"
+                # Sauberes TLS gegen NAS20: kein skip-verify mehr. QuObjects
+                # (8010) sendet nur das Leaf-Zert -> Sectigo-Bundle (R36+R46)
+                # clientseitig via RCLONE_CA_CERT (additiv zum System-Trust).
+                # Secret idoit-s3-ca (NS idoit), Mount /etc/ca/ca.crt. (14a-cleanup)
+                - name: RCLONE_CA_CERT
+                  value: /etc/ca/ca.crt
                 # src/ wird nur Sonntags gesichert. Fuer manuellen Force-Run:
                 # CronJob temporaer patchen mit BACKUP_FORCE_SRC=yes,
                 # einmal triggern (kubectl create job --from=cronjob/idoit-backup),
@@ -190,6 +191,9 @@ spec:
                   readOnly: true
                 - name: work
                   mountPath: /tmp/idoit-backup
+                - name: s3-ca
+                  mountPath: /etc/ca
+                  readOnly: true
               resources:
                 requests:
                   cpu: 100m
@@ -218,3 +222,6 @@ spec:
             - name: work
               emptyDir:
                 sizeLimit: 500Mi
+            - name: s3-ca
+              secret:
+                secretName: idoit-s3-ca
