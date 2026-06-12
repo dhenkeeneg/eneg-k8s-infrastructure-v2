@@ -4,11 +4,17 @@
 # Groessere PVC und Caches als DEV/TEST.
 
 # S3 Bucket fuer PROD
+# DEFENSIV (Phase 14a): base zeigt auf NAS20, PROD bleibt vorerst auf NAS10.
+# endpoint+insecure ueberschreiben base zurueck; ca_file (base) bleibt inert,
+# da insecure:true. Bucket-Name wie gehabt. Bei PROD-Migration entfernen.
 loki:
   storage:
     bucketNames:
       chunks: k8s-prod-loki
       ruler: k8s-prod-loki
+    s3:
+      endpoint: http://nas10.eneg.de:8010
+      insecure: true
 
 # PVC-Groesse (groesser als DEV/TEST) + Memory-Limit erhoeht
 # Memory-Limit auf 3Gi angehoben (mehr Apps, mehr Logs als DEV/TEST),
