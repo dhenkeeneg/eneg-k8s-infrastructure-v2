@@ -1,12 +1,12 @@
 # Phase 14: S3-Migration NAS10 -> NAS20
 
-**Status:** In Bearbeitung (14a DEV: 7 von 11 Diensten migriert)
+**Status:** In Bearbeitung (14a DEV: 8 von 11 Diensten migriert)
 **Beginn:** 11.06.2026
 **Bearbeiter:** Daniel Henke
 **Methode:** Clean Cutover ueber GitOps (kein Daten-Sync), Ausnahme: Registry
 
 **14a DEV Fortschritt:** Velero, garage/odoo/idoit-backup, MariaDB, CNPG (erp+shared,
-ObjectStore+pg_dumpall+basebackup), Loki = FERTIG. Offen: Thanos (#7), Registry (#11),
+ObjectStore+pg_dumpall+basebackup), Loki, Thanos = FERTIG. Offen: Registry (#11),
 14a-cleanup (skip-verify -> CA-Bundle bei Velero+rclone, NAS10_*-Karteileichen).
 
 ---
@@ -179,6 +179,8 @@ k8s-{env}-odoo-backup, k8s-{env}-idoit, k8s-{env}-registry
 | 12.06.2026 | ERKENNTNIS (CNPG Cloud-Plugin Status-Writeback): firstRecoverabilityPoint + lastSuccessfulBackup im Cluster-Objekt werden vom Barman Cloud Plugin NICHT zuverlaessig/sofort zurueckgeschrieben (zeigten nach Cutover noch alte NAS10-Werte). Autoritativ ist das Backup-CR (.status.phase=completed + beginWal/endWal) + erfolgreiche WAL-Archive-Logs, NICHT die Cluster-Status-Felder. barman-cloud-backup-list per manuellem exec scheitert mit "Unable to locate credentials" (Sidecar-Env wird nicht vererbt) - kein Datenproblem. |
 | 12.06.2026 | 14a Loki DEV Cutover ABGESCHLOSSEN (#6, B1-Variante): base/monitoring/loki/values.yaml auf https/nas20 + insecure:false + http_config.ca_file (Quelle der Wahrheit). DEV-Override: extraVolumes/Mounts (Secret eneg-s3-ca, NS monitoring, namespace-weit fuer Loki+Thanos) + retention 120h. TEST/PROD-Overrides DEFENSIV auf NAS10/HTTP zurueckgezogen (endpoint + insecure:true), bis deren Migration. CA-Mount NUR im DEV-Override (nicht base!), sonst haengen TEST/PROD-Pods am fehlenden Secret. loki-s3-credentials S3_SECRET_KEY auf NAS20. Verifiziert: Pod 2/2, S3 Read (download ~1-2,5ms) + Write (flushing stream bis 4MB, kein failed to flush), kein x509. |
 | 12.06.2026 | ERKENNTNIS (Env-Staleness bei Secret-Cutover): Dienste die S3-Credentials via extraEnvFrom/secretRef als ENV laden (Loki), bekommen Secret-Aenderungen NICHT live - Pod laedt ENV nur beim Start. Wenn Hard-Refresh den Pod VOR dem Secret-Sync neu startet, traegt er alte Credentials (Folge: InvalidAccessKeyId trotz korrektem Cluster-Secret). LEHRE: Reihenfolge = erst *-secrets-App syncen + Cluster-Secret pruefen, DANN Dienst-Pod (neu)starten. Bei Loki war ein zweiter manueller Pod-Restart noetig. |
+| 12.06.2026 | 14a Thanos DEV Cutover ABGESCHLOSSEN (#7, Option A sauberes TLS): S3-Config liegt komplett im SOPS-Secret thanos-objstore-config (objstore.yml) - genutzt von ALLEN drei S3-Komponenten ueber dieselbe Referenz: Store Gateway + Compactor (Bitnami-Chart) UND Prometheus-Sidecar (kube-prometheus-stack, OBJSTORE_CONFIG via secretKeyRef). Secret: endpoint nas20:8010 (OHNE Schema), insecure:false, http_config.tls_config.ca_file:/etc/ca/ca.crt, Keys NAS20 (Format user:token). CA-Mount (eneg-s3-ca) pro Komponente: Bitnami via storegateway/compactor.extraVolumes+extraVolumeMounts (Feldnamen per helm template verifiziert), Sidecar via prometheusSpec.volumes + prometheusSpec.thanos.volumeMounts. Alle Mounts NUR in DEV-Overrides (nicht base) - Secret existiert nur in DEV. base + TEST/PROD unberuehrt. Verifiziert: Store Gateway laedt 285 Bloecke von NAS20, Compactor Sync/Compaction/Cleanup fehlerfrei, Sidecar ready mit objstore-Config, kein x509. |
+| 12.06.2026 | ERKENNTNIS (Compactor RWO-PVC Rollout-Konflikt): Beim Thanos-Refresh zeigte der Compactor (Singleton, Longhorn-RWO-PVC) kurz zwei Pods gleichzeitig in ContainerCreating (restarts=0, KEIN CrashLoop). Ursache: alter Pod haelt das RWO-Volume, neuer Pod wartet auf Freigabe (Multi-Attach). Loest sich nach PVC-Uebergabe von selbst (~1-2 min), KEIN Eingriff noetig. Bei TEST/PROD einplanen: kurz Geduld statt Aktionismus. |
 
 ---
 
@@ -237,7 +239,7 @@ Diensten des Namespace geteilt (Option 2). Inhalt ist ueberall identisch
 |-----------|-----------|-------------|
 | databases | mariadb-s3-ca | MariaDB |
 | databases | cnpg-s3-ca | CNPG (ObjectStore + pg_dumpall) |
-| monitoring | eneg-s3-ca | Loki, spaeter Thanos |
+| monitoring | eneg-s3-ca | Loki, Thanos (Store Gateway + Compactor + Prometheus-Sidecar) |
 
 OFFEN (spaetere Konsolidierung): mariadb-s3-ca + cnpg-s3-ca koennten zu einem
 eneg-s3-ca im NS databases zusammengefuehrt werden. Ziel-Architektur fuer
@@ -253,6 +255,8 @@ trust-manager). Bewusst NACH der Migration, nicht waehrenddessen.
 | Barman Go-SDK (CNPG ObjectStore) | spec.configuration.endpointCA {name,key} | (Plugin-intern) |
 | awscli/botocore (pg_dumpall) | ENV AWS_CA_BUNDLE + Volume-Mount | /etc/ca/ca.crt |
 | Loki Go-SDK | loki.storage.s3.http_config.ca_file + Volume-Mount | /etc/ca/ca.crt |
+| Thanos Go-SDK (Store Gateway + Compactor) | objstore.yml http_config.tls_config.ca_file + Bitnami extraVolumes/extraVolumeMounts (pro Komponente) | /etc/ca/ca.crt |
+| Thanos Sidecar (im Prometheus-Pod) | objstore.yml http_config.tls_config.ca_file + prometheusSpec.volumes + prometheusSpec.thanos.volumeMounts | /etc/ca/ca.crt |
 
 Kein Client macht AIA-Fetching -> Bundle MUSS clientseitig liegen.
 
