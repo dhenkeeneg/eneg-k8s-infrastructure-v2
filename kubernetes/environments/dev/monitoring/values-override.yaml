@@ -24,7 +24,8 @@ defaultRules:
 # --- Prometheus DEV ---
 prometheus:
   prometheusSpec:
-    # DEV-Retention: 7 Tage / max. 12 GB (Sicherheitsmarge zu 20Gi PVC, bevor TSDB Schreibstopp)
+    # DEV-Retention: 7 Tage / max. 12 GB (Sicherheitsmarge zu 25Gi PVC, bevor TSDB Schreibstopp)
+    # PVC 2026-06-21 von 20Gi auf 25Gi erweitert (TSDB-WAL-Deadlock aufgeloest, siehe Runbook)
     retention: 7d
     retentionSize: 12GB
     storageSpec:
@@ -32,7 +33,7 @@ prometheus:
         spec:
           resources:
             requests:
-              storage: 20Gi
+              storage: 25Gi
 
     # CA-Bundle fuer NAS20 TLS im Thanos-Sidecar (schreibt Bloecke nach S3).
     # Sidecar nutzt thanos-objstore-config (objstore.yml mit ca_file:/etc/ca/ca.crt).
