@@ -1,0 +1,40 @@
+---
+# PriorityClass: eneg-stateful-critical
+#
+# Zweck: Schuetzt die zustandsbehafteten Datenbank-Workloads (CNPG + MariaDB-
+# Galera) im Node-Pressure-Fall vor Verdraengung. Bei Memory-/Disk-Pressure
+# waehlt das kubelet Pods zum Evicten primaer nach QoS und Priority aus; ohne
+# eigene PriorityClass laufen die DB-Pods auf Priority 0 (gleichauf mit den
+# Pilot-Apps) und koennten zugunsten unwichtigerer Workloads gekillt werden.
+# Das war ein Glied in der Ausfall-Kaskade vom 2026-06-29 (Node-OOM auf
+# k8s-dev-21 -> DB-Pod-Verlust -> kein Primary -> CNPG-WAL-Deadlock).
+# Siehe docs/incidents/2026-06-29-cnpg-wal-deadlock-longhorn-kaskade.md
+#
+# Wert-Einordnung (bewusst unterhalb des Storage-Layers):
+#   system-node-critical     2000001000  (K8s)
+#   system-cluster-critical  2000000000  (K8s, u.a. CoreDNS)
+#   longhorn-critical        1000000000  (Longhorn instance-manager / csi-*)
+#   eneg-stateful-critical    900000000  <-- DBs: knapp unter Longhorn, da die
+#                                             DB ohne funktionierenden Storage-
+#                                             Layer ohnehin nicht laufen kann
+#   (default)                         0  (Apps, Monitoring, Registry/Zot)
+#
+# Bewusst NICHT in dieser Klasse: Monitoring (Beobachter, Verlust temporaer +
+# speicherhungrig -> soll im Pressure-Fall eher weichen) und Registry/Zot
+# (3 Replicas HA, in DEV Internet-Fallback). Begruendung im Incident-Doc /
+# Resilienz-Analyse.
+apiVersion: scheduling.k8s.io/v1
+kind: PriorityClass
+metadata:
+  name: eneg-stateful-critical
+  labels:
+    app.kubernetes.io/part-of: eneg-platform
+    app.kubernetes.io/managed-by: argocd
+value: 900000000
+# globalDefault MUSS false bleiben - sonst bekaeme jeder Pod ohne explizite
+# Klasse diese Prioritaet und der Schutz waere wertlos.
+globalDefault: false
+description: >-
+  eNeG stateful database workloads (CloudNativePG, MariaDB-Galera). Knapp
+  unterhalb von longhorn-critical, damit der Storage-Layer im Pressure-Fall
+  Vorrang behaelt. Nicht fuer Monitoring oder Registry verwenden.
