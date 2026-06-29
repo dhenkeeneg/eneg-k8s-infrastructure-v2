@@ -1,10 +1,24 @@
 ---
 # CloudNativePG Operator Helm Values
-# Chart: cloudnative-pg v0.27.1 (Operator v1.28.1)
+# Chart: cloudnative-pg v0.27.1 (Chart-appVersion v1.28.1)
+# Image-Override: Operator v1.28.3 (siehe image.tag unten)
 # Repository: https://cloudnative-pg.github.io/charts
 #
 # Minimale Konfiguration - Defaults sind gut gewaehlt.
 # Nur explizit aendern was noetig ist.
+
+# Image-Override: Patch auf Operator v1.28.3 bei Chart 0.27.1.
+# Grund: 1.28.3 behebt CVE-2026-44477 (CVSS 9.4, Metrics-Exporter) sowie einen
+# Daten-Sicherheits-Bug im Failover-Pfad. Das Chart 0.27.1 liefert per Default
+# appVersion 1.28.1; 1.28.3 ist dieselbe Minor-Linie (1.28.x) -> laut CNPG-
+# Versionierungspolitik keine rueckwaerts-inkompatiblen Aenderungen, CRDs des
+# Charts bleiben kompatibel. Der Sprung auf Chart 0.28.x (= Operator 1.29.x,
+# Minor-Upgrade) ist als separates Vorhaben vorgemerkt.
+# Hinweis Metrics: ab 1.28.3 nutzt der Exporter die Rolle cnpg_metrics_exporter
+# (pg_monitor) statt postgres-Superuser. Standard-Queries (cnpg-default-
+# monitoring) sind davon nicht betroffen; nach dem Patch Metriken gegenpruefen.
+image:
+  tag: "1.28.3"
 
 # CRDs mit dem Chart installieren
 crds:

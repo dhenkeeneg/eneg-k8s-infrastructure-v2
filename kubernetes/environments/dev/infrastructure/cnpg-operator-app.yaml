@@ -1,6 +1,7 @@
 ---
 # ArgoCD Application: CloudNativePG Operator
-# Helm Chart: cloudnative-pg v0.27.1 (Operator v1.28.1)
+# Helm Chart: cloudnative-pg v0.27.1 (Operator-Image via Values auf v1.28.3
+# gepatcht - CVE-2026-44477 + Failover-Daten-Fix; siehe operator/values.yaml)
 # Multi-Source: Helm Chart + Values aus Git
 apiVersion: argoproj.io/v1alpha1
 kind: Application
