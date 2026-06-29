@@ -52,8 +52,11 @@ spec:
     storageClass: longhorn-db
 
   # WAL Storage (separates Volume fuer bessere I/O-Performance)
+  # 2026-06-29: 5Gi -> 8Gi. Gleicher WAL-Stau-Deadlock wie cnpg-erp: Cluster
+  # ohne Primary, WAL-Volume vollgelaufen -> "Not enough disk space". Mehr
+  # Puffer bricht den Deadlock; Verkleinern spaeter nur per Instanz-Recreate.
   walStorage:
-    size: 5Gi
+    size: 8Gi
     storageClass: longhorn-db
 
   # Resources (DEV-Dimensionierung)
