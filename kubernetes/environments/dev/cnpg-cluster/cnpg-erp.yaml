@@ -72,8 +72,12 @@ spec:
     storageClass: longhorn-db
 
   # WAL Storage (separates Volume)
+  # 2026-06-29: 5Gi -> 8Gi. WAL-Stau bei Cluster-Stillstand (kein Primary ueber
+  # 3+ Tage) liess das 5Gi-Volume volllaufen -> "Not enough disk space" ->
+  # Deadlock (Postgres startet nicht -> kein Primary -> kein WAL-Recycling).
+  # Mehr Puffer bricht den Deadlock; Verkleinern spaeter nur per Instanz-Recreate.
   walStorage:
-    size: 5Gi
+    size: 8Gi
     storageClass: longhorn-db
 
   # Resources (DEV - hoeher als shared)
