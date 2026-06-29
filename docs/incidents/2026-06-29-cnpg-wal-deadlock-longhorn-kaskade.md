@@ -139,12 +139,20 @@ und wurden verworfen + frisch provisioniert (datensicher, da CNPG-Join vom Prima
 
 ## Offene Punkte / Follow-ups
 
-- **Resilienz-Analyse "Infra-Pod-Restarts → Kaskade"** in eigenem Chat (PriorityClasses,
-  PDBs, Resource-Limits, Longhorn-Settings, Monitoring). Uebergabe-Doku vorhanden.
-- **Loki-FS-Korruption** grundsaetzlich untersuchen (2. Vorfall).
-- **WAL-Volume-Fuellstand-Alert** pruefen/ergaenzen (analog `CnpgReplicationSlotInactive`).
+- **Resilienz-Analyse "Infra-Pod-Restarts → Kaskade"**: durchgefuehrt am 2026-06-29.
+  Umgesetzte DEV-Massnahmen siehe `docs/phases/resilienz-haertung-wal-deadlock-dev.md`.
+  ✅ PriorityClass `eneg-stateful-critical` (CNPG + Galera), ✅ `max_slot_wal_keep_size=6GB`
+  (beide CNPG), ✅ Alert `CnpgClusterNoPrimary`, ✅ CNPG-Operator-Patch 1.28.3 (CVE-2026-44477
+  + Failover-Daten-Fix). Offen aus der Analyse: Longhorn-Node-Speicher-Alert, Speicher-
+  Headroom -22/-23, Resource-Review der neustartenden Infra-Pods.
+- **WAL-Volume-Fuellstand-Alert**: ✅ war bereits vorhanden (`CnpgWalVolumeWarning/Critical`,
+  70/85%). Zusaetzlich neu: `CnpgClusterNoPrimary` (Frueherkennung VOR dem WAL-Stau, for:15m).
+- **Loki-FS-Korruption** grundsaetzlich untersuchen (2. Vorfall). — weiterhin offen.
 - **NFS-Follow-up aus Mai ist gegenstandslos**: kein `nfsvers` mehr im Repo, keine NFS-PVs/
   -StorageClasses, alle Backups gehen nach S3. Punkt gestrichen.
 - **8Gi WAL bleibt dauerhaft** (Verkleinern nur per Instanz-Recreate moeglich, K8s-PVC-Shrink
   wird nicht unterstuetzt).
+- **CNPG-Operator Minor-Upgrade 1.28.x → 1.29.x** als eigenes, geplantes Vorhaben vorgemerkt
+  (Chart 0.28.x, Review der 1.29-Breaking-Changes noetig).
+- **TEST/PROD-Rollout** der Resilienz-Massnahmen: offen, sequenziell nach DEV→TEST→PROD.
 - CoreDNS Auto-Sync bewusst deaktiviert gelassen (Kernkomponente).
