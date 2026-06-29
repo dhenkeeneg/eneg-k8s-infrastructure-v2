@@ -49,6 +49,31 @@ spec:
             summary: "CNPG Cluster {{ $labels.cluster }} nicht erreichbar"
             description: "CloudNativePG Cluster {{ $labels.cluster }} in Namespace {{ $labels.namespace }} ist seit 5 Minuten nicht erreichbar."
 
+        # CNPG Cluster ohne Primary (Vorbote des WAL-Deadlocks)
+        # Siehe Incident 2026-06-29: Ohne aktiven Primary recycelt PostgreSQL
+        # kein WAL -> das WAL-Volume laeuft voll -> "Not enough disk space" ->
+        # Pod startet nicht -> kein Primary (Henne-Ei-Deadlock). Frueh warnen,
+        # bevor das WAL-Volume zu wachsen beginnt.
+        # Logik: pro Cluster hat genau 1 Pod in_recovery=0 (der Primary), die
+        # Replicas haben =1. Faellt der Primary weg, gibt es 0 Pods mit =0 ->
+        # count < 1 feuert. Ein kompletter Exporter-Ausfall (keine Series) wird
+        # hiervon NICHT erfasst, sondern von CnpgClusterNotReady (collector_up).
+        # for: 15m ueberlebt jeden normalen Switchover/Restart (Sekunden bis
+        # ~1-2 min) sowie laengere Sonderfaelle (pg_basebackup-Join, kurze API-
+        # Server-Haenger). Der WAL-Deadlock baut sich erst ueber Stunden auf
+        # (Incident: ~3,5 Tage) -> 15 min Vorlauf sind weiterhin sehr frueh.
+        - alert: CnpgClusterNoPrimary
+          expr: |
+            count by (cluster, namespace) (
+              cnpg_pg_replication_in_recovery{namespace="databases"} == 0
+            ) < 1
+          for: 15m
+          labels:
+            severity: critical
+          annotations:
+            summary: "CNPG Cluster {{ $labels.cluster }} hat keinen aktiven Primary"
+            description: "Cluster {{ $labels.cluster }} (Namespace {{ $labels.namespace }}) hat seit 15 Minuten keinen Pod im Primary-Zustand (alle in Recovery). Ohne Primary staut sich WAL -> Gefahr des WAL-Deadlocks. Pod-Status und CNPG-Cluster-Phase pruefen. Runbook: docs/runbooks/cnpg-frozen-replica-stale-slot.md"
+
         # CNPG Replication Lag Warning (> 30s)
         - alert: CnpgReplicationLagWarning
           expr: |
