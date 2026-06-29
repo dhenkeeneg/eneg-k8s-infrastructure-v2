@@ -19,6 +19,11 @@ spec:
   instances: 3
   primaryUpdateStrategy: unsupervised
 
+  # PriorityClass: schuetzt die DB-Pods im Node-Pressure-Fall vor Verdraengung
+  # (2026-06-29 Resilienz-Haertung). Definition: kubernetes/base/priorityclasses/
+  # eneg-stateful-critical.yaml (value 900000000, knapp unter longhorn-critical).
+  priorityClassName: eneg-stateful-critical
+
   # Superuser-Zugang fuer pg_dumpall Backups
   enableSuperuserAccess: true
 
@@ -56,6 +61,14 @@ spec:
       wal_buffers: "16MB"
       min_wal_size: "512MB"
       max_wal_size: "2GB"
+      # WAL-Slot-Deckel (2026-06-29 Resilienz-Haertung): begrenzt, wieviel WAL
+      # ein (auch inaktiver) Replication-Slot zurueckhalten darf. Verhindert den
+      # WAL-Deadlock an der Wurzel - das 8Gi-WAL-Volume kann nicht mehr durch
+      # einen haengenden Slot volllaufen. 6GB lassen ~2Gi Puffer; normale HA-
+      # Slots liegen weit darunter. Bei Ueberschreitung faellt die betroffene
+      # Replica auf S3-Archive-Restore zurueck (Archiving laeuft durchgehend).
+      # sighup-Parameter (Reload, kein Restart noetig).
+      max_slot_wal_keep_size: "6GB"
       # Checkpoints
       checkpoint_completion_target: "0.9"
       # Logging
