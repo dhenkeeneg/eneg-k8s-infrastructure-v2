@@ -12,6 +12,11 @@ metadata:
     app.kubernetes.io/managed-by: argocd
 spec:
   image: mariadb:11.8.6
+
+  # PriorityClass: schuetzt die DB-Pods im Node-Pressure-Fall vor Verdraengung
+  # (2026-06-29 Resilienz-Haertung). Definition: kubernetes/base/priorityclasses/
+  # eneg-stateful-critical.yaml (value 900000000, knapp unter longhorn-critical).
+  priorityClassName: eneg-stateful-critical
   # Reaktiviert 2026-05-15: nach Cluster-Recovery wieder voller 3-Node-Betrieb.
   # Galera-Recovery durch den Operator automatisch nach Operator-Hochfahren
   # (Phase A): Bootstrap auf mariadb-galera-0 (Primary), SST-Sync der anderen.
