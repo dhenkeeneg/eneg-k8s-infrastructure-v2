@@ -1,0 +1,214 @@
+---
+# ConfigMap: vSphere / vCenter - Hosts & Kapazitaet (Custom)
+# Quelle: OTel vcenter-Receiver via alloy-vcenter (DEV), Metriken vcenter_*
+# Variablen: $vcenter (a/b), $host (Multi-Select)
+# Sektionen: Cluster-Kapazitaet, Host-CPU, Host-RAM, Overcommit-Druck,
+#            Datastore-Belegung, Disk-Latenz (das ~200ms-Thema)
+# Ordner: Root (General) - bewusst ohne grafana_folder
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: vsphere-hosts-dashboard
+  namespace: monitoring
+  labels:
+    grafana_dashboard: "1"
+data:
+  vsphere-hosts.json: |
+    {
+      "annotations": {"list": []},
+      "editable": true,
+      "id": null,
+      "uid": "vsphere-hosts-kapazitaet",
+      "title": "vSphere / vCenter - Hosts & Kapazitaet",
+      "tags": ["vsphere", "vcenter", "kapazitaet"],
+      "timezone": "browser",
+      "refresh": "1m",
+      "time": {"from": "now-6h", "to": "now"},
+      "templating": {
+        "list": [
+          {
+            "name": "vcenter",
+            "label": "vCenter",
+            "type": "query",
+            "datasource": {"type": "prometheus", "uid": "prometheus"},
+            "query": "label_values(vcenter_host_cpu_usage_MHz, vcenter)",
+            "refresh": 2,
+            "includeAll": true,
+            "multi": true,
+            "current": {"text": "All", "value": "$__all"},
+            "sort": 1
+          },
+          {
+            "name": "host",
+            "label": "Host",
+            "type": "query",
+            "datasource": {"type": "prometheus", "uid": "prometheus"},
+            "query": "label_values(vcenter_host_cpu_usage_MHz{vcenter=~\"$vcenter\"}, vcenter_host)",
+            "refresh": 2,
+            "includeAll": true,
+            "multi": true,
+            "current": {"text": "All", "value": "$__all"},
+            "sort": 1
+          }
+        ]
+      },
+      "panels": [
+        {
+          "type": "row", "title": "Cluster-Kapazitaet",
+          "gridPos": {"h": 1, "w": 24, "x": 0, "y": 0}, "collapsed": false
+        },
+        {
+          "title": "Hosts gesamt", "type": "stat",
+          "gridPos": {"h": 4, "w": 4, "x": 0, "y": 1},
+          "datasource": {"type": "prometheus", "uid": "prometheus"},
+          "targets": [{"expr": "count(vcenter_host_cpu_usage_MHz{vcenter=~\"$vcenter\", vcenter_host=~\"$host\"})", "legendFormat": "Hosts"}],
+          "options": {"reduceOptions": {"calcs": ["lastNotNull"]}, "colorMode": "value"}
+        },
+        {
+          "title": "VMs gesamt", "type": "stat",
+          "gridPos": {"h": 4, "w": 4, "x": 4, "y": 1},
+          "datasource": {"type": "prometheus", "uid": "prometheus"},
+          "targets": [{"expr": "sum(vcenter_cluster_vm_count{vcenter=~\"$vcenter\"})", "legendFormat": "VMs"}],
+          "options": {"reduceOptions": {"calcs": ["lastNotNull"]}, "colorMode": "value"}
+        },
+        {
+          "title": "Cluster CPU effektiv (frei)", "type": "stat",
+          "gridPos": {"h": 4, "w": 8, "x": 8, "y": 1},
+          "datasource": {"type": "prometheus", "uid": "prometheus"},
+          "fieldConfig": {"defaults": {"unit": "rothz", "custom": {}}},
+          "targets": [{"expr": "sum(vcenter_cluster_cpu_effective_MHz{vcenter=~\"$vcenter\"}) * 1000000", "legendFormat": "CPU effektiv"}],
+          "options": {"reduceOptions": {"calcs": ["lastNotNull"]}, "colorMode": "value"}
+        },
+        {
+          "title": "Cluster RAM effektiv (frei)", "type": "stat",
+          "gridPos": {"h": 4, "w": 8, "x": 16, "y": 1},
+          "datasource": {"type": "prometheus", "uid": "prometheus"},
+          "fieldConfig": {"defaults": {"unit": "bytes"}},
+          "targets": [{"expr": "sum(vcenter_cluster_memory_effective_bytes{vcenter=~\"$vcenter\"})", "legendFormat": "RAM effektiv"}],
+          "options": {"reduceOptions": {"calcs": ["lastNotNull"]}, "colorMode": "value"}
+        },
+        {
+          "type": "row", "title": "Host CPU",
+          "gridPos": {"h": 1, "w": 24, "x": 0, "y": 5}, "collapsed": false
+        },
+        {
+          "title": "Host CPU-Auslastung (%)", "type": "timeseries",
+          "gridPos": {"h": 8, "w": 12, "x": 0, "y": 6},
+          "datasource": {"type": "prometheus", "uid": "prometheus"},
+          "fieldConfig": {"defaults": {"unit": "percent", "min": 0, "max": 100,
+            "thresholds": {"mode": "absolute", "steps": [{"color": "green", "value": null}, {"color": "yellow", "value": 70}, {"color": "red", "value": 85}]}}},
+          "targets": [{"expr": "vcenter_host_cpu_utilization_percent{vcenter=~\"$vcenter\", vcenter_host=~\"$host\"}", "legendFormat": "{{vcenter}}/{{vcenter_host}}"}],
+          "options": {"legend": {"displayMode": "table", "placement": "right", "calcs": ["lastNotNull", "max"]}}
+        },
+        {
+          "title": "Host CPU frei (MHz)", "type": "timeseries",
+          "gridPos": {"h": 8, "w": 12, "x": 12, "y": 6},
+          "datasource": {"type": "prometheus", "uid": "prometheus"},
+          "fieldConfig": {"defaults": {"unit": "rothz", "custom": {}}},
+          "targets": [{"expr": "(vcenter_host_cpu_capacity_MHz{vcenter=~\"$vcenter\", vcenter_host=~\"$host\"} - vcenter_host_cpu_usage_MHz{vcenter=~\"$vcenter\", vcenter_host=~\"$host\"}) * 1000000", "legendFormat": "{{vcenter}}/{{vcenter_host}}"}],
+          "options": {"legend": {"displayMode": "table", "placement": "right", "calcs": ["lastNotNull", "min"]}}
+        },
+        {
+          "type": "row", "title": "Host RAM",
+          "gridPos": {"h": 1, "w": 24, "x": 0, "y": 14}, "collapsed": false
+        },
+        {
+          "title": "Host RAM-Auslastung (%)", "type": "timeseries",
+          "gridPos": {"h": 8, "w": 12, "x": 0, "y": 15},
+          "datasource": {"type": "prometheus", "uid": "prometheus"},
+          "fieldConfig": {"defaults": {"unit": "percent", "min": 0, "max": 100,
+            "thresholds": {"mode": "absolute", "steps": [{"color": "green", "value": null}, {"color": "yellow", "value": 75}, {"color": "red", "value": 90}]}}},
+          "targets": [{"expr": "vcenter_host_memory_utilization_percent{vcenter=~\"$vcenter\", vcenter_host=~\"$host\"}", "legendFormat": "{{vcenter}}/{{vcenter_host}}"}],
+          "options": {"legend": {"displayMode": "table", "placement": "right", "calcs": ["lastNotNull", "max"]}}
+        },
+        {
+          "title": "Host RAM frei (fuer neue Nodes)", "type": "timeseries",
+          "gridPos": {"h": 8, "w": 12, "x": 12, "y": 15},
+          "datasource": {"type": "prometheus", "uid": "prometheus"},
+          "fieldConfig": {"defaults": {"unit": "mebibytes"}},
+          "targets": [{"expr": "vcenter_host_memory_capacity_mebibytes{vcenter=~\"$vcenter\", vcenter_host=~\"$host\"} - vcenter_host_memory_usage_mebibytes{vcenter=~\"$vcenter\", vcenter_host=~\"$host\"}", "legendFormat": "{{vcenter}}/{{vcenter_host}}"}],
+          "options": {"legend": {"displayMode": "table", "placement": "right", "calcs": ["lastNotNull", "min"]}}
+        },
+        {
+          "type": "row", "title": "Overcommit-Druck (Ready-Time / Ballooning / Swap)",
+          "gridPos": {"h": 1, "w": 24, "x": 0, "y": 23}, "collapsed": false
+        },
+        {
+          "title": "VM CPU Ready-Time (%) - Top 20", "type": "timeseries",
+          "gridPos": {"h": 8, "w": 12, "x": 0, "y": 24},
+          "datasource": {"type": "prometheus", "uid": "prometheus"},
+          "fieldConfig": {"defaults": {"unit": "percent",
+            "thresholds": {"mode": "absolute", "steps": [{"color": "green", "value": null}, {"color": "yellow", "value": 5}, {"color": "red", "value": 10}]}}},
+          "targets": [{"expr": "topk(20, vcenter_vm_cpu_readiness_percent{vcenter=~\"$vcenter\"})", "legendFormat": "{{vcenter}}/{{vcenter_vm}}"}],
+          "options": {"legend": {"displayMode": "table", "placement": "right", "calcs": ["lastNotNull", "max"]}}
+        },
+        {
+          "title": "VM Memory Ballooning + Swap (Top 20)", "type": "timeseries",
+          "gridPos": {"h": 8, "w": 12, "x": 12, "y": 24},
+          "datasource": {"type": "prometheus", "uid": "prometheus"},
+          "fieldConfig": {"defaults": {"unit": "mebibytes"}},
+          "targets": [
+            {"expr": "topk(20, vcenter_vm_memory_ballooned_mebibytes{vcenter=~\"$vcenter\"})", "legendFormat": "balloon {{vcenter_vm}}"},
+            {"expr": "topk(20, vcenter_vm_memory_swapped_mebibytes{vcenter=~\"$vcenter\"})", "legendFormat": "swap {{vcenter_vm}}"}
+          ],
+          "options": {"legend": {"displayMode": "table", "placement": "right", "calcs": ["lastNotNull", "max"]}}
+        },
+        {
+          "type": "row", "title": "Datastore-Belegung",
+          "gridPos": {"h": 1, "w": 24, "x": 0, "y": 32}, "collapsed": false
+        },
+        {
+          "title": "Datastore-Auslastung (%)", "type": "timeseries",
+          "gridPos": {"h": 8, "w": 12, "x": 0, "y": 33},
+          "datasource": {"type": "prometheus", "uid": "prometheus"},
+          "fieldConfig": {"defaults": {"unit": "percent", "min": 0, "max": 100,
+            "thresholds": {"mode": "absolute", "steps": [{"color": "green", "value": null}, {"color": "yellow", "value": 80}, {"color": "red", "value": 90}]}}},
+          "targets": [{"expr": "vcenter_datastore_disk_utilization_percent{vcenter=~\"$vcenter\"}", "legendFormat": "{{vcenter}}/{{vcenter_datastore}}"}],
+          "options": {"legend": {"displayMode": "table", "placement": "right", "calcs": ["lastNotNull", "max"]}}
+        },
+        {
+          "title": "Datastore-Belegung (Tabelle)", "type": "table",
+          "gridPos": {"h": 8, "w": 12, "x": 12, "y": 33},
+          "datasource": {"type": "prometheus", "uid": "prometheus"},
+          "fieldConfig": {"defaults": {"unit": "percent",
+            "thresholds": {"mode": "absolute", "steps": [{"color": "green", "value": null}, {"color": "yellow", "value": 80}, {"color": "red", "value": 90}]},
+            "custom": {"displayMode": "color-background"}}},
+          "targets": [{"expr": "vcenter_datastore_disk_utilization_percent{vcenter=~\"$vcenter\"}", "legendFormat": "{{vcenter_datastore}}", "format": "table", "instant": true}],
+          "transformations": [
+            {"id": "organize", "options": {"excludeByName": {"Time": true, "__name__": true, "env": true, "source": true, "job": true, "instance": true}, "renameByName": {"vcenter_datastore": "Datastore", "vcenter": "vCenter", "Value": "Belegung %"}}},
+            {"id": "sortBy", "options": {"fields": "", "sort": [{"field": "Belegung %", "desc": true}]}}
+          ]
+        },
+        {
+          "type": "row", "title": "Disk-Latenz (Host) - Storage-Performance",
+          "gridPos": {"h": 1, "w": 24, "x": 0, "y": 41}, "collapsed": false
+        },
+        {
+          "title": "Host Disk-Latenz avg (ms) - max je Host", "type": "timeseries",
+          "gridPos": {"h": 8, "w": 12, "x": 0, "y": 42},
+          "datasource": {"type": "prometheus", "uid": "prometheus"},
+          "fieldConfig": {"defaults": {"unit": "ms",
+            "thresholds": {"mode": "absolute", "steps": [{"color": "green", "value": null}, {"color": "yellow", "value": 20}, {"color": "orange", "value": 50}, {"color": "red", "value": 100}]}}},
+          "targets": [{"expr": "max by (vcenter, vcenter_host, direction) (vcenter_host_disk_latency_avg_milliseconds{vcenter=~\"$vcenter\", vcenter_host=~\"$host\"})", "legendFormat": "{{vcenter}}/{{vcenter_host}} {{direction}}"}],
+          "options": {"legend": {"displayMode": "table", "placement": "right", "calcs": ["lastNotNull", "max"]}}
+        },
+        {
+          "title": "Host Disk-Latenz max (ms) - Spitzenwerte", "type": "timeseries",
+          "gridPos": {"h": 8, "w": 12, "x": 12, "y": 42},
+          "datasource": {"type": "prometheus", "uid": "prometheus"},
+          "fieldConfig": {"defaults": {"unit": "ms",
+            "thresholds": {"mode": "absolute", "steps": [{"color": "green", "value": null}, {"color": "yellow", "value": 50}, {"color": "orange", "value": 100}, {"color": "red", "value": 200}]}}},
+          "targets": [{"expr": "max by (vcenter, vcenter_host, direction) (vcenter_host_disk_latency_max_milliseconds{vcenter=~\"$vcenter\", vcenter_host=~\"$host\"})", "legendFormat": "{{vcenter}}/{{vcenter_host}} {{direction}}"}],
+          "options": {"legend": {"displayMode": "table", "placement": "right", "calcs": ["lastNotNull", "max"]}}
+        },
+        {
+          "title": "Host Disk-Latenz avg je Disk/LUN (Detail, Top 20)", "type": "timeseries",
+          "gridPos": {"h": 8, "w": 24, "x": 0, "y": 50},
+          "datasource": {"type": "prometheus", "uid": "prometheus"},
+          "fieldConfig": {"defaults": {"unit": "ms",
+            "thresholds": {"mode": "absolute", "steps": [{"color": "green", "value": null}, {"color": "yellow", "value": 20}, {"color": "red", "value": 100}]}}},
+          "targets": [{"expr": "topk(20, vcenter_host_disk_latency_avg_milliseconds{vcenter=~\"$vcenter\", vcenter_host=~\"$host\"})", "legendFormat": "{{vcenter_host}} {{direction}} {{object}}"}],
+          "options": {"legend": {"displayMode": "table", "placement": "bottom", "calcs": ["lastNotNull", "max"]}}
+        }
+      ]
+    }
