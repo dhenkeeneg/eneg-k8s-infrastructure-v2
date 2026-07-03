@@ -1,0 +1,130 @@
+# Grafana Alloy Helm Values - DEV-Overlay (alloy-vcenter)
+# =============================================================================
+# Environment-spezifische River-Config fuer die dedizierte vCenter-Metrik-Instanz.
+# Ueberschreibt alloy.configMap.content aus der Basis (base/monitoring/alloy-vcenter).
+#
+# Datenfluss (Muster P = remote_write):
+#   otelcol.receiver.vcenter (a + b)
+#     -> otelcol.processor.transform  (resource-attrs -> datapoint-attrs = Labels)
+#     -> otelcol.processor.batch
+#     -> otelcol.exporter.prometheus  (OTLP -> Prometheus-Format)
+#     -> prometheus.remote_write      (Push an kube-prometheus-stack)
+#
+# vCenter: vcenter-a.eneg.de (8.0.3) + vcenter-b.eneg.de (8.0.2), vSphere 8 -> unterstuetzt
+# User:    svc-otel-vcenter@eneg.de (Read-Only + Performance.ModifyIntervals)
+# TLS:     ca_file mit beiden VMCA-Roots (Secret vcenter-ca-bundle -> /etc/vcenter-ca/ca.crt)
+# Ziel:    http://kube-prometheus-stack-prometheus.monitoring.svc.cluster.local:9090/api/v1/write
+#          (erfordert enableRemoteWriteReceiver=true am Prometheus, siehe monitoring-Overlay)
+# =============================================================================
+
+alloy:
+  configMap:
+    content: |
+      logging {
+        level  = "info"
+        format = "logfmt"
+      }
+
+      // ===== vCenter-A =====
+      otelcol.receiver.vcenter "vcenter_a" {
+        endpoint = "https://vcenter-a.eneg.de"
+        username = sys.env("VCENTER_USERNAME")
+        password = sys.env("VCENTER_PASSWORD")
+
+        collection_interval = "5m"
+
+        tls {
+          ca_file = "/etc/vcenter-ca/ca.crt"
+        }
+
+        // Fuer Kapazitaetsplanung: per Default deaktivierte Host-Memory-Capacity aktivieren.
+        metrics {
+          vcenter.host.memory.capacity { enabled = true }
+        }
+
+        output {
+          metrics = [otelcol.processor.transform.vcenter_a.input]
+        }
+      }
+
+      // Resource-Attribute (Host-/Datastore-/Cluster-Name) auf Datapoint-Ebene heben,
+      // damit sie als Prometheus-Labels erhalten bleiben. Plus statisches vcenter-Label.
+      otelcol.processor.transform "vcenter_a" {
+        error_mode = "ignore"
+        metric_statements {
+          context = "datapoint"
+          statements = [
+            `set(attributes["vcenter"], "a")`,
+            `set(attributes["vcenter_host"], resource.attributes["vcenter.host.name"])`,
+            `set(attributes["vcenter_datastore"], resource.attributes["vcenter.datastore.name"])`,
+            `set(attributes["vcenter_cluster"], resource.attributes["vcenter.cluster.name"])`,
+            `set(attributes["vcenter_vm"], resource.attributes["vcenter.vm.name"])`,
+          ]
+        }
+        output {
+          metrics = [otelcol.processor.batch.default.input]
+        }
+      }
+
+      // ===== vCenter-B =====
+      otelcol.receiver.vcenter "vcenter_b" {
+        endpoint = "https://vcenter-b.eneg.de"
+        username = sys.env("VCENTER_USERNAME")
+        password = sys.env("VCENTER_PASSWORD")
+
+        collection_interval = "5m"
+
+        tls {
+          ca_file = "/etc/vcenter-ca/ca.crt"
+        }
+
+        metrics {
+          vcenter.host.memory.capacity { enabled = true }
+        }
+
+        output {
+          metrics = [otelcol.processor.transform.vcenter_b.input]
+        }
+      }
+
+      otelcol.processor.transform "vcenter_b" {
+        error_mode = "ignore"
+        metric_statements {
+          context = "datapoint"
+          statements = [
+            `set(attributes["vcenter"], "b")`,
+            `set(attributes["vcenter_host"], resource.attributes["vcenter.host.name"])`,
+            `set(attributes["vcenter_datastore"], resource.attributes["vcenter.datastore.name"])`,
+            `set(attributes["vcenter_cluster"], resource.attributes["vcenter.cluster.name"])`,
+            `set(attributes["vcenter_vm"], resource.attributes["vcenter.vm.name"])`,
+          ]
+        }
+        output {
+          metrics = [otelcol.processor.batch.default.input]
+        }
+      }
+
+      // ===== Gemeinsamer Batch + Export =====
+      otelcol.processor.batch "default" {
+        output {
+          metrics = [otelcol.exporter.prometheus.default.input]
+        }
+      }
+
+      otelcol.exporter.prometheus "default" {
+        // target_info/scope_info nicht benoetigt -> Rauschen vermeiden.
+        include_target_info = false
+        include_scope_info  = false
+        forward_to = [prometheus.remote_write.default.receiver]
+      }
+
+      prometheus.remote_write "default" {
+        endpoint {
+          url = "http://kube-prometheus-stack-prometheus.monitoring.svc.cluster.local:9090/api/v1/write"
+        }
+        // Statisches Label zur Kennzeichnung der Quelle in Prometheus/Thanos.
+        external_labels = {
+          source = "alloy-vcenter",
+          env    = "dev",
+        }
+      }

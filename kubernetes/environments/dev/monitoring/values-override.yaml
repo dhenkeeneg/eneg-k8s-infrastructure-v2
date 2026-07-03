@@ -24,6 +24,11 @@ defaultRules:
 # --- Prometheus DEV ---
 prometheus:
   prometheusSpec:
+    # Remote-Write-Receiver aktivieren: erlaubt Push von externen Alloy-Instanzen.
+    # Genutzt von alloy-vcenter (OTel vcenter-Receiver -> prometheus.remote_write).
+    # Endpoint: /api/v1/write auf Port 9090. Nur DEV (vCenter-Monitoring startet in DEV).
+    enableRemoteWriteReceiver: true
+
     # DEV-Retention: 7 Tage / max. 12 GB (Sicherheitsmarge zu 25Gi PVC, bevor TSDB Schreibstopp)
     # PVC 2026-06-21 von 20Gi auf 25Gi erweitert (TSDB-WAL-Deadlock aufgeloest, siehe Runbook)
     retention: 7d

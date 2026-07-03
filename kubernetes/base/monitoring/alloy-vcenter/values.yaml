@@ -1,0 +1,81 @@
+# Grafana Alloy Helm Chart Values - Basis-Konfiguration (alloy-vcenter)
+# Chart: grafana/alloy 1.10.1  ->  Alloy-Binary v1.17.1
+#
+# DEDIZIERTE Alloy-Instanz NUR fuer vCenter/ESXi-Metriken (OTel vcenter-Receiver).
+# Getrennt vom Log-Forwarding-DaemonSet (Release "alloy"), um vCenter nicht
+# mehrfach zu pollen. Deployment mit 1 Replica.
+#
+# WICHTIG: Diese Basis enthaelt NUR environment-unabhaengige Einstellungen.
+# Die eigentliche River-Config (2x otelcol.receiver.vcenter etc.) kommt aus dem
+# Environment-Overlay via alloy.configMap.content (Helm-Value-Merge).
+#
+# Metrik-Weg: otelcol.receiver.vcenter -> batch -> otelcol.exporter.prometheus
+#             -> Alloy exponiert /metrics auf listenPort 12345
+#             -> bestehender kube-prometheus-stack scrapt via ServiceMonitor.
+
+alloy:
+  # vcenter-Receiver ist "experimental" -> Stability-Level absenken (Pflicht).
+  stabilityLevel: "experimental"
+
+  # Keine anonymen Usage-Stats.
+  enableReporting: false
+
+  # HTTP-Server (UI + /metrics-Endpoint fuer ServiceMonitor-Scrape).
+  listenAddr: 0.0.0.0
+  listenPort: 12345
+  listenScheme: HTTP
+
+  # River-Config: Platzhalter. Wird vom Environment-Overlay ueberschrieben.
+  configMap:
+    create: true
+    content: |
+      // Platzhalter - wird durch Environment-Overlay ersetzt.
+      // (base darf nicht leer sein, sonst startet Alloy ohne Pipeline.)
+      logging {
+        level  = "info"
+        format = "logfmt"
+      }
+
+  # vCenter-Credentials aus SOPS-Secret (vcenter-credentials).
+  extraEnv:
+    - name: VCENTER_USERNAME
+      valueFrom:
+        secretKeyRef:
+          name: vcenter-credentials
+          key: VCENTER_USERNAME
+    - name: VCENTER_PASSWORD
+      valueFrom:
+        secretKeyRef:
+          name: vcenter-credentials
+          key: VCENTER_PASSWORD
+
+  # CA-Bundle (beide VMCA-Roots) in den Container mounten -> ca_file im TLS-Block.
+  mounts:
+    extra:
+      - name: vcenter-ca
+        mountPath: /etc/vcenter-ca
+        readOnly: true
+
+  resources:
+    requests:
+      cpu: 50m
+      memory: 128Mi
+    limits:
+      memory: 256Mi
+
+# --- Controller: Deployment mit 1 Replica ---
+controller:
+  type: deployment
+  replicas: 1
+
+  # Volume-Definition fuer das CA-Bundle-Secret (Mount siehe alloy.mounts.extra).
+  volumes:
+    extra:
+      - name: vcenter-ca
+        secret:
+          secretName: vcenter-ca-bundle
+
+# --- Service: exponiert listenPort fuer den ServiceMonitor ---
+service:
+  enabled: true
+  type: ClusterIP
