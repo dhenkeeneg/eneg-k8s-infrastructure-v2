@@ -1,0 +1,44 @@
+---
+# ArgoCD Application: Grafana Alloy - vCenter-Metriken (DEV)
+# Multi-Source: Helm Chart 1.10.1 (Alloy v1.17.1) + Base Values + DEV Override
+# Dedizierte Deployment-Instanz (replicas 1) NUR fuer OTel vcenter-Receiver.
+# Getrennt vom Log-Forwarding-DaemonSet (Release "alloy").
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: alloy-vcenter
+  namespace: argocd
+  annotations:
+    argocd.argoproj.io/sync-wave: "4"
+  finalizers:
+    - resources-finalizer.argocd.argoproj.io
+spec:
+  project: default
+
+  sources:
+    # Source 1: Helm Chart
+    - repoURL: https://grafana.github.io/helm-charts
+      chart: alloy
+      targetRevision: 1.10.1
+      helm:
+        releaseName: alloy-vcenter
+        valueFiles:
+          - $values/kubernetes/base/monitoring/alloy-vcenter/values.yaml
+          - $values/kubernetes/environments/dev/alloy-vcenter/values.yaml
+
+    # Source 2: Git Repository Referenz fuer Values
+    - repoURL: git@github.com:dhenkeeneg/eneg-k8s-infrastructure-v2.git
+      targetRevision: main
+      ref: values
+
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: monitoring
+
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
+    syncOptions:
+      - CreateNamespace=true
+      - ServerSideApply=true
