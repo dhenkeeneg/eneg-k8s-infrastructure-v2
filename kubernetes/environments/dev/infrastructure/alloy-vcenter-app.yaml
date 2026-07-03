@@ -1,6 +1,6 @@
 ---
 # ArgoCD Application: Grafana Alloy - vCenter-Metriken (DEV)
-# Multi-Source: Helm Chart 1.10.1 (Alloy v1.17.1) + Base Values + DEV Override
+# Multi-Source: Helm Chart 1.10.0 (Alloy v1.17.x) + Base Values + DEV Override
 # Dedizierte Deployment-Instanz (replicas 1) NUR fuer OTel vcenter-Receiver.
 # Getrennt vom Log-Forwarding-DaemonSet (Release "alloy").
 apiVersion: argoproj.io/v1alpha1
@@ -19,7 +19,7 @@ spec:
     # Source 1: Helm Chart
     - repoURL: https://grafana.github.io/helm-charts
       chart: alloy
-      targetRevision: 1.10.1
+      targetRevision: 1.10.0
       helm:
         releaseName: alloy-vcenter
         valueFiles:
