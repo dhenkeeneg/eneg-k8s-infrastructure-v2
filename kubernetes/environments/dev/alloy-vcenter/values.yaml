@@ -54,11 +54,11 @@ alloy:
         metric_statements {
           context = "datapoint"
           statements = [
-            `set(attributes["vcenter"], "a")`,
-            `set(attributes["vcenter_host"], resource.attributes["vcenter.host.name"])`,
-            `set(attributes["vcenter_datastore"], resource.attributes["vcenter.datastore.name"])`,
-            `set(attributes["vcenter_cluster"], resource.attributes["vcenter.cluster.name"])`,
-            `set(attributes["vcenter_vm"], resource.attributes["vcenter.vm.name"])`,
+            `set(datapoint.attributes["vcenter"], "a")`,
+            `set(datapoint.attributes["vcenter_host"], resource.attributes["vcenter.host.name"])`,
+            `set(datapoint.attributes["vcenter_datastore"], resource.attributes["vcenter.datastore.name"])`,
+            `set(datapoint.attributes["vcenter_cluster"], resource.attributes["vcenter.cluster.name"])`,
+            `set(datapoint.attributes["vcenter_vm"], resource.attributes["vcenter.vm.name"])`,
           ]
         }
         output {
@@ -92,11 +92,11 @@ alloy:
         metric_statements {
           context = "datapoint"
           statements = [
-            `set(attributes["vcenter"], "b")`,
-            `set(attributes["vcenter_host"], resource.attributes["vcenter.host.name"])`,
-            `set(attributes["vcenter_datastore"], resource.attributes["vcenter.datastore.name"])`,
-            `set(attributes["vcenter_cluster"], resource.attributes["vcenter.cluster.name"])`,
-            `set(attributes["vcenter_vm"], resource.attributes["vcenter.vm.name"])`,
+            `set(datapoint.attributes["vcenter"], "b")`,
+            `set(datapoint.attributes["vcenter_host"], resource.attributes["vcenter.host.name"])`,
+            `set(datapoint.attributes["vcenter_datastore"], resource.attributes["vcenter.datastore.name"])`,
+            `set(datapoint.attributes["vcenter_cluster"], resource.attributes["vcenter.cluster.name"])`,
+            `set(datapoint.attributes["vcenter_vm"], resource.attributes["vcenter.vm.name"])`,
           ]
         }
         output {
