@@ -1,0 +1,77 @@
+---
+# PrometheusRule: Node Filesystem / Disk-Fuellstand (alle Environments)
+# Lehre aus Incident 2026-07-05: verwaiste Longhorn-Replicas fuellten die Root-Disk
+# von k8s-dev-22 auf 92% -> DiskPressure -> Eviction aller Pods (inkl. longhorn-manager)
+# -> Attach-Deadlock (Prometheus 6h+ ohne Storage). Ein Disk-Alert haette das Tage
+# vorher sichtbar gemacht. Schwellen bewusst UNTER der ~90% DiskPressure-Grenze.
+apiVersion: monitoring.coreos.com/v1
+kind: PrometheusRule
+metadata:
+  name: node-disk-alerts
+  namespace: monitoring
+  labels:
+    app: kube-prometheus-stack
+    release: kube-prometheus-stack
+spec:
+  groups:
+    - name: node-disk.rules
+      rules:
+        # Root-Filesystem Warnung > 80%
+        - alert: NodeRootFilesystemFillingUp
+          expr: |
+            (
+              1 - (
+                node_filesystem_avail_bytes{fstype!~"tmpfs|overlay|squashfs", mountpoint="/"}
+                /
+                node_filesystem_size_bytes{fstype!~"tmpfs|overlay|squashfs", mountpoint="/"}
+              )
+            ) > 0.80
+          for: 10m
+          labels:
+            severity: warning
+          annotations:
+            summary: "Node Root-FS ueber 80% belegt ({{ $labels.instance }})"
+            description: "Das Root-Filesystem auf {{ $labels.instance }} ist zu {{ $value | humanizePercentage }} belegt. Vor Erreichen der DiskPressure-Schwelle (~90%) eingreifen. Haeufige Ursachen: verwaiste Longhorn-Replicas (/var/lib/longhorn/replicas), volle Journals, ephemeral-storage. Siehe Incident 2026-07-05."
+
+        # Root-Filesystem Kritisch > 88% (dicht unter DiskPressure)
+        - alert: NodeRootFilesystemAlmostFull
+          expr: |
+            (
+              1 - (
+                node_filesystem_avail_bytes{fstype!~"tmpfs|overlay|squashfs", mountpoint="/"}
+                /
+                node_filesystem_size_bytes{fstype!~"tmpfs|overlay|squashfs", mountpoint="/"}
+              )
+            ) > 0.88
+          for: 10m
+          labels:
+            severity: critical
+          annotations:
+            summary: "Node Root-FS ueber 88% belegt - DiskPressure droht ({{ $labels.instance }})"
+            description: "Das Root-Filesystem auf {{ $labels.instance }} ist zu {{ $value | humanizePercentage }} belegt und nahe der DiskPressure-Schwelle. Bei DiskPressure evictet Kubernetes ALLE Pods des Nodes (inkl. Longhorn) -> Attach-Deadlock-Gefahr. SOFORT Platz schaffen. Runbook/Incident 2026-07-05 pruefen."
+
+    - name: longhorn-disk.rules
+      rules:
+        # Longhorn-Datenpartition Warnung > 80% (spezifisch fuer /var/lib/longhorn)
+        # Ersatz fuer nicht existierende Orphan-Metrik: haette beim Incident 2026-07-05
+        # angeschlagen, als verwaiste Replicas die Longhorn-Partition fuellten.
+        - alert: LonghornDiskFillingUp
+          expr: |
+            max by (node) (longhorn_disk_usage_bytes / longhorn_disk_capacity_bytes) > 0.80
+          for: 10m
+          labels:
+            severity: warning
+          annotations:
+            summary: "Longhorn-Datenpartition ueber 80% belegt ({{ $labels.node }})"
+            description: "Die Longhorn-Datenpartition auf {{ $labels.node }} ist zu {{ $value | humanizePercentage }} belegt. Vor DiskPressure eingreifen. Auf verwaiste Replica-Verzeichnisse pruefen (orphans.longhorn.io, /var/lib/longhorn/replicas) und Rebuild-Aktivitaet. Siehe Incident 2026-07-05."
+
+        # Longhorn-Datenpartition Kritisch > 88%
+        - alert: LonghornDiskAlmostFull
+          expr: |
+            max by (node) (longhorn_disk_usage_bytes / longhorn_disk_capacity_bytes) > 0.88
+          for: 10m
+          labels:
+            severity: critical
+          annotations:
+            summary: "Longhorn-Datenpartition ueber 88% belegt ({{ $labels.node }})"
+            description: "Die Longhorn-Datenpartition auf {{ $labels.node }} ist zu {{ $value | humanizePercentage }} belegt - kritisch. Bei vollem Longhorn-Disk scheitern Rebuilds und Attaches (Deadlock-Gefahr wie Incident 2026-07-05). SOFORT Platz schaffen."

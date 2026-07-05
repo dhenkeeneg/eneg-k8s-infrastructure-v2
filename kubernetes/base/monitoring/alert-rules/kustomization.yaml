@@ -6,3 +6,4 @@ resources:
   - backup-alerts.yaml
   - blackbox-alerts.yaml
   - thanos-alerts.yaml
+  - node-disk-alerts.yaml

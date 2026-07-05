@@ -10,6 +10,7 @@ resources:
   - kube-job-failed-dev.yaml
   - prometheus-tsdb-health-dev.yaml
   - vsphere-hosts-dashboard-cm.yaml
+  - vsphere-alerts-dev.yaml
 
 # DEV-Patches auf Base-Rules
 patches:

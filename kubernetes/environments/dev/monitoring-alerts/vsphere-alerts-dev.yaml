@@ -1,0 +1,63 @@
+---
+# PrometheusRule: vSphere/vCenter Alerts (DEV)
+# Basiert auf den OTel-vcenter-Metriken (alloy-vcenter), die vorerst nur in DEV
+# fliessen. Daher DEV-Overlay (nicht base) - konsistent mit dem DEV-only Dashboard.
+# Schwellen und Aggregation abgestimmt am Live-Zustand (Datastore-%, Host-Latenz max
+# je Host wegen hoher LUN-Kardinalitaet im object-Label).
+apiVersion: monitoring.coreos.com/v1
+kind: PrometheusRule
+metadata:
+  name: vsphere-alerts-dev
+  namespace: monitoring
+  labels:
+    app: kube-prometheus-stack
+    release: kube-prometheus-stack
+spec:
+  groups:
+    - name: vsphere-datastore-dev.rules
+      rules:
+        # Datastore-Belegung Warnung > 85%
+        - alert: VsphereDatastoreFillingUp
+          expr: |
+            max by (vcenter, vcenter_datastore) (vcenter_datastore_disk_utilization_percent) > 85
+          for: 10m
+          labels:
+            severity: warning
+          annotations:
+            summary: "vSphere Datastore ueber 85% belegt ({{ $labels.vcenter_datastore }} / vcenter-{{ $labels.vcenter }})"
+            description: "Der Datastore {{ $labels.vcenter_datastore }} auf vcenter-{{ $labels.vcenter }} ist zu {{ $value | printf \"%.1f\" }}% belegt. Kapazitaet pruefen, ggf. VMs verschieben oder Storage erweitern, bevor VMs wegen Platzmangel stoppen."
+
+        # Datastore-Belegung Kritisch > 92%
+        - alert: VsphereDatastoreAlmostFull
+          expr: |
+            max by (vcenter, vcenter_datastore) (vcenter_datastore_disk_utilization_percent) > 92
+          for: 10m
+          labels:
+            severity: critical
+          annotations:
+            summary: "vSphere Datastore ueber 92% belegt ({{ $labels.vcenter_datastore }} / vcenter-{{ $labels.vcenter }})"
+            description: "Der Datastore {{ $labels.vcenter_datastore }} auf vcenter-{{ $labels.vcenter }} ist zu {{ $value | printf \"%.1f\" }}% belegt - kritisch. Bei 100% koennen VMs auf diesem Datastore einfrieren oder nicht mehr starten. SOFORT Platz schaffen."
+
+    - name: vsphere-latency-dev.rules
+      rules:
+        # Host-Disk-Latenz Warnung > 100ms (max je Host, ueber alle LUNs/Richtungen)
+        - alert: VsphereHostDiskLatencyHigh
+          expr: |
+            max by (vcenter, vcenter_host) (vcenter_host_disk_latency_max_milliseconds) > 100
+          for: 10m
+          labels:
+            severity: warning
+          annotations:
+            summary: "vSphere Host Disk-Latenz hoch ({{ $labels.vcenter_host }} / vcenter-{{ $labels.vcenter }})"
+            description: "Host {{ $labels.vcenter_host }} (vcenter-{{ $labels.vcenter }}) meldet eine max. Disk-Latenz von {{ $value | printf \"%.0f\" }} ms (ueber 10 min). Moegliche Ursachen: Storage-Ueberlast, Rebuild-Storm, Datastore-Engpass. Storage-Performance pruefen (Dashboard vsphere-hosts-kapazitaet, Sektion Disk-Latenz)."
+
+        # Host-Disk-Latenz Kritisch > 250ms (das strukturelle ~200ms-Problem)
+        - alert: VsphereHostDiskLatencyCritical
+          expr: |
+            max by (vcenter, vcenter_host) (vcenter_host_disk_latency_max_milliseconds) > 250
+          for: 10m
+          labels:
+            severity: critical
+          annotations:
+            summary: "vSphere Host Disk-Latenz kritisch ({{ $labels.vcenter_host }} / vcenter-{{ $labels.vcenter }})"
+            description: "Host {{ $labels.vcenter_host }} (vcenter-{{ $labels.vcenter }}) meldet eine max. Disk-Latenz von {{ $value | printf \"%.0f\" }} ms (ueber 10 min). In diesem Bereich leiden VM-/Pod-I/O massiv (vgl. strukturelles ~200ms-Datastore-Problem). Storage dringend entlasten."
