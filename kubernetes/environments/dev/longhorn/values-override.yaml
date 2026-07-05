@@ -10,23 +10,27 @@
 #   least-effort balanciert nur bei echten degraded Volumes.
 #   Siehe: docs/decisions/ADR-003-kyverno-webhook-hardening.md
 #          docs/phases/phase-13-kyverno-longhorn-stabilization-dev.md
-# 2026-07-05: orphanResourceAutoDeletion aktiviert (replica-data)
-#   Begruendung: Nach Incident 2026-07-05 (DiskPressure k8s-dev-22 durch
-#   ~186GB verwaiste Replica-Verzeichnisse -> Eviction -> Attach-Deadlock).
-#   Longhorn hatte die Orphans als CRs mit DataCleanable=True erkannt, aber
-#   Auto-Deletion war deaktiviert -> Leichen sammelten sich seit 02.07. an.
-#   In Longhorn v1.9 heisst das Setting orphanResourceAutoDeletion und erwartet
-#   eine Typ-Liste (replica-data;instance), NICHT true/false. Wir aktivieren
-#   nur replica-data (verwaiste Replica-Verzeichnisse), nicht instance.
-#   Hinweis: greift nur auf gesunden Nodes; failed/unknown Nodes werden NICHT
-#   automatisch bereinigt (dann weiterhin manueller Weg noetig).
+# 2026-07-05: orphanResourceAutoDeletion explizit in GitOps dokumentiert (replica-data)
+#   Kontext: Incident 2026-07-05 (DiskPressure k8s-dev-22 durch ~186GB verwaiste
+#   Replica-Verzeichnisse -> Eviction aller Pods inkl. longhorn-manager ->
+#   Attach-Deadlock fuer Prometheus + thanos-compactor).
+#   WICHTIG - Erkenntnis: Das Setting war im Cluster BEREITS aktiv (Wert
+#   'replica-data', APPLIED seit Cluster-Aufbau ~136d). Es war NICHT die Ursache.
+#   Ursache war, dass Longhorns Auto-Deletion auf einem bereits gestressten Node
+#   (bzw. bei evictetem longhorn-manager) NICHT greift:
+#   'Orphaned resources on failed or unknown nodes are not automatically cleaned up'.
+#   Diese Zeilen machen den bestehenden Wert nur explizit in der GitOps-Config
+#   (vorher implizit als Chart-/Cluster-Default). KEINE Verhaltensaenderung.
+#   In Longhorn v1.9 erwartet das Setting eine Typ-Liste (replica-data;instance),
+#   NICHT true/false. Nur replica-data gesetzt (verwaiste Replica-Verzeichnisse).
 #   Siehe: docs/incidents/2026-07-05-longhorn-orphan-diskpressure-dev.md
 
 defaultSettings:
   # DEV: Conservatives Auto-Balance (nur bei echten degraded Volumes)
   replicaAutoBalance: least-effort
-  # DEV: Verwaiste Replica-Daten automatisch aufraeumen (Incident 2026-07-05).
-  # Wert ist eine Typ-Liste (v1.9+), nicht true/false. Nur replica-data.
+  # DEV: Verwaiste Replica-Daten automatisch aufraeumen. War bereits Cluster-Default
+  # (seit ~136d aktiv); hier nur explizit dokumentiert. Wert ist eine Typ-Liste
+  # (v1.9+), nicht true/false. Nur replica-data.
   orphanResourceAutoDeletion: "replica-data"
   # Grace-Period bis Auto-Loeschung eines Orphan-CR (Sekunden). Default 300.
   orphanResourceAutoDeletionGracePeriod: "300"
