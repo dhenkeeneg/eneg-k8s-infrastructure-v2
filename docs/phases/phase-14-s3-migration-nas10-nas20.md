@@ -288,3 +288,71 @@ zieht eine base-Umstellung auf NAS20 sofort alle Envs mit. Sauberes Muster (B1):
 Erst *-secrets-App syncen + Cluster-Secret pruefen (kubectl get secret -o
 jsonpath), DANN Dienst-Pod (neu)starten. Sonst laedt der Pod beim
 Hard-Refresh-Restart alte ENV-Credentials (extraEnvFrom ist nicht live).
+
+
+---
+
+## 14b TEST - Loki auf NAS20 (06.07.2026, ABGESCHLOSSEN)
+
+**Kontext:** Nach abgeschlossener TEST-Node-Migration und kube-vip-Rollout wurde
+im Zuge der Monitoring-Reaktivierung TEST-Loki von NAS10/HTTP auf NAS20/HTTPS
+gehoben (Dienst 1 von 14b). Ausloeser war ein Loki-CrashLoop nach Reaktivierung.
+
+### Ausgangslage / Diagnose
+
+- TEST-Monitoring war waehrend der Node-Migration bewusst pausiert
+  (argocd-application-controller auf 0 skaliert -> siehe Monitoring-Reaktivierung).
+- Nach Reaktivierung ging loki-0 in CrashLoopBackOff mit:
+  `open /etc/ca/ca.crt: no such file or directory` -> `failed to build s3 config`
+  (Init-Modul ruler-storage).
+
+### Wichtige Korrektur einer bisherigen Annahme (B1-Muster)
+
+Der bisherige TEST-Override-Kommentar besagte: `ca_file` (aus base) bleibe
+"inert, da insecure:true". **Diese Annahme ist falsch.** Loki 3.6.7 laedt die
+in `loki.storage.s3.http_config.ca_file` referenzierte Datei bereits beim
+Config-Load (Init ruler-storage) - UNABHAENGIG von `insecure:true`. Fehlt die
+Datei (weil das CA-Volume in TEST nicht gemountet war), crasht Loki sofort.
+=> Beim TEST-Cutover MUSS entweder der ca_file-Pfad geleert ODER das CA-Volume
+gemountet werden. Wir haben Letzteres gewaehlt (Cutover auf NAS20, analog DEV).
+
+### Umgesetzte Aenderungen (Secret-first)
+
+1. **CA-Bundle-Secret** `eneg-s3-ca` nach TEST gebracht (Klartext, KEIN SOPS -
+   oeffentliche Sectigo-Kette R36+R46, byte-identisch zu DEV kopiert):
+   - `environments/test/monitoring-loki-secrets/eneg-s3-ca.yaml` (NEU)
+   - `.../kustomization.yaml`: `resources: [eneg-s3-ca.yaml]` ergaenzt
+2. **NAS20-S3-Credentials** in bestehendem SOPS-Secret aktualisiert:
+   - `.../loki-s3-credentials.enc.yaml` - Access-/Secret-Key auf NAS20-Werte
+     (S3-User `k8s-test-s3`, Access-Key-Format `s3-k8s-test:<key>`)
+3. **Values-Override** `environments/test/monitoring-loki/values-override.yaml`:
+   - Defensiven NAS10/HTTP-Block entfernt (endpoint+insecure kommen jetzt aus base)
+   - Bucket-Name `k8s-test-loki` bleibt (jetzt auf NAS20)
+   - CA-Volume-Mount `eneg-s3-ca` -> /etc/ca ergaenzt (analog DEV)
+   - Retention `retention_period: 120h` (5 Tage) ergaenzt (siehe 14b-Retention)
+
+### Cutover-Reihenfolge (bestaetigt die dokumentierte Loki-Lehre)
+
+Zwei-Etappen, secret-first: (1) loki-secrets-App syncen + `kubectl get secret`
+verifizieren, (2) erst dann Values-Override pushen + loki-App syncen. Da Loki
+S3-Credentials via `extraEnvFrom` als ENV bekommt (NICHT live nachgeladen),
+musste loki-0 nach jeder Secret-Aenderung per Pod-delete neu gestartet werden.
+
+### Stolperstein: erster NAS20-Key abgelehnt (403)
+
+Nach CA-Fix lief die TLS-Verbindung, aber der erste hinterlegte Access-Key
+wurde von NAS20 mit `InvalidAccessKeyId (403)` abgelehnt. Korrektur des Keys
+(zweiter sops-Durchlauf), Pod-Neustart -> Index-Sync `success=true`, keine
+403-Fehler mehr. loki-0 2/2 Running, loki-App Synced/Healthy.
+
+### Ergebnis 14b-Loki-TEST
+
+- loki-0 2/2 Running, 0 Restarts; Index-Set-Sync auf NAS20 `success=true`.
+- Bucket `k8s-test-loki` auf NAS20, TLS verifiziert (CA-Bundle).
+- TLS-Client-Referenz-Tabelle (siehe oben) gilt jetzt auch fuer TEST-Loki.
+
+### Offene 14b-Folgepunkte (weitere TEST-Dienste)
+
+Loki ist Dienst 1 von 14b. Die uebrigen TEST-Dienste (Velero, MariaDB, CNPG,
+Thanos, Registry, garage/odoo/idoit-backup) stehen fuer 14b TEST weiterhin aus
+(analog 14a DEV, ein Dienst nach dem anderen). PROD = 14c.
