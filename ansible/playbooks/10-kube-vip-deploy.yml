@@ -38,8 +38,6 @@
   become: true
   serial: 1
   any_errors_fatal: true
-  vars_files:
-    - "{{ inventory_dir }}/group_vars/secrets.yml"
 
   tasks:
     # --- Sicherheits-Check: Sind wir auf dem erwarteten Node? -------------
@@ -73,7 +71,9 @@
         name: k3s
         state: restarted
         daemon_reload: false
-      when: k3s_config.changed
+      when:
+        - k3s_config.changed
+        - not ansible_check_mode
       tags:
         - san
 
@@ -83,7 +83,9 @@
         host: "{{ ansible_host }}"
         delay: 5
         timeout: 180
-      when: k3s_config.changed
+      when:
+        - k3s_config.changed
+        - not ansible_check_mode
       tags:
         - san
 
@@ -96,14 +98,18 @@
       retries: 30
       delay: 10
       changed_when: false
-      when: k3s_config.changed
+      when:
+        - k3s_config.changed
+        - not ansible_check_mode
       tags:
         - san
 
     - name: "Kurze Stabilisierungspause vor naechstem Node"
       ansible.builtin.pause:
         seconds: 15
-      when: k3s_config.changed
+      when:
+        - k3s_config.changed
+        - not ansible_check_mode
       tags:
         - san
 
