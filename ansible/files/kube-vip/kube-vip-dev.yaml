@@ -117,15 +117,24 @@ spec:
             - name: vip_leasename
               value: plndr-cp-lock
             - name: vip_leaseduration
-              value: "15"
+              value: "5"
             - name: vip_renewdeadline
-              value: "10"
+              value: "3"
             - name: vip_retryperiod
-              value: "2"
+              value: "1"
             - name: address
               value: 192.168.180.20
             - name: prometheus_server
               value: :2112
+          # kube-vip nutzt die LOKALE K3s-Kubeconfig (zeigt auf 127.0.0.1:6443),
+          # damit jede Instanz mit IHREM lokalen API-Server spricht und NICHT
+          # ueber die ClusterIP 10.43.0.1. Das ist Voraussetzung fuer
+          # funktionierenden Control-Plane-Failover (sonst kein Leader-Wechsel
+          # bei Node-Ausfall -> "10.43.0.1:443 connection refused").
+          volumeMounts:
+            - name: kubeconfig
+              mountPath: /etc/kubernetes/admin.conf
+              readOnly: true
           resources:
             requests:
               cpu: 50m
@@ -147,5 +156,10 @@ spec:
           operator: Exists
         - effect: NoExecute
           operator: Exists
+      volumes:
+        - name: kubeconfig
+          hostPath:
+            path: /etc/rancher/k3s/k3s.yaml
+            type: File
   updateStrategy:
     type: RollingUpdate
