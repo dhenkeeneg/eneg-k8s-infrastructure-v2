@@ -55,10 +55,10 @@ alloy:
           context = "datapoint"
           statements = [
             `set(datapoint.attributes["vcenter"], "a")`,
-            `set(datapoint.attributes["vcenter_host"], resource.attributes["vcenter.host.name"])`,
-            `set(datapoint.attributes["vcenter_datastore"], resource.attributes["vcenter.datastore.name"])`,
-            `set(datapoint.attributes["vcenter_cluster"], resource.attributes["vcenter.cluster.name"])`,
-            `set(datapoint.attributes["vcenter_vm"], resource.attributes["vcenter.vm.name"])`,
+            `set(datapoint.attributes["vcenter_host"], resource.attributes["vcenter.host.name"]) where resource.attributes["vcenter.host.name"] != nil`,
+            `set(datapoint.attributes["vcenter_datastore"], resource.attributes["vcenter.datastore.name"]) where resource.attributes["vcenter.datastore.name"] != nil`,
+            `set(datapoint.attributes["vcenter_cluster"], resource.attributes["vcenter.cluster.name"]) where resource.attributes["vcenter.cluster.name"] != nil`,
+            `set(datapoint.attributes["vcenter_vm"], resource.attributes["vcenter.vm.name"]) where resource.attributes["vcenter.vm.name"] != nil`,
           ]
         }
         output {
@@ -93,10 +93,10 @@ alloy:
           context = "datapoint"
           statements = [
             `set(datapoint.attributes["vcenter"], "b")`,
-            `set(datapoint.attributes["vcenter_host"], resource.attributes["vcenter.host.name"])`,
-            `set(datapoint.attributes["vcenter_datastore"], resource.attributes["vcenter.datastore.name"])`,
-            `set(datapoint.attributes["vcenter_cluster"], resource.attributes["vcenter.cluster.name"])`,
-            `set(datapoint.attributes["vcenter_vm"], resource.attributes["vcenter.vm.name"])`,
+            `set(datapoint.attributes["vcenter_host"], resource.attributes["vcenter.host.name"]) where resource.attributes["vcenter.host.name"] != nil`,
+            `set(datapoint.attributes["vcenter_datastore"], resource.attributes["vcenter.datastore.name"]) where resource.attributes["vcenter.datastore.name"] != nil`,
+            `set(datapoint.attributes["vcenter_cluster"], resource.attributes["vcenter.cluster.name"]) where resource.attributes["vcenter.cluster.name"] != nil`,
+            `set(datapoint.attributes["vcenter_vm"], resource.attributes["vcenter.vm.name"]) where resource.attributes["vcenter.vm.name"] != nil`,
           ]
         }
         output {
