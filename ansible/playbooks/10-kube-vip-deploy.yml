@@ -210,7 +210,7 @@
         - kube-vip
         - verify
 
-    - name: "VIP-Erreichbarkeit testen (API ueber VIP 192.168.180.20:6443)"
+    - name: "VIP-Erreichbarkeit testen (API ueber VIP {{ kube_vip_address }}:6443)"
       ansible.builtin.wait_for:
         host: "{{ kube_vip_address }}"
         port: 6443
