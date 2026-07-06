@@ -12,6 +12,9 @@ loki:
     bucketNames:
       chunks: k8s-test-loki
       ruler: k8s-test-loki
+  # TEST-Retention: 120h (5 Tage), ueberschreibt base (2160h / 90 Tage) - analog DEV
+  limits_config:
+    retention_period: 120h
 
 # PVC-Groesse (gleich wie DEV) + Memory-Limit erhoeht
 # Memory-Limit auf 2Gi angehoben, da 1Gi nach laengerer Offline-Phase
