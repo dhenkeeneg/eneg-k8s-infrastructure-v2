@@ -1,0 +1,229 @@
+# =============================================================================
+# Playbook: kube-vip API-Server VIP ausrollen + TLS-SAN erweitern
+# =============================================================================
+# Zweck:
+#   1. Verteilt das kube-vip DaemonSet-Manifest in den K3s Auto-Deploy-Ordner
+#      (/var/lib/rancher/k3s/server/manifests/) auf allen Control-Plane-Nodes.
+#      -> K3s deployt kube-vip automatisch. VIP wird per ARP/Leader-Election
+#         auf einem lebenden Node gehalten (Failover bei Node-Ausfall).
+#   2. Synchronisiert /etc/rancher/k3s/config.yaml aus dem aktuellen Template
+#      (enthaelt jetzt VIP + DNS-Name als zusaetzliche tls-san) und startet
+#      K3s bei Aenderung NODE-FUER-NODE (serial:1) neu, damit das
+#      API-Zertifikat mit den neuen SANs neu erzeugt wird.
+#
+# WICHTIG - Reihenfolge in diesem Playbook:
+#   Erst SAN-Erweiterung (config.yaml + rolling restart), DANN kube-vip.
+#   Grund: Wenn die VIP schon laeuft, das Zertifikat sie aber noch nicht als
+#   SAN kennt, gaebe es bei kubectl ueber die VIP TLS-Fehler.
+#
+# Sicherheit:
+#   - serial: 1  -> immer nur EIN Node zur Zeit (Cluster bleibt verfuegbar)
+#   - any_errors_fatal -> Abbruch beim ersten Fehler, kein Weiterlaufen
+#   - hostname-Verify + Ready-Check + API-Port-Check zwischen den Nodes
+#
+# Ausfuehrung (DEV):
+#   cd ~/git/eneg-k8s-infrastructure-v2/ansible
+#   ansible-playbook -i inventory/dev/hosts.ini playbooks/10-kube-vip-deploy.yml
+#
+#   Nur SAN-Sync (ohne kube-vip):   --tags san
+#   Nur kube-vip verteilen:          --tags kube-vip
+#   Trockenlauf (Vorschau):          --check --diff
+# =============================================================================
+---
+# =============================================================================
+# PLAY 1: TLS-SAN erweitern (config.yaml sync + rolling restart)
+# =============================================================================
+- name: "kube-vip Vorbereitung - TLS-SAN erweitern (rolling)"
+  hosts: k3s_servers
+  become: true
+  serial: 1
+  any_errors_fatal: true
+  vars_files:
+    - "{{ inventory_dir }}/group_vars/secrets.yml"
+
+  tasks:
+    # --- Sicherheits-Check: Sind wir auf dem erwarteten Node? -------------
+    - name: "SICHERHEIT - Hostname des Ziel-Nodes ermitteln"
+      ansible.builtin.command: hostname
+      register: node_hostname
+      changed_when: false
+
+    - name: "SICHERHEIT - Hostname muss zum Inventory-Namen passen"
+      ansible.builtin.assert:
+        that:
+          - node_hostname.stdout == inventory_hostname
+        fail_msg: >-
+          ABBRUCH: Node meldet Hostname '{{ node_hostname.stdout }}',
+          erwartet wurde '{{ inventory_hostname }}'. Kein systemctl-Eingriff!
+        success_msg: "Hostname bestaetigt: {{ node_hostname.stdout }}"
+
+    # --- config.yaml aus Template rendern (idempotent) --------------------
+    - name: "config.yaml aus Template schreiben (mit neuen tls-san)"
+      ansible.builtin.template:
+        src: ../templates/k3s-config.yaml.j2
+        dest: /etc/rancher/k3s/config.yaml
+        mode: '0644'
+        backup: true
+      register: k3s_config
+      tags:
+        - san
+    # --- K3s nur neu starten wenn config sich geaendert hat ---------------
+    - name: "K3s neu starten (nur bei config-Aenderung)"
+      ansible.builtin.systemd:
+        name: k3s
+        state: restarted
+        daemon_reload: false
+      when: k3s_config.changed
+      tags:
+        - san
+
+    - name: "Warten bis API-Port 6443 wieder erreichbar ist"
+      ansible.builtin.wait_for:
+        port: 6443
+        host: "{{ ansible_host }}"
+        delay: 5
+        timeout: 180
+      when: k3s_config.changed
+      tags:
+        - san
+
+    - name: "Warten bis Node wieder Ready ist"
+      ansible.builtin.shell: |
+        /usr/local/bin/k3s kubectl get node {{ inventory_hostname }} \
+          -o jsonpath='{.status.conditions[?(@.type=="Ready")].status}'
+      register: node_ready
+      until: node_ready.stdout == "True"
+      retries: 30
+      delay: 10
+      changed_when: false
+      when: k3s_config.changed
+      tags:
+        - san
+
+    - name: "Kurze Stabilisierungspause vor naechstem Node"
+      ansible.builtin.pause:
+        seconds: 15
+      when: k3s_config.changed
+      tags:
+        - san
+
+# =============================================================================
+# PLAY 2: kube-vip Manifest verteilen (K3s Auto-Deploy)
+# =============================================================================
+# Laeuft ERST nach erfolgreicher SAN-Erweiterung auf allen Nodes.
+# Kopiert das Manifest in den Auto-Deploy-Ordner -> K3s deployt kube-vip.
+# Nur der erste Node braucht das Manifest nicht mehrfach - aber K3s
+# Auto-Deploy ist idempotent und dedupliziert ueber den Cluster, daher
+# legen wir es sicherheitshalber auf allen Servern ab (reboot-/rebuild-fest).
+# =============================================================================
+- name: "kube-vip DaemonSet-Manifest verteilen"
+  hosts: k3s_servers
+  become: true
+  any_errors_fatal: true
+
+  tasks:
+    - name: "SICHERHEIT - Hostname bestaetigen"
+      ansible.builtin.command: hostname
+      register: node_hostname
+      changed_when: false
+      tags:
+        - kube-vip
+
+    - name: "SICHERHEIT - Hostname muss zum Inventory-Namen passen"
+      ansible.builtin.assert:
+        that:
+          - node_hostname.stdout == inventory_hostname
+        fail_msg: >-
+          ABBRUCH: Node meldet '{{ node_hostname.stdout }}',
+          erwartet '{{ inventory_hostname }}'.
+        success_msg: "Hostname bestaetigt: {{ node_hostname.stdout }}"
+      tags:
+        - kube-vip
+
+    - name: "Auto-Deploy-Manifest-Ordner sicherstellen"
+      ansible.builtin.file:
+        path: /var/lib/rancher/k3s/server/manifests
+        state: directory
+        mode: '0755'
+      tags:
+        - kube-vip
+
+    - name: "kube-vip Manifest ausrollen"
+      ansible.builtin.copy:
+        src: "../{{ kube_vip_manifest_src }}"
+        dest: /var/lib/rancher/k3s/server/manifests/kube-vip.yaml
+        mode: '0644'
+        backup: true
+      tags:
+        - kube-vip
+
+# =============================================================================
+# PLAY 3: Verifikation (read-only, nur erster Server)
+# =============================================================================
+- name: "kube-vip Verifikation"
+  hosts: k3s_initial_server
+  become: true
+  gather_facts: false
+
+  tasks:
+    - name: "Warten bis kube-vip DaemonSet-Pods laufen (max ~3 min)"
+      ansible.builtin.shell: |
+        /usr/local/bin/k3s kubectl -n kube-system get pods \
+          -l app.kubernetes.io/name=kube-vip-ds \
+          -o jsonpath='{range .items[*]}{.metadata.name}{"="}{.status.phase}{" "}{end}'
+      register: kv_pods
+      until: kv_pods.stdout.count("Running") >= 1
+      retries: 18
+      delay: 10
+      changed_when: false
+      tags:
+        - kube-vip
+        - verify
+
+    - name: "kube-vip Pod-Status anzeigen"
+      ansible.builtin.debug:
+        msg: "kube-vip Pods: {{ kv_pods.stdout }}"
+      tags:
+        - kube-vip
+        - verify
+
+    - name: "Control-Plane Lease pruefen (plndr-cp-lock)"
+      ansible.builtin.shell: |
+        /usr/local/bin/k3s kubectl -n kube-system get lease plndr-cp-lock \
+          -o jsonpath='{.spec.holderIdentity}' 2>/dev/null || echo "noch keine Lease"
+      register: kv_lease
+      changed_when: false
+      tags:
+        - kube-vip
+        - verify
+
+    - name: "Aktueller VIP-Leader"
+      ansible.builtin.debug:
+        msg: "VIP-Leader (holderIdentity): {{ kv_lease.stdout }}"
+      tags:
+        - kube-vip
+        - verify
+
+    - name: "VIP-Erreichbarkeit testen (API ueber VIP 192.168.180.20:6443)"
+      ansible.builtin.wait_for:
+        host: "{{ kube_vip_address }}"
+        port: 6443
+        timeout: 60
+      tags:
+        - kube-vip
+        - verify
+
+    - name: "ERFOLG - Zusammenfassung"
+      ansible.builtin.debug:
+        msg: |
+          ============================================================
+          kube-vip DEV erfolgreich ausgerollt.
+          VIP:        {{ kube_vip_address }}:6443  (erreichbar)
+          DNS:        k8s-dev-api.eneg.de
+          Leader:     {{ kv_lease.stdout }}
+          Naechster Schritt: kubeconfig-Endpoint auf VIP/DNS umstellen
+          (siehe docs/runbooks/kube-vip-api-vip.md).
+          ============================================================
+      tags:
+        - kube-vip
+        - verify

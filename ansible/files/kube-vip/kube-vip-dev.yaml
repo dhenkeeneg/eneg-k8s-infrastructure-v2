@@ -1,0 +1,151 @@
+# =============================================================================
+# kube-vip - API-Server VIP (Control-Plane) - DEV
+# =============================================================================
+# Zweck: Hochverfuegbare VIP fuer den Kubernetes API-Server (Port 6443).
+#        Der kubeconfig-Endpoint zeigt auf die VIP statt auf eine Node-IP,
+#        sodass ein Node-Ausfall (z.B. VM-Migration) den kubectl-/MCP-Zugriff
+#        nicht mehr unterbricht.
+#
+# Modus:   ARP (Layer 2), alle Nodes im selben Subnetz 192.168.180.0/24
+# VIP:     192.168.180.20  (DNS: k8s-dev-api.eneg.de)
+# IFACE:   ens160
+# Version: kube-vip v1.2.0
+#
+# Deployment: K3s Auto-Deploy Manifest
+#   Ablage auf ALLEN Control-Plane-Nodes unter:
+#     /var/lib/rancher/k3s/server/manifests/kube-vip.yaml
+#   Verteilung via Ansible (playbooks/10-kube-vip-deploy.yml).
+#
+# WICHTIG (Koexistenz mit MetalLB):
+#   MetalLB (L2) und kube-vip (ARP) nutzen beide Gratuitous ARP. Sie
+#   koexistieren konfliktfrei, solange sie DISJUNKTE IPs verwalten.
+#   Die VIP .20 liegt AUSSERHALB des MetalLB-Pools (.100 + .151-.199).
+#   -> Die VIP darf NIEMALS in einen MetalLB-IPAddressPool aufgenommen werden.
+#
+# kube-vip macht hier ausschliesslich Control-Plane (cp_enable=true),
+# KEIN Service-LoadBalancing (svc_enable weggelassen; das uebernimmt MetalLB).
+# =============================================================================
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: kube-vip
+  namespace: kube-system
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: system:kube-vip-role
+  annotations:
+    rbac.authorization.kubernetes.io/autoupdate: "true"
+rules:
+  - apiGroups: [""]
+    resources: ["services", "services/status", "nodes", "endpoints"]
+    verbs: ["list", "get", "watch", "update"]
+  - apiGroups: ["coordination.k8s.io"]
+    resources: ["leases"]
+    verbs: ["list", "get", "watch", "update", "create"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: system:kube-vip-binding
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: system:kube-vip-role
+subjects:
+  - kind: ServiceAccount
+    name: kube-vip
+    namespace: kube-system
+---
+apiVersion: apps/v1
+kind: DaemonSet
+metadata:
+  labels:
+    app.kubernetes.io/name: kube-vip-ds
+    app.kubernetes.io/version: v1.2.0
+  name: kube-vip-ds
+  namespace: kube-system
+spec:
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: kube-vip-ds
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: kube-vip-ds
+        app.kubernetes.io/version: v1.2.0
+    spec:
+      affinity:
+        nodeAffinity:
+          requiredDuringSchedulingIgnoredDuringExecution:
+            nodeSelectorTerms:
+              - matchExpressions:
+                  - key: node-role.kubernetes.io/control-plane
+                    operator: Exists
+              - matchExpressions:
+                  - key: node-role.kubernetes.io/master
+                    operator: Exists
+      containers:
+        - name: kube-vip
+          image: ghcr.io/kube-vip/kube-vip:v1.2.0
+          imagePullPolicy: IfNotPresent
+          args:
+            - manager
+          env:
+            - name: vip_arp
+              value: "true"
+            - name: port
+              value: "6443"
+            - name: vip_nodename
+              valueFrom:
+                fieldRef:
+                  fieldPath: spec.nodeName
+            - name: vip_interface
+              value: ens160
+            - name: vip_subnet
+              value: "32"
+            - name: dns_mode
+              value: first
+            - name: cp_enable
+              value: "true"
+            - name: cp_namespace
+              value: kube-system
+            - name: vip_leaderelection
+              value: "true"
+            - name: vip_leasename
+              value: plndr-cp-lock
+            - name: vip_leaseduration
+              value: "15"
+            - name: vip_renewdeadline
+              value: "10"
+            - name: vip_retryperiod
+              value: "2"
+            - name: address
+              value: 192.168.180.20
+            - name: prometheus_server
+              value: :2112
+          resources:
+            requests:
+              cpu: 50m
+              memory: 64Mi
+            limits:
+              cpu: 100m
+              memory: 128Mi
+          securityContext:
+            capabilities:
+              add:
+                - NET_ADMIN
+                - NET_RAW
+              drop:
+                - ALL
+      hostNetwork: true
+      serviceAccountName: kube-vip
+      tolerations:
+        - effect: NoSchedule
+          operator: Exists
+        - effect: NoExecute
+          operator: Exists
+  updateStrategy:
+    type: RollingUpdate

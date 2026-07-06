@@ -23,6 +23,17 @@ k3s_tls_san:
   - "k8s-dev-21.eneg.de"
   - "k8s-dev-22.eneg.de"
   - "k8s-dev-23.eneg.de"
+  # kube-vip API-Server VIP (Control-Plane HA)
+  - "192.168.180.20"
+  - "k8s-dev-api.eneg.de"
+
+# kube-vip - API-Server VIP (Control-Plane HA)
+# Siehe: ansible/files/kube-vip/kube-vip-dev.yaml
+# VIP muss AUSSERHALB des MetalLB-Pools liegen (.100 + .151-.199) -> .20 OK
+kube_vip_address: "192.168.180.20"
+kube_vip_interface: "ens160"
+kube_vip_version: "v1.2.0"
+kube_vip_manifest_src: "files/kube-vip/kube-vip-dev.yaml"
 
 # Komponenten die NICHT installiert werden sollen
 # (wir installieren diese später via GitOps)
