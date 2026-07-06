@@ -268,10 +268,32 @@ kubectl --context k8s-<env> get nodes   # ueber VIP-kubeconfig -> muss Nodes lis
 - Runbook `test-cluster-wiederanlauf.md` (verwandter Kontext TEST-Cluster).
 - Ansible K3s-Install: `playbooks/02-install-k3s.yml`, Template `templates/k3s-config.yaml.j2`.
 
+## Voraussetzung / Nebenbefund: inotify-Limits (TEST-Rollout 06.07.2026)
+
+Beim TEST-Failover-Test warf `systemctl stop k3s` auf k8s-test-21
+`Failed to allocate directory watch: Too many open files`. Ursache: Die
+inotify-Limits standen auf Ubuntu-24.04-Defaults (`max_user_instances=128`,
+`max_user_watches` kernel-berechnet ~124126) statt der eNeG-Zielwerte
+(`8192` / `524288`). Das Ansible-Playbook `06-sysctl-inotify-limits.yml`
+(Phase 9a) war auf TEST nie erfolgreich gelaufen (Nodes aelter als der Fix,
+Playbook lief waehrend TEST-Deaktivierung nicht nach).
+
+**Wichtig vor jeder Node-Migration / kube-vip-Rollout:** inotify-Limits
+pruefen und ggf. `06-sysctl-inotify-limits.yml` ausfuehren:
+```bash
+# Pruefen (pro Node, mit hostname-Check):
+sysctl fs.inotify.max_user_instances fs.inotify.max_user_watches
+# Erwartung: 8192 / 524288. Falls Defaults -> Playbook ausfuehren:
+ansible-playbook -i inventory/<env>/hosts.ini playbooks/06-sysctl-inotify-limits.yml
+```
+Status je Umgebung (06.07.2026): DEV OK, TEST heute gefixt, PROD offen
+(Nodes aus; Packer-Template + Playbook vorhanden, Live-Pruefung bei
+Reaktivierung noetig).
+
 ## Rollout-Status
 
 | Umgebung | TLS-SAN | kube-vip | kubeconfig | Failover-Test | Datum       |
 |----------|---------|----------|------------|---------------|-------------|
 | DEV      | OK      | OK       | OK         | OK            | 06.07.2026  |
-| TEST     | offen   | offen    | offen      | offen         | -           |
+| TEST     | OK      | OK       | OK         | OK            | 06.07.2026  |
 | PROD     | offen   | offen    | offen      | offen         | -           |
