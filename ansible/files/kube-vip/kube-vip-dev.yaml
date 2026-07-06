@@ -150,6 +150,15 @@ spec:
               drop:
                 - ALL
       hostNetwork: true
+      # kube-vip spricht den API-Server ueber den Namen "kubernetes" an.
+      # Mit hostNetwork zeigt dieser Alias auf den lokalen API-Server des
+      # Nodes (127.0.0.1:6443). Ohne diesen Alias schlaegt die DNS-Aufloesung
+      # von "kubernetes" fehl ("server misbehaving") und kube-vip wird nicht
+      # Leader -> VIP wird nicht aufgelegt.
+      hostAliases:
+        - hostnames:
+            - kubernetes
+          ip: 127.0.0.1
       serviceAccountName: kube-vip
       tolerations:
         - effect: NoSchedule
