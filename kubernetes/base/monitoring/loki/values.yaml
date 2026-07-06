@@ -69,6 +69,20 @@ loki:
   limits_config:
     retention_period: 2160h  # 90 Tage
 
+  # Retention-Enforcement via Compactor.
+  # WICHTIG: retention_period allein loescht NICHTS - der Compactor muss mit
+  # retention_enabled:true laufen, sonst werden nur Index-Tabellen compacted.
+  # delete_request_store ist ab Loki 3.0 PFLICHT bei retention_enabled:true
+  # (sonst CONFIG ERROR + CrashLoop). Voraussetzung erfuellt: Index-Period 24h.
+  # retention_delete_delay: Chunks werden erst 2h nach Markierung geloescht
+  # (Sicherheitspuffer gegen versehentliche Fehlkonfiguration).
+  # Env-Retention: DEV/TEST 120h (Override), PROD erbt hier 2160h (90 Tage).
+  compactor:
+    retention_enabled: true
+    delete_request_store: s3
+    working_directory: /var/loki/retention
+    retention_delete_delay: 2h
+
   commonConfig:
     replication_factor: 1
 
