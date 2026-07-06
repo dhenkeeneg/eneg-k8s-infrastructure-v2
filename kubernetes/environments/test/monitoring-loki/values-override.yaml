@@ -4,17 +4,14 @@
 # PVC-Groesse gleich wie DEV.
 
 # S3 Bucket fuer TEST
-# DEFENSIV (Phase 14a): base zeigt auf NAS20, TEST bleibt vorerst auf NAS10.
-# endpoint+insecure ueberschreiben base zurueck; ca_file (base) bleibt inert,
-# da insecure:true. Bucket-Name wie gehabt. Bei TEST-Migration entfernen.
+# Phase 14a abgeschlossen: TEST auf NAS20/HTTPS migriert (analog DEV).
+# endpoint + insecure kommen jetzt aus base (NAS20/HTTPS, ca_file gesetzt).
+# Hier wird nur noch der TEST-Bucket-Name ueberschrieben.
 loki:
   storage:
     bucketNames:
       chunks: k8s-test-loki
       ruler: k8s-test-loki
-    s3:
-      endpoint: http://nas10.eneg.de:8010
-      insecure: true
 
 # PVC-Groesse (gleich wie DEV) + Memory-Limit erhoeht
 # Memory-Limit auf 2Gi angehoben, da 1Gi nach laengerer Offline-Phase
@@ -28,3 +25,13 @@ singleBinary:
       memory: 256Mi
     limits:
       memory: 2Gi
+  # CA-Bundle fuer NAS20 TLS (Secret eneg-s3-ca, NS monitoring).
+  # Pfad /etc/ca/ca.crt deckt sich mit loki.storage.s3.http_config.ca_file (base).
+  extraVolumes:
+    - name: s3-ca
+      secret:
+        secretName: eneg-s3-ca
+  extraVolumeMounts:
+    - name: s3-ca
+      mountPath: /etc/ca
+      readOnly: true
