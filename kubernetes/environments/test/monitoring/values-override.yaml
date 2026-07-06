@@ -21,6 +21,10 @@ defaultRules:
 # --- Prometheus TEST ---
 prometheus:
   prometheusSpec:
+    # Explizit 1 Replica: schuetzt vor Drift durch manuelles Scaling
+    # (z.B. Reconciliation-Pause waehrend Migration). Chart-Default ist 1,
+    # aber ohne expliziten Wert heilt ArgoCD ein manuell gesetztes 0 nicht.
+    replicas: 1
     storageSpec:
       volumeClaimTemplate:
         spec:
@@ -30,6 +34,9 @@ prometheus:
 
 # --- AlertManager Config ---
 alertmanager:
+  # Explizit 1 Replica: analog zu Prometheus, schuetzt vor Scaling-Drift.
+  alertmanagerSpec:
+    replicas: 1
   config:
     global:
       resolve_timeout: 5m
