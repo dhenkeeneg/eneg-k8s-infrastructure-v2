@@ -60,8 +60,6 @@ spec:
       tls:
         enabled: false
     targetRecoveryTime: "2026-05-10T00:02:00Z"
-    restoreJob:
-      backoffLimit: 3
 
   resources:
     requests:
