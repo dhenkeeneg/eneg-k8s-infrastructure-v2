@@ -61,7 +61,12 @@ spec:
     log_warnings=2
     slow_query_log=ON
     long_query_time=2
-    default_time_zone=Europe/Berlin
+    # TEMPORAER (PROD-Reaktivierung 07.07.2026): numerischer Offset statt
+    # 'Europe/Berlin', da die mysql.time_zone*-Tabellen nach Kaltstart leer sind
+    # und MariaDB sonst mit 'Illegal or unknown default time zone' crasht (signal 11).
+    # Nach Galera-Wiederanlauf: tzinfo via 'mariadb-tzinfo-to-sql' laden,
+    # dann diese Zeile ZURUECK auf 'default_time_zone=Europe/Berlin' setzen.
+    default_time_zone=+01:00
 
   updateStrategy:
     type: ReplicasFirstPrimaryLast
