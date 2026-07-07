@@ -36,6 +36,33 @@ spec:
     size: 20Gi
     storageClassName: longhorn-db
 
+  # ============================================================
+  # TEMPORAER: Recovery aus PhysicalBackup vom 2026-05-10 00:01 UTC
+  # Anlass: PROD-Reaktivierung 07.07.2026 - Galera-Kaltstart-Bootstrap
+  #         auf leeren Node galera-0 fuehrte zu Datenverlust der idoit-DB
+  #         (SST ueberschrieb galera-2). Restore aus letztem Backup 10.05.
+  # Doku:   docs/incidents/2026-07-07-prod-galera-restore.md
+  # WICHTIG: Nach erfolgreichem Restore + Verifikation diese Sektion entfernen,
+  #          sonst initiiert der Operator den Restore bei jedem Reconcile erneut.
+  # ============================================================
+  bootstrapFrom:
+    backupContentType: Physical
+    s3:
+      endpoint: "nas10.eneg.de:8010"
+      bucket: k8s-prod-mariadb-backup
+      prefix: mariadb-galera/
+      accessKeyIdSecretKeyRef:
+        name: mariadb-credentials
+        key: S3_ACCESS_KEY_ID
+      secretAccessKeySecretKeyRef:
+        name: mariadb-credentials
+        key: S3_SECRET_ACCESS_KEY
+      tls:
+        enabled: false
+    targetRecoveryTime: "2026-05-10T00:02:00Z"
+    restoreJob:
+      backoffLimit: 3
+
   resources:
     requests:
       memory: "1Gi"
