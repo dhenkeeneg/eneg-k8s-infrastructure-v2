@@ -4,17 +4,19 @@
 # Groessere PVC und Caches als DEV/TEST.
 
 # S3 Bucket fuer PROD
-# DEFENSIV (Phase 14a): base zeigt auf NAS20, PROD bleibt vorerst auf NAS10.
-# endpoint+insecure ueberschreiben base zurueck; ca_file (base) bleibt inert,
-# da insecure:true. Bucket-Name wie gehabt. Bei PROD-Migration entfernen.
+# Phase 14c abgeschlossen: PROD auf NAS20/HTTPS migriert (analog DEV/TEST 14b).
+# endpoint + insecure kommen jetzt aus base (NAS20/HTTPS, ca_file gesetzt).
+# Hier wird nur noch der PROD-Bucket-Name ueberschrieben + Retention.
 loki:
   storage:
     bucketNames:
       chunks: k8s-prod-loki
       ruler: k8s-prod-loki
-    s3:
-      endpoint: http://nas10.eneg.de:8010
-      insecure: true
+  # PROD-Retention: 240h (10 Tage), ueberschreibt base (2160h / 90 Tage).
+  # Phase-14-Entscheidung: PROD 10 Tage. OHNE diesen Override wuerde PROD
+  # base 2160h (90d) erben. Compactor-Retention-Enforcement kommt aus base.
+  limits_config:
+    retention_period: 240h
 
 # PVC-Groesse (groesser als DEV/TEST) + Memory-Limit erhoeht
 # Memory-Limit auf 3Gi angehoben (mehr Apps, mehr Logs als DEV/TEST),
@@ -28,6 +30,16 @@ singleBinary:
       memory: 256Mi
     limits:
       memory: 3Gi
+  # CA-Bundle fuer NAS20 TLS (Secret eneg-s3-ca, NS monitoring).
+  # Pfad /etc/ca/ca.crt deckt sich mit loki.storage.s3.http_config.ca_file (base).
+  extraVolumes:
+    - name: s3-ca
+      secret:
+        secretName: eneg-s3-ca
+  extraVolumeMounts:
+    - name: s3-ca
+      mountPath: /etc/ca
+      readOnly: true
 
 # Groessere Caches fuer PROD (8 vCPU / 24 GB Nodes)
 chunksCache:
