@@ -16,10 +16,10 @@ spec:
   groups:
     - name: vsphere-datastore-dev.rules
       rules:
-        # Datastore-Belegung Warnung > 85%
+        # Datastore-Belegung Warnung > 85% (S2850-SSD-R5 ausgenommen, eigene Regel unten)
         - alert: VsphereDatastoreFillingUp
           expr: |
-            max by (vcenter, vcenter_datastore) (vcenter_datastore_disk_utilization_percent) > 85
+            max by (vcenter, vcenter_datastore) (vcenter_datastore_disk_utilization_percent{vcenter_datastore!="S2850-SSD-R5"}) > 85
           for: 10m
           labels:
             severity: warning
@@ -27,16 +27,40 @@ spec:
             summary: "vSphere Datastore ueber 85% belegt ({{ $labels.vcenter_datastore }} / vcenter-{{ $labels.vcenter }})"
             description: "Der Datastore {{ $labels.vcenter_datastore }} auf vcenter-{{ $labels.vcenter }} ist zu {{ $value | printf \"%.1f\" }}% belegt. Kapazitaet pruefen, ggf. VMs verschieben oder Storage erweitern, bevor VMs wegen Platzmangel stoppen."
 
-        # Datastore-Belegung Kritisch > 92%
+        # Datastore-Belegung Kritisch > 92% (S2850-SSD-R5 ausgenommen, eigene Regel unten)
         - alert: VsphereDatastoreAlmostFull
           expr: |
-            max by (vcenter, vcenter_datastore) (vcenter_datastore_disk_utilization_percent) > 92
+            max by (vcenter, vcenter_datastore) (vcenter_datastore_disk_utilization_percent{vcenter_datastore!="S2850-SSD-R5"}) > 92
           for: 10m
           labels:
             severity: critical
           annotations:
             summary: "vSphere Datastore ueber 92% belegt ({{ $labels.vcenter_datastore }} / vcenter-{{ $labels.vcenter }})"
             description: "Der Datastore {{ $labels.vcenter_datastore }} auf vcenter-{{ $labels.vcenter }} ist zu {{ $value | printf \"%.1f\" }}% belegt - kritisch. Bei 100% koennen VMs auf diesem Datastore einfrieren oder nicht mehr starten. SOFORT Platz schaffen."
+
+        # --- Sonderfall S2850-SSD-R5 (vcenter-b) ---
+        # Dieser Datastore laeuft betrieblich dauerhaft sehr voll (~99%).
+        # Daher aus den generischen Schwellen (85/92) ausgenommen und mit
+        # hoeheren, spezifischen Schwellen versehen: warning 95%, critical 97%.
+        - alert: VsphereDatastoreS2850FillingUp
+          expr: |
+            max by (vcenter, vcenter_datastore) (vcenter_datastore_disk_utilization_percent{vcenter_datastore="S2850-SSD-R5"}) > 95
+          for: 10m
+          labels:
+            severity: warning
+          annotations:
+            summary: "vSphere Datastore S2850-SSD-R5 ueber 95% belegt (vcenter-{{ $labels.vcenter }})"
+            description: "Der Datastore S2850-SSD-R5 ist zu {{ $value | printf \"%.1f\" }}% belegt. Dieser Datastore laeuft betrieblich dauerhaft voll; eigene Schwelle 95% (warning). Belegung im Auge behalten."
+
+        - alert: VsphereDatastoreS2850AlmostFull
+          expr: |
+            max by (vcenter, vcenter_datastore) (vcenter_datastore_disk_utilization_percent{vcenter_datastore="S2850-SSD-R5"}) > 97
+          for: 10m
+          labels:
+            severity: critical
+          annotations:
+            summary: "vSphere Datastore S2850-SSD-R5 ueber 97% belegt (vcenter-{{ $labels.vcenter }})"
+            description: "Der Datastore S2850-SSD-R5 ist zu {{ $value | printf \"%.1f\" }}% belegt - kritisch (eigene Schwelle 97%). Bei 100% koennen VMs auf diesem Datastore einfrieren oder nicht mehr starten. Platz schaffen."
 
     - name: vsphere-latency-dev.rules
       rules:
