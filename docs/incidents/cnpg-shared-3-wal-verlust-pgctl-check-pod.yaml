@@ -1,0 +1,57 @@
+# Maintenance-Pod: liest zerstoerungsfrei pg_control von cnpg-shared-3 (PGDATA)
+# ZWECK: Feststellen, ob der PROD-Shutdown Anfang Mai sauber war.
+#        pg_controldata -> "Database cluster state":
+#          "shut down"               = sauber   -> Weg 1 (pg_resetwal) sicher
+#          "in production" / "...in recovery" = unsauber -> Weg 2 (Restore) sicherer
+# VORAUSSETZUNG: cnpg-shared vorher hibernated (PGDATA detached), sonst Multi-Attach.
+# KEIN Postgres-Start, nur pg_controldata. Danach Pod loeschen.
+apiVersion: v1
+kind: Pod
+metadata:
+  name: cnpg-shared-pgctl-check
+  namespace: databases
+  labels:
+    app.kubernetes.io/managed-by: manual-maintenance
+spec:
+  restartPolicy: Never
+  nodeSelector:
+    kubernetes.io/hostname: k8s-prod-23
+  securityContext:
+    runAsNonRoot: true
+    runAsUser: 26
+    runAsGroup: 26
+    fsGroup: 26
+    fsGroupChangePolicy: OnRootMismatch
+    seccompProfile:
+      type: RuntimeDefault
+  containers:
+    - name: pgctl
+      image: ghcr.io/cloudnative-pg/postgresql:17.9-standard-bookworm
+      command: ["/bin/bash", "-c"]
+      args:
+        - |
+          set -x
+          id
+          ls -ln /var/lib/postgresql/data/pgdata/global/pg_control || true
+          echo "=== pg_controldata ==="
+          pg_controldata /var/lib/postgresql/data/pgdata || true
+          echo "=== ENDE - sleep 3600 zur Inspektion ==="
+          sleep 3600
+      securityContext:
+        allowPrivilegeEscalation: false
+        capabilities:
+          drop: ["ALL"]
+      resources:
+        requests:
+          cpu: 50m
+          memory: 64Mi
+        limits:
+          cpu: 200m
+          memory: 128Mi
+      volumeMounts:
+        - name: pgdata
+          mountPath: /var/lib/postgresql/data
+  volumes:
+    - name: pgdata
+      persistentVolumeClaim:
+        claimName: cnpg-shared-3
