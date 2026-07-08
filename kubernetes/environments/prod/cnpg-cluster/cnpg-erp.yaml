@@ -54,6 +54,12 @@ spec:
       wal_buffers: "16MB"
       min_wal_size: "512MB"
       max_wal_size: "2GB"
+      # WAL-Slot-Deckel (2026-07-08): begrenzt, wieviel WAL ein (auch inaktiver)
+      # Replication-Slot zurueckhalten darf. Verhindert, dass ein haengender Slot
+      # das WAL-Volume volllaufen laesst (Ursache des cnpg-erp-Ausfalls 08.07.).
+      # sighup-Parameter (Reload). Bei Ueberschreitung faellt die Replica auf
+      # S3-Archive-Restore zurueck (Archiving laeuft durchgehend).
+      max_slot_wal_keep_size: "6GB"
       checkpoint_completion_target: "0.9"
       log_statement: "ddl"
       log_min_duration_statement: "1000"
@@ -67,8 +73,12 @@ spec:
     storageClass: longhorn-db
 
   # WAL Storage (separates Volume)
+  # 2026-07-08: 5Gi -> 8Gi. Das 5Gi-WAL-Volume des Primary lief zu 99% voll
+  # -> PANIC "No space left on device" -> Cluster down. Mehr Puffer + der
+  # max_slot_wal_keep_size-Deckel oben verhindern eine Wiederholung.
+  # Verkleinern spaeter nur per Instanz-Recreate moeglich.
   walStorage:
-    size: 5Gi
+    size: 8Gi
     storageClass: longhorn-db
 
   # Resources (PROD-Dimensionierung)
