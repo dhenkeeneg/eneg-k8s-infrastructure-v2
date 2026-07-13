@@ -62,6 +62,22 @@ defaultSettings:
   # Schuetzt Storage bei Velero-Mass-Restore (z.B. nach Cluster-Recovery).
   concurrentVolumeBackupRestorePerNodeLimit: 1
 
+  # Timeout (Sekunden), nach dem die Engine eine nicht antwortende Replica
+  # als 'error' markiert -> Fault + Rebuild. Default Longhorn: 8 (Minimum).
+  # Gueltige Range v1.9.2: 8-30.
+  # Erhoeht auf 16, damit kurze Host-/Datastore-Latenzspitzen (mehrere
+  # Sekunden I/O-Stall auf einem ESXi-Host) nicht sofort einen Replica-Fault
+  # und anschliessenden Rebuild-Sturm ausloesen. Ergaenzt die bestehende
+  # Storm-Protection (concurrentReplicaRebuildPerNodeLimit,
+  # replicaReplenishmentWaitInterval).
+  #
+  # 2026-07-13: Eingefuehrt nach host-weitem I/O-Stall auf ESXi s3168
+  #   (VM-Disk-Latenz bis ~7s ueber 5-Min-Fenster, ~23 VMs betroffen),
+  #   der auf k8s-prod-23 wiederholte Longhorn-Replica-Faults ausloeste.
+  #   Nicht disruptiv (keine Pod-Restarts / Volume-Detach).
+  #   Siehe: docs/incidents/2026-07-13-s3168-io-stall-longhorn-faults-prod.md
+  engineReplicaTimeout: 16
+
 # -----------------------------------------------------------------------
 # Ingress (deaktiviert - wir nutzen Traefik IngressRoute)
 # -----------------------------------------------------------------------
