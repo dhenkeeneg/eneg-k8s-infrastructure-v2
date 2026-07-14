@@ -88,6 +88,10 @@ App-of-Apps-Name. TEST und PROD haben untereinander **identische** App-Listen.
 **PROD `cnpg-cluster` OutOfSync:** betrifft nur `Cluster/cnpg-erp`. Ursache:
 immutables Feld `bootstrap.recovery` (cnpg-erp-v2-Recovery 08.07.). Rein
 kosmetisch, Health gruen - **kein Handlungsbedarf.**
+-- ERLEDIGT 14.07.2026: `bootstrap.recovery` + `externalClusters` aus Git
+entfernt, App wieder `Synced/Healthy`. Zusaetzlich serverName vN (cnpg-erp-v2 +
+cnpg-shared-v2) entfernt -> PROD an DEV/TEST angeglichen. Siehe
+incidents/2026-07-14-nas-reboot-verifikation-cnpg-backup-cleanup.md.
 
 ---
 
@@ -456,7 +460,9 @@ als Generalprobe.)
 - final durch Daniel.
 
 **OF-5: PROD cnpg-erp.yaml Doppel-`enablePodMonitor`** bei Gelegenheit bereinigen
-(kein Drift, nur Hygiene).
+(kein Drift, nur Hygiene). -- ERLEDIGT 14.07.2026: Doppel-`monitoring:`-Block in
+allen vier betroffenen Dateien (test+prod, erp+shared) entfernt, `false`
+beibehalten. Siehe incidents/2026-07-14-nas-reboot-verifikation-cnpg-backup-cleanup.md.
 
 **OF-6: Longhorn Phase-13-Settings** (`replica-auto-balance` least-effort):
 nach TEST/PROD portieren oder bewusst DEV-only lassen? (Projektplan-Hinweis:
