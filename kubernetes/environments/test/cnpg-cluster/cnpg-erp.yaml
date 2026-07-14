@@ -19,10 +19,6 @@ spec:
   # Superuser-Zugang fuer pg_dumpall Backups
   enableSuperuserAccess: true
 
-  # Monitoring: PodMonitor fuer Prometheus Metriken
-  monitoring:
-    enablePodMonitor: true
-
   # Managed Roles (Passwort aus Secret, Login erlaubt)
   managed:
     roles:
