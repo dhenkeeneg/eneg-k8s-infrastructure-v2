@@ -19,19 +19,6 @@ spec:
   # Superuser-Zugang fuer pg_dumpall Backups
   enableSuperuserAccess: true
 
-  # Recovery aus S3-Base-Backup (Barman Cloud Plugin), Base-Restore ohne PITR.
-  # 2026-07-08: Cluster nach WAL-Volllauf + verklemmtem Reconcile aus Backup
-  # neu aufgebaut. Quelle: serverName cnpg-erp (bestehende Backups). CNPG waehlt
-  # das neueste Base-Backup (20260708T002000) und spielt die lueckenlose WAL-
-  # Kette bis zum konsistenten Endzustand nach (beides in S3 verifiziert).
-  bootstrap:
-    recovery:
-      source: cnpg-erp-source
-
-  # Monitoring: PodMonitor fuer Prometheus Metriken
-  monitoring:
-    enablePodMonitor: true
-
   # Managed Roles (Passwort aus Secret, Login erlaubt)
   managed:
     roles:
@@ -100,9 +87,11 @@ spec:
       cpu: "2"
 
   # Backup via Barman Cloud Plugin (ersetzt in-tree barmanObjectStore)
-  # serverName cnpg-erp-v2: eigener Backup-/WAL-Pfad des wiederhergestellten
-  # Clusters, getrennt von der Recovery-Quelle (serverName cnpg-erp), damit
-  # der neue Cluster NICHT in den Quell-Backuppfad zurueckschreibt.
+  # serverName cnpg-erp-v2: eigener Backup-/WAL-Pfad des am 2026-07-08 aus S3
+  # wiederhergestellten Clusters. Bewusst getrennt vom urspruenglichen Pfad
+  # (serverName cnpg-erp), um nicht in den alten Quell-Backuppfad zurueckzu-
+  # schreiben. Die Recovery-Konfiguration (bootstrap/externalClusters) wurde
+  # nach abgeschlossener Wiederherstellung entfernt (2026-07-14 Cleanup).
   plugins:
     - enabled: true
       isWALArchiver: true
@@ -114,14 +103,3 @@ spec:
   # Monitoring (vorbereitet fuer Phase 7)
   monitoring:
     enablePodMonitor: false
-
-  # Recovery-Quelle: verweist auf die bestehenden Backups unter serverName
-  # cnpg-erp. Wird nur beim initialen bootstrap.recovery verwendet; danach
-  # archiviert der Cluster ueber den plugins-Block (serverName cnpg-erp-v2).
-  externalClusters:
-    - name: cnpg-erp-source
-      plugin:
-        name: barman-cloud.cloudnative-pg.io
-        parameters:
-          barmanObjectName: cnpg-erp-objectstore
-          serverName: cnpg-erp
