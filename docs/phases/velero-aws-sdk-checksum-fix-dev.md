@@ -1,8 +1,8 @@
 # Velero Backup-Fix: AWS-SDK-go-v2 Checksum-Inkompatibilitaet mit QNAP QuObjects (DEV)
 
-**Datum:** 19.05.2026
-**Umgebung:** DEV (k8s-dev-21/22/23)
-**Status:** In Umsetzung
+**Datum:** 19.05.2026 (DEV) / 14.07.2026 (TEST + PROD Rollout, P1)
+**Umgebung:** DEV, TEST, PROD (k8s-dev/test/prod-21/22/23)
+**Status:** ERLEDIGT - alle 3 Cluster angeglichen (DEV NAS20, TEST/PROD NAS10)
 **Komponenten:** Velero v1.17.1, velero-plugin-for-aws v1.13.0, Helm-Chart velero-11.3.2
 
 ---
@@ -259,3 +259,4 @@ Der naechste regulaere Lauf zeigt die Wirkung live.
 |------------|----------------------------------------------------------------------------------------------------------------|
 | 19.05.2026 | Initiale Anlage, DEV-Fix per `checksumAlgorithm: ""`                                                           |
 | 19.05.2026 | Verifikation: Test-Backup 1 (Resource-only) Completed in 7s, Test-Backup 2 (full + fs-backup) 65/65 PVBs Completed, 0 Failed. ArgoCD-Hard-Refresh-Subtilitaet dokumentiert (Section 7.2). Cleanup der 10 Failed-Backups via DeleteBackupRequest gestartet. |
+| 14.07.2026 | **TEST + PROD Rollout (P1 Drift-Angleich).** `checksumAlgorithm: ""` + Resource-Limits (velero 2Gi, nodeAgent 1Gi) in `environments/{test,prod}/velero/values-override.yaml` ergaenzt; NAS10/HTTP/skip-verify beibehalten (OF-2: NAS20-Migration bewusst auf P4 verschoben), TTL/Schedule unveraendert. Rollout je Umgebung: git push -> ArgoCD Hard-Refresh -> `rollout restart deployment/velero`. Live verifiziert: BSL config enthaelt `checksumAlgorithm: ""` (`Available`), Deployment/DaemonSet-Limits aktiv, Pods Running/0 Restarts. Test-Backups Completed ohne InvalidDigest (TEST `test-checksum-fix-test-001` 1472/1472 in 7s; PROD `test-checksum-fix-prod-001` 919/919 in 2s; je 0 errors/warnings, Server-Logs ohne `InvalidDigest`/`level=error`). PROD hatte kein akutes InvalidDigest (Daily-Laeufe seit 08.07. alle Completed) - Fix praeventiv. Cleanup: beide Test-Backups + PROD-PartiallyFailed-Lauf 07.07. (Reaktivierungs-Artefakt, 28 err/94 warn) via DeleteBackupRequest entfernt. **Damit P1 abgeschlossen; Velero in allen 3 Clustern angeglichen.** |

@@ -192,16 +192,25 @@ altem Stand.
 > `enablePodMonitor` doppelt (einmal true, einmal false). Kein Drift-Thema,
 > aber bei Gelegenheit bereinigen (der zweite `false`-Block gewinnt).
 
-### 5.4 Velero (echter Drift - hohe Prioritaet)
+### 5.4 Velero (echter Drift - hohe Prioritaet)  [P1 ERLEDIGT 14.07.2026]
+
+> **Status 14.07.2026:** checksumAlgorithm-Fix + Resource-Limits auf TEST und
+> PROD nachgezogen (NAS10/HTTP-Backend beibehalten, OF-2). Beide Cluster live
+> verifiziert: BSL zeigt `checksumAlgorithm: ""` (`Available`), velero 2Gi /
+> nodeAgent 1Gi aktiv, Test-Backup `Completed` ohne InvalidDigest (TEST 1472/1472
+> in 7s, PROD 919/919 in 2s, je 0 errors/warnings). PROD hatte kein akutes
+> InvalidDigest (Daily-Laeufe seit 08.07. alle Completed) - Fix dort praeventiv.
+> NAS20-Migration bewusst NICHT hier, sondern gebuendelt mit P4. Doc-Ref:
+> docs/phases/velero-aws-sdk-checksum-fix-dev.md (Abschnitt 8).
 
 `environments/{dev,test,prod}/velero/values-override.yaml`:
 
 | Aspekt | DEV | TEST | PROD | Nachziehen? |
 |--------|-----|------|------|-------------|
 | S3-Backend | NAS20 / HTTPS + CA-Bundle | NAS10 / HTTP skip-verify | NAS10 / HTTP skip-verify | JA (Teil 14x) |
-| `checksumAlgorithm: ""` | gesetzt | **fehlt** | **fehlt** | **JA (hoch)** |
-| Resource-Limits (2Gi, OOM-Fix) | gesetzt | fehlt | fehlt | JA |
-| nodeAgent-Limits | gesetzt | fehlt | fehlt | JA |
+| `checksumAlgorithm: ""` | gesetzt | gesetzt (14.07.) | gesetzt (14.07.) | ERLEDIGT |
+| Resource-Limits (2Gi, OOM-Fix) | gesetzt | gesetzt (14.07.) | gesetzt (14.07.) | ERLEDIGT |
+| nodeAgent-Limits | gesetzt | gesetzt (14.07.) | gesetzt (14.07.) | ERLEDIGT |
 | Retention (TTL) | 120h (5d) | 336h (14d) | 336h (14d) | env-abhaengig pruefen |
 | Schedule | 05:45 | 03:30 | 03:30 | NEIN (env, gestaffelt) |
 
@@ -338,7 +347,7 @@ Schritt durch Daniel.**
 
 > **Verbindliche Reihenfolge (festgelegt Daniel, 14.07.2026) - je ein Thema pro
 > Chat, jeweils neuer Chat:**
-> 1. **Velero** (P1)
+> 1. **Velero** (P1)  [ERLEDIGT 14.07.2026 - TEST + PROD, NAS10-Backend]
 > 2. **DB-Resilienz-Haertung** (P2)
 > 3. **Prometheus** - Memory-Limit + Retention + TSDB-Health-Alerts (P3).
 >    TSDB-Alerts gehoeren NICHT zum vcenter-Monitoring (s. Klaerung 5.6-Vorspann)
@@ -349,13 +358,18 @@ Schritt durch Daniel.**
 
 ### Prioritaet 1 - Backup-Integritaet (hoechstes Risiko bei Nichtstun)
 
-**P1: Velero checksumAlgorithm-Fix** (Abschnitt 5.4)
+**P1: Velero checksumAlgorithm-Fix** (Abschnitt 5.4)  [ERLEDIGT 14.07.2026]
 - Ohne Fix schlagen Velero-Backups gegen QuObjects fehl -> keine verlaesslichen
   Cluster-Backups in TEST/PROD.
 - Umfang: `checksumAlgorithm: ""` + Resource-Limits in
   `environments/{test,prod}/velero/values-override.yaml`.
 - Entscheidung noetig: nur Checksum-Fix auf NAS10 ODER gleich NAS20-Migration
   mitziehen (OF-2).
+- **Umgesetzt 14.07.2026 (OF-2 = nur Checksum-Fix + Limits auf NAS10):** TEST +
+  PROD Overrides ergaenzt, ArgoCD Hard-Refresh + rollout restart, beide live
+  verifiziert (BSL `checksumAlgorithm: ""` Available, velero 2Gi/nodeAgent 1Gi,
+  Test-Backup Completed ohne InvalidDigest). PROD-Cleanup: PartiallyFailed-Lauf
+  07.07. (Reaktivierungs-Artefakt) entfernt. NAS20-Migration verschoben auf P4.
 
 ### Prioritaet 2 - DB-Resilienz (Schutz vor WAL-Deadlock / Verdraengung)
 
@@ -445,7 +459,8 @@ Einfluss darauf, wie "Promotion" beim Nachziehen ueberhaupt funktioniert** - bei
 Single-Branch wirkt jeder Push auf `environments/dev|test|prod/**` nur auf das
 jeweilige Overlay, aber jede `base/`-Aenderung sofort ueberall.
 
-**OF-2: Velero TEST/PROD - Ziel-Backend.** Nur Checksum-Fix auf NAS10 (schnell,
+**OF-2: Velero TEST/PROD - Ziel-Backend.**  [ENTSCHIEDEN + ERLEDIGT 14.07.2026]
+Nur Checksum-Fix auf NAS10 (schnell,
 kleiner Eingriff) ODER gleich NAS20-Migration mitnehmen (konsistenter mit
 Loki/Thanos-Richtung, aber CA-Bundle-Secret + Bucket noetig)? Empfehlung:
 mind. Checksum-Fix sofort (P1), NAS20 optional im Zug von P4.
