@@ -20,6 +20,7 @@ spec:
   pluginConfiguration:
     name: barman-cloud.cloudnative-pg.io
   immediate: true
+  suspend: false
 ---
 # ScheduledBackup: cnpg-erp Full Backup (Barman Cloud Plugin)
 # Taeglich um 00:20 UTC (versetzt zu shared)
@@ -40,3 +41,4 @@ spec:
   pluginConfiguration:
     name: barman-cloud.cloudnative-pg.io
   immediate: true
+  suspend: false
