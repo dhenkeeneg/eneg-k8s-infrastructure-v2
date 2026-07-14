@@ -16,6 +16,12 @@ configuration:
         s3ForcePathStyle: "true"
         s3Url: http://nas10.eneg.de:8010
         insecureSkipTLSVerify: "true"
+        # Workaround NAS10 QuObjects: AWS-SDK-go-v2 sendet seit ~v1.30
+        # Trailing-Checksums (x-amz-sdk-checksum-algorithm), die QNAP
+        # QuObjects mit 400 InvalidDigest ablehnt. Leer-String unterdrueckt
+        # SDK-side Checksum-Generierung. Backend-unabhaengig (auch NAS10/HTTP).
+        # Ref: docs/phases/velero-aws-sdk-checksum-fix-dev.md, velero#8265
+        checksumAlgorithm: ""
 
 # -----------------------------------------------------------------------
 # Backup Schedule: Taeglich 04:30 Europe/Berlin, 14 Tage Retention
@@ -31,3 +37,26 @@ schedules:
       defaultVolumesToFsBackup: true
       includedNamespaces:
         - "*"
+
+
+# -----------------------------------------------------------------------
+# Resource Limits: erhoeht wegen OOM-Kills bei ~4000 Items im Cluster
+# (Helm-Chart-Default 512Mi war zu klein - Pod wurde beim Backup OOM-killed)
+# Analog DEV (docs/phases/velero-aws-sdk-checksum-fix-dev.md).
+# -----------------------------------------------------------------------
+resources:
+  requests:
+    cpu: 200m
+    memory: 512Mi
+  limits:
+    cpu: 1000m
+    memory: 2Gi
+
+nodeAgent:
+  resources:
+    requests:
+      cpu: 100m
+      memory: 256Mi
+    limits:
+      cpu: 500m
+      memory: 1Gi
