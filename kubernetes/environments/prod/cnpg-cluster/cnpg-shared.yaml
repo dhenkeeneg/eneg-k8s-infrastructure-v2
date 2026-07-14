@@ -63,10 +63,6 @@ spec:
       name: barman-cloud.cloudnative-pg.io
       parameters:
         barmanObjectName: cnpg-shared-objectstore
-        # serverName v2: frischer Backup-Pfad nach Neu-Init (System-ID 7660117729400840211,
-        # Timeline 1) - vermeidet Kollision mit stale Alt-Archiv unter serverName cnpg-shared.
-        # Recovery-Incident 2026-07-08. Alt-Historie bleibt als Netz erhalten.
-        serverName: cnpg-shared-v2
 
   # Managed Roles (deklarativ, Passwoerter aus SOPS Secrets)
   managed:
