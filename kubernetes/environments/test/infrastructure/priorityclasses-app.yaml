@@ -1,0 +1,36 @@
+---
+# ArgoCD Application: PriorityClasses (cluster-global) - TEST
+# Deployt die cluster-globalen eNeG-PriorityClasses aus dem base/ Verzeichnis.
+# Aktuell: eneg-stateful-critical (CNPG + MariaDB-Galera).
+#
+# Sync-Wave 1: muss VOR den DB-Workloads existieren (cnpg-cluster = Wave 5),
+# sonst werden deren Pods ohne die referenzierte PriorityClass gescheduled.
+# Nachgezogen im Rahmen P2 (Drift-Angleich DEV->TEST->PROD, 14.07.2026).
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: priorityclasses
+  namespace: argocd
+  annotations:
+    argocd.argoproj.io/sync-wave: "1"
+  finalizers:
+    - resources-finalizer.argocd.argoproj.io
+spec:
+  project: default
+
+  source:
+    repoURL: git@github.com:dhenkeeneg/eneg-k8s-infrastructure-v2.git
+    targetRevision: main
+    path: kubernetes/base/priorityclasses
+    directory:
+      include: 'eneg-stateful-critical.yaml'
+
+  destination:
+    server: https://kubernetes.default.svc
+
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
+    syncOptions:
+      - ServerSideApply=true
