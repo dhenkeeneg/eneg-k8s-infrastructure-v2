@@ -87,18 +87,12 @@ spec:
       cpu: "2"
 
   # Backup via Barman Cloud Plugin (ersetzt in-tree barmanObjectStore)
-  # serverName cnpg-erp-v2: eigener Backup-/WAL-Pfad des am 2026-07-08 aus S3
-  # wiederhergestellten Clusters. Bewusst getrennt vom urspruenglichen Pfad
-  # (serverName cnpg-erp), um nicht in den alten Quell-Backuppfad zurueckzu-
-  # schreiben. Die Recovery-Konfiguration (bootstrap/externalClusters) wurde
-  # nach abgeschlossener Wiederherstellung entfernt (2026-07-14 Cleanup).
   plugins:
     - enabled: true
       isWALArchiver: true
       name: barman-cloud.cloudnative-pg.io
       parameters:
         barmanObjectName: cnpg-erp-objectstore
-        serverName: cnpg-erp-v2
 
   # Monitoring (vorbereitet fuer Phase 7)
   monitoring:
