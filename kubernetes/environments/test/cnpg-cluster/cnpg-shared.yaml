@@ -34,6 +34,10 @@ spec:
       log_statement: "ddl"
       log_min_duration_statement: "1000"
       lc_messages: "C"
+      # WAL-Deadlock-Schutz (P2.3, 14.07.2026): begrenzt WAL-Rueckhalt eines
+      # (auch inaktiven) Replication-Slots. Deckel < WAL-Volume (8Gi), ~2Gi
+      # Puffer. sighup-Reload, kein Restart. Siehe resilienz-haertung-wal-deadlock-dev.md
+      max_slot_wal_keep_size: "6GB"
       # Timezone
       timezone: "Europe/Berlin"
 
