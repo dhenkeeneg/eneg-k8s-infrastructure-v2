@@ -16,6 +16,12 @@ spec:
   instances: 3
   primaryUpdateStrategy: unsupervised
 
+  # PriorityClass: schuetzt die DB-Pods im Node-Pressure-Fall vor Verdraengung
+  # (2026-06-29 Resilienz-Haertung, P2.4 nach TEST 14.07.2026). Definition:
+  # kubernetes/base/priorityclasses/eneg-stateful-critical.yaml (value 900000000,
+  # knapp unter longhorn-critical). Loest Rolling-Restart aus.
+  priorityClassName: eneg-stateful-critical
+
   # Superuser-Zugang fuer pg_dumpall Backups
   enableSuperuserAccess: true
 
