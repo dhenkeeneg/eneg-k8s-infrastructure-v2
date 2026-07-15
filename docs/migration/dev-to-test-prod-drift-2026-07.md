@@ -432,7 +432,7 @@ Reihenfolge je Umgebung zwingend:
 > Replication-Slots aktiv (`pg_replication_slots.active = t`) -> Alerts feuern
 > nicht faelschlich.
 
-### Prioritaet 3 - Monitoring-Resilienz
+### Prioritaet 3 - Monitoring-Resilienz  [ERLEDIGT 15.07.2026]
 
 **P3.1: Prometheus Memory-Limit 3Gi + retention/retentionSize** [ERLEDIGT 15.07.]
 - In `environments/{test,prod}/monitoring/values-override.yaml`.
@@ -478,29 +478,39 @@ Reihenfolge je Umgebung zwingend:
   vorhanden sein (in DEV vorhanden; fuer TEST/PROD anlegen - analog Loki 14b/c).
 - Analog zur bereits abgeschlossenen Loki-Migration.
 
-**P4-Erweiterung: Welche Dienste liegen noch auf NAS10? (Bestandsaufnahme bei P4-Start)**
+**P4-Erweiterung: Welche Dienste liegen noch auf NAS10? (Live-Inventur 15.07.2026)**
 
-Frage Daniel: "pruefen ob noch andere Sachen von NAS10 zu NAS20 umgestellt werden
-muessen (z.B. Backups oder weiteres)". Aktueller Stand der S3-Backends
-(14.07.2026, noch NICHT final auf NAS20-Migrationsentscheidung geprueft):
+Repo-weite Suche nas10/nas20 in environments/** durchgefuehrt. WICHTIGE KORREKTUR
+gegenueber der Erstannahme: In DEV sind INZWISCHEN praktisch ALLE S3-Dienste auf
+NAS20 migriert. Damit sind die NAS10-Referenzen in TEST/PROD NICHT nur eine
+strategische Migrationsfrage, sondern ECHTER DRIFT DEV vs TEST/PROD.
 
-| Dienst | Backend aktuell | Migrationsstatus |
-|--------|-----------------|------------------|
-| Loki | NAS20/HTTPS | migriert (14a/b/c) |
-| Thanos | NAS10 (TEST/PROD), NAS20 (DEV) | P4 - jetzt dran |
-| Registry/Zot (nas10 k8s-{env}-registry) | NAS10 | offen - an Phase 9a gekoppelt, separat |
-| Velero (k8s-{env}-velero) | NAS10 (DEV bereits NAS20) | via P1/OF-2 entscheiden |
-| CNPG WAL/Backup (k8s-{env}-postgres-wal/-backup) | NAS10 | NICHT Teil dieses Angleichs - eigene Bewertung |
-| MariaDB Physical (k8s-{env}-mariadb-backup) | NAS10 | NICHT Teil dieses Angleichs |
-| Garage-Backup, Odoo, i-doit (rclone) | NAS10 | NICHT Teil dieses Angleichs |
+| Dienst | DEV | TEST | PROD | Drift? |
+|--------|-----|------|------|--------|
+| Loki | NAS20 | NAS20 | NAS20 | ERLEDIGT (14a/b/c) |
+| Velero | NAS20 | NAS10* | NAS10* | *bewusst: P1 nur Checksum-Fix auf NAS10; NAS20 hier in P4 |
+| Thanos | NAS20 | NAS10 | NAS10 | **JA - P4 Kern** |
+| CNPG objectstore erp+shared | NAS20 | NAS10 | NAS10 | **JA** (WAL+Backup-Bucket) |
+| CNPG-backup cronjob erp+shared | NAS20 | NAS10 | NAS10 | **JA** |
+| MariaDB physical-backup | NAS20 | NAS10 | NAS10 | **JA** |
+| Garage-backup cronjob | NAS20 | NAS10 | NAS10 | **JA** |
+| Odoo-backup cronjob | NAS20 | NAS10 | NAS10 | **JA** (in apps/) |
+| i-doit-backup cronjob | NAS20 | (pruefen) | (pruefen) | **wahrscheinlich JA** |
+| Registry/Zot | NAS20 | n/a (DEV-only) | n/a | separat (Phase 9a) |
 
-> **Empfehlung:** Bei P4-Start eine kurze fokussierte NAS10->NAS20-Gesamtinventur
-> machen (welche Buckets/Secrets/values, welche mit CA-Bundle-Bedarf), dann pro
-> Dienst entscheiden. Thanos ist der unmittelbare Drift-Punkt; die restlichen
-> NAS10-Dienste sind in allen drei Clustern GLEICH auf NAS10 (also kein Drift
-> zwischen den Envs, sondern eine strategische Migrationsfrage - Punkt D aus den
-> NAS10-Stabilitaets-Diskussionen). Diese als eigenes Vorhaben nach dem Angleich
-> behandeln, sofern nicht anders freigegeben.
+*Velero: values-override ist seit P1 gefixt (checksumAlgorithm), Backend aber
+bewusst noch NAS10. In P4 mit auf NAS20 ziehen (dann konsistent).
+
+> **Konsequenz fuer P4:** Der Scope ist groesser als nur Thanos. Es ist zu
+> entscheiden (OF-8), ob P4 = nur Thanos (enger Drift-Fix, Rest spaeter) ODER
+> P4 = komplette NAS10->NAS20-Angleichung aller obigen Dienste in TEST/PROD
+> (konsistenter Endzustand, aber deutlich mehr Secrets/CA-Bundles/Buckets).
+> Gemeinsames Muster je Dienst: (1) Ziel-Bucket auf NAS20 anlegen + Daten
+> migrieren, (2) S3-Credentials-Secret + CA-Bundle-Secret (Sectigo Int R36 +
+> Root R46) im jeweiligen Namespace, (3) values/cronjob/objectstore auf
+> endpoint nas20 + insecure:false + ca_file umstellen. CNPG braucht ggf. neuen
+> serverName beim Bucket-Wechsel (WAL-Prefix-Kollision vermeiden - Learning aus
+> cnpg-shared/-erp). Das ist der heikelste Teilaspekt und einzeln zu planen.
 
 ### Prioritaet 5 - Grenzfaelle (nur nach expliziter Freigabe)
 
@@ -551,6 +561,14 @@ getrennte Review.)
 
 **OF-7: Doku-Kommentare** in `test/prod/.../cnpg-operator-app.yaml` ("v1.28.1")
 an Live-Stand 1.28.3 angleichen (Hygiene, kein Funktionsdrift).
+
+**OF-8: P4-Scope (NEU 15.07.).** Live-Inventur zeigt: DEV ist bei allen
+S3-Diensten auf NAS20, TEST/PROD noch auf NAS10 (Thanos, CNPG objectstore+backup,
+MariaDB-physical, Garage, Odoo, i-doit). Frage: P4 = nur Thanos (enger Fix) oder
+komplette NAS10->NAS20-Angleichung aller Dienste in TEST/PROD? Empfehlung:
+gestuft - Thanos als P4a (unmittelbarer Monitoring-Drift, analog Loki erprobt),
+danach die Backup-Dienste als P4b in einem eigenen, sorgfaeltig geplanten Schritt
+(CNPG-Bucket-Wechsel ist wegen WAL-Prefix/serverName der heikelste Punkt).
 
 ---
 
