@@ -21,6 +21,26 @@ defaultRules:
 # --- Prometheus PROD (groessere PVCs) ---
 prometheus:
   prometheusSpec:
+    # PROD-Retention: 15d (Zeit, env-spezifisch belassen) / max. 38 GB (Groessendeckel).
+    # retentionSize ergaenzt den fehlenden groessenbasierten Deckel (P3, Drift-Angleich
+    # 15.07.2026): retention 15d allein kann die 50Gi-PVC volllaufen lassen. 38GB ~= 76%
+    # der 50Gi-PVC, laesst ~12GB Puffer fuer WAL + chunks_head + Kompaktierungs-Spitzen.
+    # Was zuerst greift (Zeit ODER Groesse), begrenzt. Thanos haelt die Langzeit-Historie
+    # auf S3, lokal reicht kurze Vorhaltung. Hinweis: retentionSize schuetzt nur
+    # persistierte Bloecke, NICHT das WAL - gegen WAL-Deadlock 21.06. wirken die
+    # TSDB-Health-Alerts (prometheus-tsdb-health-prod.yaml).
+    retention: 15d
+    retentionSize: 38GB
+    # Memory-Limit 3Gi (Angleich an DEV, P3 15.07.2026): PROD-Normalverbrauch ~1,7GB,
+    # altes 2Gi-Limit liess nur ~0,3GB Puffer und war riskant beim WAL-Replay nach
+    # Pod-Neustart (OOMKill genau im Recovery-Moment). 3Gi/1Gi gibt Replay-Puffer -
+    # alle drei Cluster nun einheitlich.
+    resources:
+      requests:
+        cpu: 100m
+        memory: 1Gi
+      limits:
+        memory: 3Gi
     storageSpec:
       volumeClaimTemplate:
         spec:
