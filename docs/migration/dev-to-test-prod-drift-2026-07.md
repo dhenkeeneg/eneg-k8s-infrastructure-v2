@@ -153,40 +153,51 @@ Aus der Resilienz-Haertung vom 29.06.2026 (DEV). Live-Werte 14.07.2026:
 |---------|-----------|------------------------|-------------------|
 | DEV cnpg-erp     | 8Gi | 6GB | eneg-stateful-critical |
 | DEV cnpg-shared  | 8Gi | 6GB | eneg-stateful-critical |
-| TEST cnpg-erp    | 5Gi | (fehlt) | (fehlt) |
-| TEST cnpg-shared | 5Gi | (fehlt) | (fehlt) |
+| TEST cnpg-erp    | 8Gi (15.07.) | 6GB (15.07.) | eneg-stateful-critical (15.07.) |
+| TEST cnpg-shared | 8Gi (15.07.) | 6GB (15.07.) | eneg-stateful-critical (15.07.) |
 | PROD cnpg-erp    | 8Gi | 6GB | (fehlt) |
 | PROD cnpg-shared | 5Gi | (fehlt) | (fehlt) |
 
-PROD cnpg-erp hat WAL 8Gi + slot bereits aus der cnpg-erp-v2-Recovery (08.07.),
-aber **keine** priorityClass. PROD cnpg-shared und beide TEST-Cluster sind auf
-altem Stand.
+**TEST vollstaendig gehaertet (P2 TEST erledigt 14./15.07.2026).** PROD cnpg-erp
+hat WAL 8Gi + slot bereits aus der cnpg-erp-v2-Recovery (08.07.), aber **keine**
+priorityClass. PROD cnpg-shared ist noch auf altem Stand (5Gi, kein slot, keine
+priorityClass) - PROD ist der naechste Schritt.
 
 **MariaDB Galera (Spec live):**
 
 | Cluster | priorityClassName |
 |---------|-------------------|
 | DEV  | eneg-stateful-critical |
-| TEST | (fehlt) |
+| TEST | eneg-stateful-critical (15.07.) |
 | PROD | (fehlt) |
 
 **Bewertung / Nachziehen:**
 
 | Einzelmassnahme | DEV | TEST | PROD | Nachziehen? | Risiko / Abhaengigkeit |
 |-----------------|-----|------|------|-------------|------------------------|
-| PriorityClass-Definition (`base/priorityclasses`) | vorhanden | fehlt (App fehlt) | fehlt (App fehlt) | **JA** | Muss existieren, BEVOR ein Pod sie referenziert, sonst wird der Pod nicht admittiert. **Reihenfolge-kritisch: zuerst App anlegen.** |
-| `priorityClassName` an CNPG erp+shared | ja | nein | nein | **JA** | Haengt an PriorityClass-Definition |
-| `priorityClassName` an MariaDB Galera | ja | nein | nein | **JA** | Rolling-Restart, IST/SST beobachten |
-| `max_slot_wal_keep_size: 6GB` (erp+shared) | ja | nein | nur erp | **JA** | sighup-Reload, kein Restart |
-| WAL-Volume 5Gi -> 8Gi | ja | nein (5Gi) | nur erp (shared 5Gi) | **JA** | **Nur per Instanz-Recreate moeglich, NICHT live erweiterbar!** Deckel `max_slot_wal_keep_size` muss deutlich unter Volume-Groesse liegen (~2Gi Puffer). Bei 5Gi-Volumes NICHT 6GB-Deckel setzen ohne vorherigen Resize. |
+| PriorityClass-Definition (`base/priorityclasses`) | vorhanden | erledigt 14.07. (App) | fehlt (App fehlt) | **PROD offen** | Muss existieren, BEVOR ein Pod sie referenziert, sonst wird der Pod nicht admittiert. **Reihenfolge-kritisch: zuerst App anlegen.** |
+| `priorityClassName` an CNPG erp+shared | ja | erledigt 15.07. | nein | **PROD offen** | Haengt an PriorityClass-Definition |
+| `priorityClassName` an MariaDB Galera | ja | erledigt 15.07. (IST, kein SST) | nein | **PROD offen** | Rolling-Restart, IST/SST beobachten |
+| `max_slot_wal_keep_size: 6GB` (erp+shared) | ja | erledigt 15.07. | nur erp | **PROD offen (shared)** | sighup-Reload, kein Restart |
+| WAL-Volume 5Gi -> 8Gi | ja | erledigt 15.07. (Online-Resize) | nur erp (shared 5Gi) | **PROD offen (shared)** | **KORREKTUR: live online-erweiterbar** (longhorn-db `allowVolumeExpansion: true`). CNPG 1.28.3 orchestriert WAL-PVC-Resize ueber `spec.walStorage.size` sequenziell. In TEST 15.07. ohne Longhorn-Deadlock durchgelaufen; Detach-Trick nicht noetig. Deckel `max_slot_wal_keep_size` erst NACH Resize setzen (~2Gi Puffer). |
 | Alert `CnpgClusterNoPrimary` (`base/`) | ja | ja | ja | ERLEDIGT (base) | kommt automatisch mit |
 | Alert `CnpgReplicationSlotInactive` (`base/`) | ja | ja | ja | ERLEDIGT (base) | kommt automatisch mit |
 
 > **Kritische Abhaengigkeit:** `max_slot_wal_keep_size` (Deckel) und
 > WAL-Volume-Groesse gehoeren zusammen. Der Deckel darf nie >= Volume-Groesse
-> sein. Reihenfolge daher: erst WAL-Volume auf 8Gi (Instanz-Recreate), dann
-> 6GB-Deckel. Bei TEST (beide 5Gi) und PROD-cnpg-shared (5Gi) ist der Resize
-> zwingend vor dem Deckel.
+> sein. Reihenfolge daher: erst WAL-Volume auf 8Gi (Online-Resize via
+> `spec.walStorage.size`), dann 6GB-Deckel. Bei PROD-cnpg-shared (5Gi) ist der
+> Resize zwingend vor dem Deckel.
+>
+> **KORREKTUR WAL-Resize-Methode (verifiziert TEST 15.07.2026):** Die urspruengliche
+> Annahme "nur per Instanz-Recreate, NICHT live erweiterbar" stammt aus dem
+> disk-full-Deadlock 29.06. (CNPG-Disk-Guard blockierte den Pod-Start). Im
+> normalen (nicht-vollen) Zustand ist der Online-Resize der zuverlaessige Weg:
+> `spec.walStorage.size` erhoehen, CNPG rollt die PVCs sequenziell, Longhorn
+> expandiert online. In TEST liefen erp+shared ohne Deadlock durch; nur der
+> jeweils letzte Node (FileSystemResizePending) brauchte einen Remount
+> (Replica: Pod-Delete; Primary: Switchover). Detach-Trick (Runbook) war nicht
+> noetig, bleibt aber Sicherheitsnetz.
 
 > **Hinweis PROD cnpg-erp.yaml:** Das Manifest enthaelt `monitoring:` /
 > `enablePodMonitor` doppelt (einmal true, einmal false). Kein Drift-Thema,
@@ -373,24 +384,44 @@ Schritt durch Daniel.**
 
 ### Prioritaet 2 - DB-Resilienz (Schutz vor WAL-Deadlock / Verdraengung)
 
+> **Status: TEST vollstaendig erledigt (14./15.07.2026). PROD offen (naechster
+> Schritt).** Detaildoku: `docs/phases/resilienz-haertung-wal-deadlock-dev.md`
+> (TEST/PROD-Rollout-Abschnitt).
+
 Reihenfolge je Umgebung zwingend:
 
 **P2.1: PriorityClass-App anlegen** (Voraussetzung fuer alles Weitere)
 - Neue Datei `environments/{test,prod}/infrastructure/priorityclasses-app.yaml`
   (analog DEV, zeigt auf `base/priorityclasses/`).
 - Verifizieren: PriorityClass `eneg-stateful-critical` im Cluster vorhanden.
+- **TEST erledigt 14.07.:** App `priorityclasses` Synced/Healthy, PriorityClass
+  (value 900000000) im Cluster vor Workload-Referenz verifiziert. PROD offen.
 
 **P2.2: WAL-Volume-Resize 5Gi -> 8Gi** (wo noetig: TEST erp+shared, PROD shared)
-- **Nur per Instanz-Recreate** (nicht live). Sorgfaeltig, ein Cluster nach dem
-  anderen, Backup/Archiving vorher pruefen.
+- **KORREKTUR:** live online-erweiterbar via `spec.walStorage.size` (nicht per
+  Recreate). CNPG 1.28.3 rollt die PVCs sequenziell, Longhorn expandiert online.
+- **TEST erledigt 15.07.:** shared zuerst, dann erp; beide ohne Longhorn-Deadlock.
+  Letzter Node je Cluster brauchte Remount (shared: Primary-Switchover; erp:
+  Replica-Pod-Delete). PROD: nur cnpg-shared (erp schon 8Gi).
 
 **P2.3: `max_slot_wal_keep_size: 6GB`** (erst NACH Resize)
 - In `cnpg-{erp,shared}.yaml` der Umgebung. sighup-Reload.
+- **TEST erledigt 15.07.:** live in beiden Clustern (`SHOW` = 6GB), kein Restart.
+  PROD: erp hat 6GB schon; nur shared offen (nach shared-Resize).
 
 **P2.4: `priorityClassName` an CNPG (erp+shared) und MariaDB Galera**
 - Loest Rolling-Restart aus -> engmaschig beobachten (Galera: IST/SST).
+- **TEST erledigt 15.07.:** erp+shared+galera, alle Pods priority 900000000.
+  Galera per IST (kein SST), galera-1 ohne Memory-Probleme. PROD offen.
+- **Lesson:** CNPG loest bei priorityClass-Aenderung KEINEN Auto-Restart aus ->
+  expliziter `kubectl cnpg restart <cluster>` noetig. Primary-Schritt kann lange
+  im Terminating stehen (30-Min-Grace), loest sich aber selbst - nicht vorschnell
+  force-deleten. Galera-Operator restartet dagegen automatisch
+  (ReplicasFirstPrimaryLast).
 
 > Der zugehoerige Alert `CnpgClusterNoPrimary` ist via base bereits ueberall aktiv.
+> TEST-Verifikation 15.07.: beide Cluster mit Primary, alle Replication-Slots
+> aktiv (`pg_replication_slots.active = t`) -> Alerts feuern nicht faelschlich.
 
 ### Prioritaet 3 - Monitoring-Resilienz
 

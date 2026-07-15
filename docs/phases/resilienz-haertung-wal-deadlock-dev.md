@@ -3,7 +3,7 @@
 **Datum:** 2026-06-29
 **Umgebung:** k8s-dev
 **Bezug:** `docs/incidents/2026-06-29-cnpg-wal-deadlock-longhorn-kaskade.md`
-**Status:** DEV abgeschlossen; TEST/PROD-Rollout offen
+**Status:** DEV abgeschlossen; TEST abgeschlossen (15.07.2026); PROD-Rollout offen
 
 ---
 
@@ -118,6 +118,62 @@ Pro Umgebung einzeln, mit Verifikation dazwischen. Reihenfolge je Umgebung:
 gesetzt wird. In DEV ist das WAL-Volume 8Gi (nach Incident-Resize); in TEST/PROD
 kann die Groesse abweichen. Der Deckel muss deutlich unter der Volume-Groesse
 liegen (Faustregel: Volume-Groesse minus ~2Gi Puffer).
+
+## TEST-Rollout (abgeschlossen 14./15.07.2026)
+
+Durchgefuehrt im Rahmen von P2 der Drift-Analyse
+(`docs/migration/dev-to-test-prod-drift-2026-07.md`). Reihenfolge strikt
+1→2→3→4 mit Zwischenverifikation, riskante Schritte mit Freigabe.
+
+**Abweichung vom Rollout-Plan (bewusst):** Schritt "CNPG-Operator-Patch 1.28.3"
+entfaellt fuer TEST/PROD - der Operator liegt in `base/` und ist bereits ueberall
+live auf 1.28.3 (Drift-Analyse 5.2). Kein separater Patch-Schritt noetig.
+
+1. **PriorityClass-App (14.07.):** `environments/test/infrastructure/priorityclasses-app.yaml`
+   angelegt (analog DEV, `directory.include: eneg-stateful-critical.yaml`,
+   Sync-Wave 1). Von `test-infrastructure` per directory-recurse aufgegriffen
+   (kein kustomization.yaml im Ordner). App `priorityclasses` Synced/Healthy;
+   PriorityClass `eneg-stateful-critical` (value 900000000) im Cluster verifiziert
+   VOR jeder Workload-Referenz.
+
+2. **WAL-Resize 5Gi→8Gi (15.07.):** Online-Resize via `spec.walStorage.size`
+   (Weg a). shared zuerst (Generalprobe), dann erp. Beide ohne Longhorn-Deadlock;
+   Longhorn expandierte alle Volumes online, Detach-Trick nicht noetig. Der jeweils
+   letzte Node blieb auf `FileSystemResizePending` bis zum Remount:
+   - shared: Primary (shared-2) per `kubectl cnpg promote cnpg-shared cnpg-shared-1`
+     zum Remount gebracht → FS 8Gi, `FileSystemResizeSuccessful`.
+   - erp: ausstehender Node war eine Replica (erp-4) → Pod-Delete genuegte.
+   Endstand beide: 3x WAL-PVC 8Gi, 3/3 healthy.
+
+3. **max_slot_wal_keep_size=6GB (15.07.):** in cnpg-{erp,shared}.yaml TEST gesetzt,
+   sighup-Reload (kein Restart). Live verifiziert via
+   `SHOW max_slot_wal_keep_size` = `6GB` auf beiden Primaries. Conditions gruen
+   (Ready/ContinuousArchiving/LastBackupSucceeded).
+
+4. **priorityClassName (15.07.):** an cnpg-{erp,shared}.yaml + mariadb-galera.yaml.
+   - **CNPG-Lesson:** priorityClass-Aenderung loest KEINEN Auto-Restart aus
+     (kein "restart-wuerdiges" Feld fuer den Operator). Expliziter
+     `kubectl cnpg restart <cluster>` noetig. Bei `primaryUpdateMethod: restart`
+     wird der Primary in-place/als Pod-Recreate zuletzt neu gestartet; der
+     Primary-Pod kann dabei lange im Terminating stehen (terminationGracePeriod
+     1800s) - loeste sich in beiden Faellen selbst (ueber Nacht), KEIN
+     Force-Delete noetig. Endstand: alle 6 CNPG-Pods priority 900000000, beide 3/3.
+   - **Galera:** Operator restartet automatisch (`ReplicasFirstPrimaryLast`) nach
+     dem Sync. Alle 3 Nodes per **IST** (kein SST) - Logs bestaetigt
+     ("Receiving IST... 100.0% complete", JOINER→JOINED→SYNCED). galera-1 (im Mai
+     Memory-problematisch) ohne Auffaelligkeit. Ready/GaleraReady True, priority
+     900000000 auf allen dreien.
+
+5. **CnpgClusterNoPrimary / CnpgReplicationSlotInactive:** beide via base aktiv,
+   nach den Aenderungen NICHT faelschlich feuernd - verifiziert: beide Cluster mit
+   genau einem Primary, alle Replication-Slots aktiv (`pg_replication_slots.active
+   = t`: erp 2/4, shared 2/3).
+
+**PROD-Rollout:** noch offen. PROD-Besonderheit: cnpg-erp hat WAL 8Gi + slot=6GB
+bereits (aus v2-Recovery 08.07.) - dort nur priorityClass noetig. Voller
+Durchlauf nur fuer cnpg-shared (Resize + slot + priorityClass) + Galera. Fuer den
+Primary-priorityClass-Schritt in PROD Switchover-Weg (Variante B) erwaegen, um
+den langen Primary-Terminating zu vermeiden.
 
 ## Offene Punkte aus der Resilienz-Analyse (nicht in dieser Runde umgesetzt)
 
