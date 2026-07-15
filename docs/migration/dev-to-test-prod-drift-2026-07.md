@@ -155,13 +155,12 @@ Aus der Resilienz-Haertung vom 29.06.2026 (DEV). Live-Werte 14.07.2026:
 | DEV cnpg-shared  | 8Gi | 6GB | eneg-stateful-critical |
 | TEST cnpg-erp    | 8Gi (15.07.) | 6GB (15.07.) | eneg-stateful-critical (15.07.) |
 | TEST cnpg-shared | 8Gi (15.07.) | 6GB (15.07.) | eneg-stateful-critical (15.07.) |
-| PROD cnpg-erp    | 8Gi | 6GB | (fehlt) |
-| PROD cnpg-shared | 5Gi | (fehlt) | (fehlt) |
+| PROD cnpg-erp    | 8Gi | 6GB | eneg-stateful-critical (15.07.) |
+| PROD cnpg-shared | 8Gi (15.07.) | 6GB (15.07.) | eneg-stateful-critical (15.07.) |
 
-**TEST vollstaendig gehaertet (P2 TEST erledigt 14./15.07.2026).** PROD cnpg-erp
-hat WAL 8Gi + slot bereits aus der cnpg-erp-v2-Recovery (08.07.), aber **keine**
-priorityClass. PROD cnpg-shared ist noch auf altem Stand (5Gi, kein slot, keine
-priorityClass) - PROD ist der naechste Schritt.
+**TEST + PROD vollstaendig gehaertet (P2 komplett erledigt 14./15.07.2026).** Alle
+drei Cluster (DEV/TEST/PROD) bei der DB-Resilienz-Haertung nun identisch: WAL 8Gi,
+max_slot_wal_keep_size 6GB, priorityClassName an cnpg-erp/cnpg-shared/mariadb-galera.
 
 **MariaDB Galera (Spec live):**
 
@@ -169,17 +168,17 @@ priorityClass) - PROD ist der naechste Schritt.
 |---------|-------------------|
 | DEV  | eneg-stateful-critical |
 | TEST | eneg-stateful-critical (15.07.) |
-| PROD | (fehlt) |
+| PROD | eneg-stateful-critical (15.07.) |
 
 **Bewertung / Nachziehen:**
 
 | Einzelmassnahme | DEV | TEST | PROD | Nachziehen? | Risiko / Abhaengigkeit |
 |-----------------|-----|------|------|-------------|------------------------|
-| PriorityClass-Definition (`base/priorityclasses`) | vorhanden | erledigt 14.07. (App) | fehlt (App fehlt) | **PROD offen** | Muss existieren, BEVOR ein Pod sie referenziert, sonst wird der Pod nicht admittiert. **Reihenfolge-kritisch: zuerst App anlegen.** |
-| `priorityClassName` an CNPG erp+shared | ja | erledigt 15.07. | nein | **PROD offen** | Haengt an PriorityClass-Definition |
-| `priorityClassName` an MariaDB Galera | ja | erledigt 15.07. (IST, kein SST) | nein | **PROD offen** | Rolling-Restart, IST/SST beobachten |
-| `max_slot_wal_keep_size: 6GB` (erp+shared) | ja | erledigt 15.07. | nur erp | **PROD offen (shared)** | sighup-Reload, kein Restart |
-| WAL-Volume 5Gi -> 8Gi | ja | erledigt 15.07. (Online-Resize) | nur erp (shared 5Gi) | **PROD offen (shared)** | **KORREKTUR: live online-erweiterbar** (longhorn-db `allowVolumeExpansion: true`). CNPG 1.28.3 orchestriert WAL-PVC-Resize ueber `spec.walStorage.size` sequenziell. In TEST 15.07. ohne Longhorn-Deadlock durchgelaufen; Detach-Trick nicht noetig. Deckel `max_slot_wal_keep_size` erst NACH Resize setzen (~2Gi Puffer). |
+| PriorityClass-Definition (`base/priorityclasses`) | vorhanden | erledigt 14.07. (App) | erledigt 15.07. (App) | **ERLEDIGT** | Muss existieren, BEVOR ein Pod sie referenziert, sonst wird der Pod nicht admittiert. **Reihenfolge-kritisch: zuerst App anlegen.** |
+| `priorityClassName` an CNPG erp+shared | ja | erledigt 15.07. | erledigt 15.07. | **ERLEDIGT** | Haengt an PriorityClass-Definition |
+| `priorityClassName` an MariaDB Galera | ja | erledigt 15.07. (IST, kein SST) | erledigt 15.07. (IST, kein SST) | **ERLEDIGT** | Rolling-Restart, IST/SST beobachten |
+| `max_slot_wal_keep_size: 6GB` (erp+shared) | ja | erledigt 15.07. | erledigt 15.07. | **ERLEDIGT** | sighup-Reload, kein Restart |
+| WAL-Volume 5Gi -> 8Gi | ja | erledigt 15.07. (Online-Resize) | erledigt 15.07. (Online-Resize) | **ERLEDIGT** | **KORREKTUR: live online-erweiterbar** (longhorn-db `allowVolumeExpansion: true`). CNPG 1.28.3 orchestriert WAL-PVC-Resize ueber `spec.walStorage.size` sequenziell. TEST+PROD 15.07. ohne Longhorn-Deadlock; Detach-Trick nicht noetig. PROD-shared-Volumes waren fast leer (~0,79 GB) -> Resize ganz ohne Eingriff. Deckel erst NACH Resize (~2Gi Puffer). |
 | Alert `CnpgClusterNoPrimary` (`base/`) | ja | ja | ja | ERLEDIGT (base) | kommt automatisch mit |
 | Alert `CnpgReplicationSlotInactive` (`base/`) | ja | ja | ja | ERLEDIGT (base) | kommt automatisch mit |
 
@@ -359,7 +358,7 @@ Schritt durch Daniel.**
 > **Verbindliche Reihenfolge (festgelegt Daniel, 14.07.2026) - je ein Thema pro
 > Chat, jeweils neuer Chat:**
 > 1. **Velero** (P1)  [ERLEDIGT 14.07.2026 - TEST + PROD, NAS10-Backend]
-> 2. **DB-Resilienz-Haertung** (P2)
+> 2. **DB-Resilienz-Haertung** (P2)  [ERLEDIGT 14./15.07.2026 - TEST + PROD]
 > 3. **Prometheus** - Memory-Limit + Retention + TSDB-Health-Alerts (P3).
 >    TSDB-Alerts gehoeren NICHT zum vcenter-Monitoring (s. Klaerung 5.6-Vorspann)
 >    und werden nach TEST+PROD mitgenommen.
@@ -384,9 +383,9 @@ Schritt durch Daniel.**
 
 ### Prioritaet 2 - DB-Resilienz (Schutz vor WAL-Deadlock / Verdraengung)
 
-> **Status: TEST vollstaendig erledigt (14./15.07.2026). PROD offen (naechster
-> Schritt).** Detaildoku: `docs/phases/resilienz-haertung-wal-deadlock-dev.md`
-> (TEST/PROD-Rollout-Abschnitt).
+> **Status: P2 VOLLSTAENDIG ERLEDIGT (TEST + PROD, 14./15.07.2026).** Alle drei
+> Cluster identisch gehaertet. Detaildoku:
+> `docs/phases/resilienz-haertung-wal-deadlock-dev.md` (TEST- + PROD-Rollout-Abschnitt).
 
 Reihenfolge je Umgebung zwingend:
 
@@ -395,24 +394,33 @@ Reihenfolge je Umgebung zwingend:
   (analog DEV, zeigt auf `base/priorityclasses/`).
 - Verifizieren: PriorityClass `eneg-stateful-critical` im Cluster vorhanden.
 - **TEST erledigt 14.07.:** App `priorityclasses` Synced/Healthy, PriorityClass
-  (value 900000000) im Cluster vor Workload-Referenz verifiziert. PROD offen.
+  (value 900000000) im Cluster vor Workload-Referenz verifiziert.
+- **PROD erledigt 15.07.:** ebenso. Hinweis: `prod-infrastructure` hat KEINEN
+  Auto-Sync (manueller Sync noetig); die Child-App `priorityclasses` bringt aber
+  selbst automated/selfHeal mit.
 
 **P2.2: WAL-Volume-Resize 5Gi -> 8Gi** (wo noetig: TEST erp+shared, PROD shared)
 - **KORREKTUR:** live online-erweiterbar via `spec.walStorage.size` (nicht per
   Recreate). CNPG 1.28.3 rollt die PVCs sequenziell, Longhorn expandiert online.
 - **TEST erledigt 15.07.:** shared zuerst, dann erp; beide ohne Longhorn-Deadlock.
   Letzter Node je Cluster brauchte Remount (shared: Primary-Switchover; erp:
-  Replica-Pod-Delete). PROD: nur cnpg-shared (erp schon 8Gi).
+  Replica-Pod-Delete).
+- **PROD erledigt 15.07.:** nur cnpg-shared (erp schon 8Gi). Volumes fast leer
+  (~0,79 GB) -> alle drei PVCs ohne jeden Eingriff auf 8Gi (kein Switchover/Delete
+  noetig, CNPG loeste FileSystemResizePending selbst auf).
 
 **P2.3: `max_slot_wal_keep_size: 6GB`** (erst NACH Resize)
 - In `cnpg-{erp,shared}.yaml` der Umgebung. sighup-Reload.
 - **TEST erledigt 15.07.:** live in beiden Clustern (`SHOW` = 6GB), kein Restart.
-  PROD: erp hat 6GB schon; nur shared offen (nach shared-Resize).
+- **PROD erledigt 15.07.:** shared gesetzt (`SHOW`=6GB); erp hatte 6GB schon.
 
 **P2.4: `priorityClassName` an CNPG (erp+shared) und MariaDB Galera**
 - Loest Rolling-Restart aus -> engmaschig beobachten (Galera: IST/SST).
 - **TEST erledigt 15.07.:** erp+shared+galera, alle Pods priority 900000000.
-  Galera per IST (kein SST), galera-1 ohne Memory-Probleme. PROD offen.
+  Galera per IST (kein SST), galera-1 ohne Memory-Probleme.
+- **PROD erledigt 15.07.:** erp+shared+galera, alle Pods 900000000. Galera per
+  IST (kein SST), galera-1 unauffaellig. CNPG via `kubectl cnpg restart` (Primary
+  erp schnell, shared laenger im Terminating, loeste sich selbst).
 - **Lesson:** CNPG loest bei priorityClass-Aenderung KEINEN Auto-Restart aus ->
   expliziter `kubectl cnpg restart <cluster>` noetig. Primary-Schritt kann lange
   im Terminating stehen (30-Min-Grace), loest sich aber selbst - nicht vorschnell
@@ -420,8 +428,9 @@ Reihenfolge je Umgebung zwingend:
   (ReplicasFirstPrimaryLast).
 
 > Der zugehoerige Alert `CnpgClusterNoPrimary` ist via base bereits ueberall aktiv.
-> TEST-Verifikation 15.07.: beide Cluster mit Primary, alle Replication-Slots
-> aktiv (`pg_replication_slots.active = t`) -> Alerts feuern nicht faelschlich.
+> TEST+PROD-Verifikation 15.07.: beide Cluster je Umgebung mit Primary, alle
+> Replication-Slots aktiv (`pg_replication_slots.active = t`) -> Alerts feuern
+> nicht faelschlich.
 
 ### Prioritaet 3 - Monitoring-Resilienz
 
@@ -527,10 +536,11 @@ ueberall sofort wirksam; echter Drift steckt nur in den env-Overlays.
 **Kein Versionsdrift** bei Helm-Charts/Operatoren - alles ueber base identisch.
 
 **Echter, nachzuziehender Drift (priorisiert):**
-1. **Velero** checksumAlgorithm-Fix + Resource-Limits fehlen in TEST+PROD (Backup-Integritaet, hoch).
-2. **DB-Resilienz-Haertung** (29.06.) fehlt in TEST komplett und PROD teilweise:
-   PriorityClass-App + priorityClassName (CNPG+Galera), max_slot_wal_keep_size,
-   WAL-Volume 8Gi. Abhaengigkeitskette + WAL-Resize nur per Recreate.
+1. **Velero** checksumAlgorithm-Fix + Resource-Limits fehlen in TEST+PROD (Backup-Integritaet, hoch). [ERLEDIGT 14.07.]
+2. **DB-Resilienz-Haertung** (29.06.): PriorityClass-App + priorityClassName
+   (CNPG+Galera), max_slot_wal_keep_size, WAL-Volume 8Gi. [ERLEDIGT 14./15.07. -
+   TEST+PROD; alle drei Cluster identisch. WAL-Resize erwies sich als online
+   moeglich (Korrektur der "nur Recreate"-Annahme).]
 3. **Prometheus** Memory-Limit 3Gi + retention und die TSDB-Health-Alerts nur in DEV.
 4. **Thanos** S3 noch NAS10/insecure in TEST/PROD (Loki bereits auf NAS20 - erledigt).
 5. Grenzfaelle: Longhorn `replica-auto-balance` (Phase 13), backup-overdue-Patch.

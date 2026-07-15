@@ -3,7 +3,7 @@
 **Datum:** 2026-06-29
 **Umgebung:** k8s-dev
 **Bezug:** `docs/incidents/2026-06-29-cnpg-wal-deadlock-longhorn-kaskade.md`
-**Status:** DEV abgeschlossen; TEST abgeschlossen (15.07.2026); PROD-Rollout offen
+**Status:** DEV + TEST + PROD abgeschlossen (15.07.2026) - alle drei Cluster identisch gehaertet
 
 ---
 
@@ -169,11 +169,40 @@ live auf 1.28.3 (Drift-Analyse 5.2). Kein separater Patch-Schritt noetig.
    genau einem Primary, alle Replication-Slots aktiv (`pg_replication_slots.active
    = t`: erp 2/4, shared 2/3).
 
-**PROD-Rollout:** noch offen. PROD-Besonderheit: cnpg-erp hat WAL 8Gi + slot=6GB
-bereits (aus v2-Recovery 08.07.) - dort nur priorityClass noetig. Voller
-Durchlauf nur fuer cnpg-shared (Resize + slot + priorityClass) + Galera. Fuer den
-Primary-priorityClass-Schritt in PROD Switchover-Weg (Variante B) erwaegen, um
-den langen Primary-Terminating zu vermeiden.
+## PROD-Rollout (abgeschlossen 15.07.2026)
+
+Schlanker als TEST, da cnpg-erp aus der v2-Recovery (08.07.) bereits WAL 8Gi +
+slot=6GB hatte. Reihenfolge wie TEST, riskante Schritte mit Freigabe.
+
+1. **PriorityClass-App (15.07.):** `environments/prod/infrastructure/priorityclasses-app.yaml`
+   analog TEST. **Besonderheit PROD:** `prod-infrastructure` hat KEINEN Auto-Sync
+   -> nach Hard-Refresh manueller Sync noetig (UI/`argocd app sync`). Die Child-App
+   `priorityclasses` bringt selbst automated/selfHeal mit und deployt die
+   PriorityClass dann selbst. PriorityClass (900000000) im Cluster verifiziert.
+
+2. **WAL-Resize 5Gi->8Gi (15.07.):** nur cnpg-shared (erp schon 8Gi). `cnpg-cluster`
+   in PROD HAT Auto-Sync/selfHeal -> Spec-Aenderung automatisch uebernommen, Resize
+   lief sofort an. WAL-Volumes waren fast leer (~0,79 GB) -> alle drei PVCs ohne
+   jeden Eingriff auf 8Gi (kein Switchover, kein Pod-Delete; CNPG loeste
+   FileSystemResizePending im Reconcile selbst auf). Glatter als TEST.
+
+3. **max_slot_wal_keep_size=6GB (15.07.):** nur cnpg-shared (erp hatte es schon).
+   sighup-Reload, live `SHOW`=6GB auf shared-Primary. Conditions gruen.
+
+4. **priorityClassName (15.07.):** cnpg-erp + cnpg-shared + mariadb-galera.
+   - **CNPG (Variante A, `kubectl cnpg restart`):** erp+shared. Wie in TEST kein
+     Auto-Restart durch die Spec-Aenderung. shared-Primary stand laenger im
+     Terminating (loeste sich selbst, kein Force-Delete); erp-Restart lief zuegig
+     durch. Endstand: alle 6 CNPG-Pods priority 900000000, beide 3/3.
+   - **Galera:** Operator-Auto-Restart (`ReplicasFirstPrimaryLast`) nach Hard-Refresh
+     der `mariadb-cluster`-App. Alle 3 Nodes per **IST** (kein SST, Logs bestaetigt),
+     galera-1 unauffaellig. Ready/GaleraReady True, priority 900000000.
+
+5. **Alerts:** CnpgClusterNoPrimary/CnpgReplicationSlotInactive - beide Cluster mit
+   Primary, alle Slots aktiv (`active=t`: erp 1/3, shared 2/3). Kein Fehlalarm.
+
+**Ergebnis P2:** DEV + TEST + PROD bei der DB-Resilienz-Haertung identisch
+(WAL 8Gi, slot 6GB, priorityClass an CNPG erp+shared und Galera).
 
 ## Offene Punkte aus der Resilienz-Analyse (nicht in dieser Runde umgesetzt)
 
