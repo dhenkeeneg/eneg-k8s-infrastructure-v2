@@ -8,3 +8,4 @@ resources:
   - ../../../base/monitoring/prometheus-msteams
   - cnpg-podmonitors.yaml
   - kube-job-failed-test.yaml
+  - prometheus-tsdb-health-test.yaml

@@ -25,6 +25,25 @@ prometheus:
     # (z.B. Reconciliation-Pause waehrend Migration). Chart-Default ist 1,
     # aber ohne expliziten Wert heilt ArgoCD ein manuell gesetztes 0 nicht.
     replicas: 1
+    # TEST-Retention: 15d (Zeit, env-spezifisch belassen) / max. 14 GB (Groessendeckel).
+    # retentionSize ergaenzt den fehlenden groessenbasierten Deckel (P3, Drift-Angleich
+    # 15.07.2026): retention 15d allein kann die 20Gi-PVC volllaufen lassen. 14GB ~= 70%
+    # der 20Gi-PVC, laesst ~6GB Puffer fuer WAL + chunks_head + Kompaktierungs-Spitzen.
+    # Was zuerst greift (Zeit ODER Groesse), begrenzt. Thanos haelt die Langzeit-Historie
+    # auf S3, lokal reicht kurze Vorhaltung. Hinweis: retentionSize schuetzt nur
+    # persistierte Bloecke, NICHT das WAL - gegen WAL-Deadlock 21.06. wirken die
+    # TSDB-Health-Alerts (prometheus-tsdb-health-test.yaml).
+    retention: 15d
+    retentionSize: 14GB
+    # Memory-Limit 3Gi (Angleich an DEV, P3 15.07.2026): Normalverbrauch ~1,8GB, altes
+    # 2Gi-Limit war knapp und riskant beim WAL-Replay nach Pod-Neustart. 3Gi/1Gi gibt
+    # Puffer fuer Replay/Kompaktierung ohne OOMKill - alle drei Cluster nun einheitlich.
+    resources:
+      requests:
+        cpu: 100m
+        memory: 1Gi
+      limits:
+        memory: 3Gi
     storageSpec:
       volumeClaimTemplate:
         spec:
