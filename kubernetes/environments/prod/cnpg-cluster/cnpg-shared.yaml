@@ -43,8 +43,10 @@ spec:
     storageClass: longhorn-db
 
   # WAL Storage (separates Volume fuer bessere I/O-Performance)
+  # 5Gi -> 8Gi (P2.2, 15.07.2026): Angleich an DEV/TEST; Voraussetzung fuer
+  # max_slot_wal_keep_size 6GB (Deckel < Volume, ~2Gi Puffer). Online-Resize.
   walStorage:
-    size: 5Gi
+    size: 8Gi
     storageClass: longhorn-db
 
   # Resources (PROD-Dimensionierung)
