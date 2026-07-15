@@ -434,16 +434,40 @@ Reihenfolge je Umgebung zwingend:
 
 ### Prioritaet 3 - Monitoring-Resilienz
 
-**P3.1: Prometheus Memory-Limit 3Gi + retention/retentionSize**
+**P3.1: Prometheus Memory-Limit 3Gi + retention/retentionSize** [ERLEDIGT 15.07.]
 - In `environments/{test,prod}/monitoring/values-override.yaml`.
 - retentionSize an jeweilige PVC-Groesse anpassen (TEST 20Gi, PROD 50Gi), NICHT
   DEV-Wert 12GB uebernehmen.
+- **Finale Werte (Freigabe Daniel 15.07., siehe OF-4):** retentionSize TEST 14GB
+  (~70% von 20Gi), PROD 38GB (~76% von 50Gi). retention 15d in TEST+PROD BELASSEN
+  (env-spezifisch; Thanos haelt Langzeit-Historie, retentionSize ist der harte
+  Deckel). Memory einheitlich 3Gi/1Gi in allen drei Clustern.
+- **TEST erledigt 15.07.:** CR live retention=15d/retentionSize=14GB/mem=3Gi/1Gi.
+  Pod-Neustart sauber (3/3, 0 Restarts, kein OOMKill).
+- **PROD erledigt 15.07.:** CR live retention=15d/retentionSize=38GB/mem=3Gi/1Gi.
+  Pod-Neustart sauber (3/3, 0 Restarts); Mem nach WAL-Replay ~1GB, Limit 3Gi mit
+  reichlich Puffer (alte Grenze 2Gi bei ~1,7GB Normallast war knapp).
+- **Lesson:** retentionSize schuetzt nur persistierte Bloecke, NICHT das WAL - der
+  21.06.-Deadlock (WAL-Korruption -> blockierte Kompaktierung) wird dadurch NICHT
+  verhindert. Der eigentliche Frueherkennungs-Schutz sind die P3.2-Alerts;
+  retentionSize deckt den anderen Fall ab (retention-getriebenes PVC-Volllaufen).
+  retention/Memory-Aenderung loest Prometheus-Pod-Neustart aus (StatefulSet, kurze
+  Scrape-Luecke) - Hard-Refresh der ArgoCD-App `monitoring` noetig (Helm-Sub-Map).
 
-**P3.2: `prometheus-tsdb-health` Alerts nach TEST/PROD** (bestaetigt Daniel 14.07.)
+**P3.2: `prometheus-tsdb-health` Alerts nach TEST/PROD** (bestaetigt Daniel 14.07.) [ERLEDIGT 15.07.]
 - Gehoert NICHT zu vcenter-Monitoring (s. 5.6-Vorspann) - ueberwacht die
   Prometheus-eigene TSDB. Wird nach TEST+PROD mitgenommen.
 - Datei aus DEV ableiten, Schwellwert-PVC-Bezug pruefen, in
   `monitoring-alerts/kustomization.yaml` als resource ergaenzen.
+- **TEST+PROD erledigt 15.07.:** `prometheus-tsdb-health-{test,prod}.yaml` aus DEV
+  abgeleitet (3 Alerts: CompactionsFailing, WALCorruptions, StorageFillingUp), je
+  in `monitoring-alerts/kustomization.yaml` ergaenzt. Live verifiziert: Regelgruppe
+  geladen, alle Alerts `health=ok` und `state=inactive` (kein Fehlalarm).
+- **Lesson:** Der PVC-Selektor `prometheus-.*` und der Job-Filter
+  `job="kube-prometheus-stack-prometheus"` sind ohne Anpassung portierbar (Release-
+  Name in allen drei Clustern identisch). Der Job-Filter ist ZWINGEND: die Metrik
+  `prometheus_tsdb_compactions_total` existiert auch mit `job="thanos-compactor"` -
+  ohne Filter wuerde der Compactor mit-alarmieren.
 
 ### Prioritaet 4 - S3-Migration Thanos + NAS10->NAS20-Gesamtpruefung (Phase 14)
 
@@ -512,7 +536,9 @@ als Generalprobe.)
 
 **OF-4: retention/retentionSize-Werte** fuer Prometheus TEST (20Gi) und PROD
 (50Gi) festlegen (DEV: 7d/12GB bei 25Gi). Vorschlag TEST 7d/10GB, PROD 15-20d/40GB
-- final durch Daniel.
+- final durch Daniel. -- ENTSCHIEDEN + ERLEDIGT 15.07.2026: retentionSize TEST
+  14GB, PROD 38GB; retention 15d in beiden BELASSEN (nicht auf DEV-7d angeglichen -
+  env-spezifisch, Thanos haelt Langzeit); Memory 3Gi/1Gi einheitlich. Siehe P3.1.
 
 **OF-5: PROD cnpg-erp.yaml Doppel-`enablePodMonitor`** bei Gelegenheit bereinigen
 (kein Drift, nur Hygiene). -- ERLEDIGT 14.07.2026: Doppel-`monitoring:`-Block in
@@ -542,6 +568,9 @@ ueberall sofort wirksam; echter Drift steckt nur in den env-Overlays.
    TEST+PROD; alle drei Cluster identisch. WAL-Resize erwies sich als online
    moeglich (Korrektur der "nur Recreate"-Annahme).]
 3. **Prometheus** Memory-Limit 3Gi + retention und die TSDB-Health-Alerts nur in DEV.
+   [ERLEDIGT 15.07. - TEST+PROD: retentionSize 14GB/38GB ergaenzt, retention 15d
+   belassen, Memory 3Gi/1Gi einheitlich, TSDB-Health-Alerts portiert und live
+   verifiziert (inactive/health=ok).]
 4. **Thanos** S3 noch NAS10/insecure in TEST/PROD (Loki bereits auf NAS20 - erledigt).
 5. Grenzfaelle: Longhorn `replica-auto-balance` (Phase 13), backup-overdue-Patch.
 
@@ -555,5 +584,7 @@ via Desktop-Commander; Daniel: git commit/push, ArgoCD-Sync, Server-Zugriffe).
 
 ---
 
-*Analyse-Datei, Stand 14.07.2026. Kein Rollout, kein Commit im Rahmen dieser
-Session. Aktualisieren, sobald Nachzieh-Schritte umgesetzt werden.*
+*Analyse-Datei, urspruenglicher Stand 14.07.2026. Fortlaufend aktualisiert bei
+Umsetzung der Nachzieh-Schritte: P1 (Velero) erledigt 14.07.; P2 (DB-Resilienz)
+erledigt 14./15.07.; P3 (Monitoring-Resilienz) erledigt 15.07. Offen: P4 (Thanos
+NAS20), P5 (Grenzfaelle).*
