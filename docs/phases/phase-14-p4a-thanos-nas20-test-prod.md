@@ -1,6 +1,6 @@
 # P4a: Thanos S3-Migration NAS10 -> NAS20 (TEST + PROD)
 
-**Status:** TEST ABGESCHLOSSEN (16.07.2026). PROD ausstehend.
+**Status:** VOLLSTAENDIG ABGESCHLOSSEN (TEST + PROD, 16.07.2026).
 **Kontext:** Drift-Angleich DEV -> TEST/PROD, Prioritaet P4a (nur Thanos).
 **Scope-Entscheidung:** OF-8 = P4a ausschliesslich Thanos. P4b (CNPG-backup,
 MariaDB-physical, Garage, Odoo, i-doit NAS10->NAS20) folgt separat.
@@ -126,8 +126,35 @@ vor Upload) sind in Query nicht direkt sichtbar.
   drei Cluster), dann Query-Neustart. Vorher pruefen, ob prometheus-operated die
   gRPC-Endpoints (10901) mit passenden SRV-Records liefert.
 
-## 7. PROD (14c-analog) - ausstehend
+## 7. PROD (14c-analog) - ABGESCHLOSSEN 16.07.2026
 
 Gleiche Schrittfolge mit prod-Overlays, bucket k8s-prod-thanos, eneg-s3-ca in
-PROD bereits vorhanden. Beachten: prod-infrastructure ohne Auto-Sync (manueller
-Sync), Child-Apps mit selfHeal. Erst nach Freigabe.
+PROD bereits vorhanden (Loki-Migration 07.07.). prod-infrastructure ohne Auto-Sync
+-> Child-Apps aktiv gesynct.
+
+**Ablauf (ohne Stolpersteine - TEST-Lehren griffen):**
+- Phase (a): compactor.enabled:false -> Compactor-Deployment+Pod entfernt (Sync
+  griff direkt, kein "Synced-ohne-Apply").
+- Phase (b): rclone-Kopie k8s-prod-thanos NAS10->NAS20, size-Werte plausibel gleich.
+- Phase (c): Template (nas20/insecure:false/ca_file) + CA-Mounts (compactor/
+  storegateway/sidecar) + Compactor reaktiviert; secret_key diesmal korrekt
+  (Access-Key s3-k8s-prod:<key>, mit loki-s3-credentials abgeglichen -> KEIN
+  InvalidAccessKeyId). Secret-first: monitoring-secrets zuerst, App-Sync real
+  verifiziert (operationState synced-rev == compared-rev, finishedAt aktuell).
+- Phase (d): thanos + monitoring gesynct. Verifiziert: Storegateway laedt 9 Bloecke
+  von NAS20 (ready in 9,5s, kein x509), Compactor Cleanup sauber + regelmaessige
+  Metadata-Syncs (returned=47), Sidecar ready mit CA-Mount (kein x509, Upload beim
+  naechsten 2h-Cut), Query laeuft. Alle Pods 1/1 stabil.
+
+**Nebenbefund (identisch zu TEST):** Query sidecarsService-Discovery greift auch
+in PROD ins Leere (real: prometheus-operated:10901) - Historie via Storegateway,
+migrations-unabhaengig, eigener base-Fix spaeter.
+
+## 8. Status P4a gesamt
+
+- **TEST:** erledigt 16.07.2026.
+- **PROD:** erledigt 16.07.2026.
+- **P4a damit VOLLSTAENDIG.** Alle drei Cluster (DEV/TEST/PROD) Thanos auf NAS20.
+- Offen: P4b (CNPG-backup, MariaDB-physical, Garage, Odoo, i-doit NAS10->NAS20,
+  separater Chat), Query-Discovery-Fix (base, separater Chat), Sidecar-Upload-
+  Bestaetigung am NAS20-Bucket beim naechsten 2h-Cut (TEST + PROD).

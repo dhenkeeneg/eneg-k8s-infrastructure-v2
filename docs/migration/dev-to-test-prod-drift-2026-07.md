@@ -284,13 +284,15 @@ Bug ist backend-unabhaengig).
 | **Loki** S3 | NAS20/HTTPS + CA | NAS20/HTTPS + CA | NAS20/HTTPS + CA | **ERLEDIGT** (14a/b/c) |
 | Loki Retention | 120h | 120h | 240h | NEIN (env gewollt) |
 | Loki Compactor retention_enabled (base) | ja | ja | ja | ERLEDIGT (base) |
-| **Thanos** objstore | NAS20/HTTPS + ca_file | NAS20 (16.07.) | NAS10/HTTP insecure | **P4a: TEST erledigt 16.07., PROD offen** |
-| Thanos CA-Mount (compactor+storegateway) | ja | ja (16.07.) | nein | P4a: TEST erledigt, PROD offen |
+| **Thanos** objstore | NAS20/HTTPS + ca_file | NAS20 (16.07.) | NAS20 (16.07.) | **P4a ERLEDIGT (TEST+PROD)** |
+| Thanos CA-Mount (compactor+storegateway) | ja | ja (16.07.) | ja (16.07.) | P4a ERLEDIGT (TEST+PROD) |
 
-Loki ist vollstaendig auf NAS20 migriert (kein Drift mehr). **Thanos** ist der
-verbliebene S3-Migrations-Rueckstand: TEST/PROD schreiben Bloecke noch auf
-NAS10/insecure. Betrifft `monitoring-thanos/values-override.yaml` (CA-Mount) und
-das Secret `thanos-objstore-config` (endpoint + insecure + ca_file).
+Loki ist vollstaendig auf NAS20 migriert (kein Drift mehr). **Thanos** ist seit
+16.07.2026 in allen drei Clustern auf NAS20 (P4a TEST+PROD erledigt). Betraf
+`monitoring-thanos/values-override.yaml` (CA-Mount compactor+storegateway),
+`monitoring/values-override.yaml` (Sidecar-CA-Mount) und das Secret
+`thanos-objstore-config` (endpoint nas20 + insecure:false + ca_file). Doc:
+phases/phase-14-p4a-thanos-nas20-test-prod.md.
 
 ### 5.7 Longhorn - Live-Settings (Nicht-GitOps-Drift)
 
@@ -364,7 +366,7 @@ Schritt durch Daniel.**
 >    und werden nach TEST+PROD mitgenommen.
 > 4. **Thanos** auf NAS20 umstellen (P4) - dabei pruefen, ob weitere Dienste noch
 >    NAS10 -> NAS20 umzustellen sind (Backups etc., s. P4-Erweiterung).
->    [P4a Thanos: TEST erledigt 16.07.2026, PROD offen. P4b (uebrige Dienste) offen.]
+>    [P4a Thanos: TEST + PROD erledigt 16.07.2026. P4b (uebrige Dienste) offen.]
 > 5. **Longhorn `replica-auto-balance`** (P5) - erst im Anschluss diskutieren.
 
 ### Prioritaet 1 - Backup-Integritaet (hoechstes Risiko bei Nichtstun)
@@ -479,17 +481,17 @@ Reihenfolge je Umgebung zwingend:
   vorhanden sein (in DEV vorhanden; fuer TEST/PROD anlegen - analog Loki 14b/c).
 - Analog zur bereits abgeschlossenen Loki-Migration.
 
-> **P4a Thanos - TEST ERLEDIGT 16.07.2026.** Datenkopie NAS10->NAS20 (volle
+> **P4a Thanos - TEST + PROD ERLEDIGT 16.07.2026.** Datenkopie NAS10->NAS20 (volle
 > Historie, Compactor-Pause via `enabled:false`), Secret + CA-Mounts (compactor/
 > storegateway/sidecar) split-brain-sicher in einem Cutover. `eneg-s3-ca` war
 > durch die Loki-Migration bereits vorhanden (wiederverwendet, kein neues Secret).
-> Live verifiziert: Storegateway laedt 15 Bloecke von NAS20 (kein x509), Compactor
-> sauber, Sidecar ready mit CA (Upload beim naechsten 2h-Cut), Query nutzt
-> Storegateway. Stolpersteine: (1) compactor.replicaCount greift beim bitnami-Chart
-> NICHT -> enabled:false; (2) falscher secret_key (InvalidAccessKeyId trotz TLS-OK)
-> -> Access-Key-Format `s3-k8s-{env}:<key>`. Doc: phases/phase-14-p4a-thanos-nas20-test-prod.md.
-> **PROD analog noch offen** (bucket k8s-prod-thanos, eneg-s3-ca vorhanden,
-> prod-infrastructure ohne Auto-Sync).
+> Live verifiziert je Cluster: Storegateway laedt Bloecke von NAS20 (kein x509),
+> Compactor sauber, Sidecar ready mit CA (Upload beim naechsten 2h-Cut), Query nutzt
+> Storegateway. Stolpersteine (nur TEST): (1) compactor.replicaCount greift beim
+> bitnami-Chart NICHT -> enabled:false; (2) falscher secret_key (InvalidAccessKeyId
+> trotz TLS-OK) -> Access-Key-Format `s3-k8s-{env}:<key>`. PROD lief ohne diese
+> Stolpersteine (Lehren griffen). Doc: phases/phase-14-p4a-thanos-nas20-test-prod.md.
+> **P4a damit vollstaendig - alle drei Cluster auf NAS20.**
 >
 > **Nebenbefund (NICHT P4a, dokumentiert fuer spaeter):** Thanos-Query
 > sidecarsService `kube-prometheus-stack-thanos-discovery` existiert in KEINEM
@@ -508,7 +510,7 @@ strategische Migrationsfrage, sondern ECHTER DRIFT DEV vs TEST/PROD.
 |--------|-----|------|------|--------|
 | Loki | NAS20 | NAS20 | NAS20 | ERLEDIGT (14a/b/c) |
 | Velero | NAS20 | NAS10* | NAS10* | *bewusst: P1 nur Checksum-Fix auf NAS10; NAS20 hier in P4 |
-| Thanos | NAS20 | NAS20 (16.07.) | NAS10 | **P4a: TEST erledigt, PROD offen** |
+| Thanos | NAS20 | NAS20 (16.07.) | NAS20 (16.07.) | **P4a ERLEDIGT (TEST+PROD)** |
 | CNPG objectstore erp+shared | NAS20 | NAS10 | NAS10 | **JA** (WAL+Backup-Bucket) |
 | CNPG-backup cronjob erp+shared | NAS20 | NAS10 | NAS10 | **JA** |
 | MariaDB physical-backup | NAS20 | NAS10 | NAS10 | **JA** |
@@ -588,9 +590,10 @@ komplette NAS10->NAS20-Angleichung aller Dienste in TEST/PROD? Empfehlung:
 gestuft - Thanos als P4a (unmittelbarer Monitoring-Drift, analog Loki erprobt),
 danach die Backup-Dienste als P4b in einem eigenen, sorgfaeltig geplanten Schritt
 (CNPG-Bucket-Wechsel ist wegen WAL-Prefix/serverName der heikelste Punkt).
--- ENTSCHIEDEN + P4a TEILWEISE ERLEDIGT: P4a = nur Thanos (TEST erledigt 16.07.2026,
-   PROD offen). P4b (CNPG-backup, MariaDB-physical, Garage, Odoo, i-doit) bleibt
-   als eigener, spaeter freizugebender Schritt offen - NICHT mit P4a vermischt.
+-- ENTSCHIEDEN + P4a ERLEDIGT: P4a = nur Thanos (TEST + PROD erledigt 16.07.2026,
+   alle drei Cluster auf NAS20). P4b (CNPG-backup, MariaDB-physical, Garage, Odoo,
+   i-doit) bleibt als eigener, spaeter freizugebender Schritt offen - NICHT mit
+   P4a vermischt.
 
 ---
 
@@ -611,8 +614,9 @@ ueberall sofort wirksam; echter Drift steckt nur in den env-Overlays.
    [ERLEDIGT 15.07. - TEST+PROD: retentionSize 14GB/38GB ergaenzt, retention 15d
    belassen, Memory 3Gi/1Gi einheitlich, TSDB-Health-Alerts portiert und live
    verifiziert (inactive/health=ok).]
-4. **Thanos** S3: DEV+TEST auf NAS20 (Loki + Thanos-TEST erledigt); PROD-Thanos
-   noch NAS10/insecure (P4a PROD offen). P4b (uebrige Backup-Dienste) offen.
+4. **Thanos** S3: alle drei Cluster (DEV/TEST/PROD) auf NAS20 (P4a erledigt
+   16.07.2026 - Loki + Thanos vollstaendig migriert). P4b (uebrige Backup-Dienste)
+   offen.
 5. Grenzfaelle: Longhorn `replica-auto-balance` (Phase 13), backup-overdue-Patch.
 
 **Bewusst ausgenommen (kein Drift):** Trivy, Kyverno, Kyverno-Policies
@@ -628,4 +632,5 @@ via Desktop-Commander; Daniel: git commit/push, ArgoCD-Sync, Server-Zugriffe).
 *Analyse-Datei, urspruenglicher Stand 14.07.2026. Fortlaufend aktualisiert bei
 Umsetzung der Nachzieh-Schritte: P1 (Velero) erledigt 14.07.; P2 (DB-Resilienz)
 erledigt 14./15.07.; P3 (Monitoring-Resilienz) erledigt 15.07.; P4a (Thanos NAS20)
-TEST erledigt 16.07. Offen: P4a PROD, P4b (uebrige NAS10-Dienste), P5 (Grenzfaelle).*
+erledigt 16.07. (TEST + PROD). Offen: P4b (uebrige NAS10-Dienste), P5 (Grenzfaelle),
+Query-sidecarsService-Discovery-Fix (base, migrations-unabhaengig).*
