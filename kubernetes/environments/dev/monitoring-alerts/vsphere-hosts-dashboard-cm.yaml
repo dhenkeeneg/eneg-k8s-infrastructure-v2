@@ -61,6 +61,18 @@ data:
             "multi": true,
             "current": {"text": "All", "value": "$__all"},
             "sort": 1
+          },
+          {
+            "name": "vm",
+            "label": "VM",
+            "type": "query",
+            "datasource": {"type": "prometheus", "uid": "prometheus"},
+            "query": "label_values(vcenter_vm_disk_throughput{vcenter=~\"$vcenter\", vcenter_host=~\"$host\"}, vcenter_vm)",
+            "refresh": 2,
+            "includeAll": true,
+            "multi": true,
+            "current": {"text": "All", "value": "$__all"},
+            "sort": 1
           }
         ]
       },
@@ -273,6 +285,31 @@ data:
             {"expr": "max by (vcenter, vcenter_host) (vcenter_host_disk_latency_avg_milliseconds{vcenter=~\"$vcenter\", vcenter_host=~\"$host\", object=~\"$lun\", object!=\"\"})", "legendFormat": "Latenz {{vcenter}}/{{vcenter_host}}"}
           ],
           "options": {"legend": {"displayMode": "table", "placement": "right", "calcs": ["lastNotNull", "max"]}}
+        },
+        {
+          "type": "row", "title": "Disk-Durchsatz (VM) - je VM und virtueller Disk",
+          "gridPos": {"h": 1, "w": 24, "x": 0, "y": 76}, "collapsed": false
+        },
+        {
+          "title": "VM Disk-Durchsatz je VM (KB/s) - Top 20", "type": "timeseries",
+          "gridPos": {"h": 9, "w": 12, "x": 0, "y": 77},
+          "datasource": {"type": "prometheus", "uid": "prometheus"},
+          "description": "Durchsatz je VM (VM-Gesamtserie, ohne object-Aufschluesselung). Filter: $host + $vm.",
+          "fieldConfig": {"defaults": {"unit": "KBs", "custom": {"fillOpacity": 10}}},
+          "targets": [
+            {"expr": "topk(20, vcenter_vm_disk_throughput{vcenter=~\"$vcenter\", vcenter_host=~\"$host\", vcenter_vm=~\"$vm\", object=\"\", direction=\"read\"})", "legendFormat": "read {{vcenter_vm}} ({{vcenter_host}})"},
+            {"expr": "topk(20, vcenter_vm_disk_throughput{vcenter=~\"$vcenter\", vcenter_host=~\"$host\", vcenter_vm=~\"$vm\", object=\"\", direction=\"write\"})", "legendFormat": "write {{vcenter_vm}} ({{vcenter_host}})"}
+          ],
+          "options": {"legend": {"displayMode": "table", "placement": "right", "calcs": ["lastNotNull", "max"]}}
+        },
+        {
+          "title": "VM Disk-Durchsatz je virtueller Disk (Detail, Top 20)", "type": "timeseries",
+          "gridPos": {"h": 9, "w": 12, "x": 12, "y": 77},
+          "datasource": {"type": "prometheus", "uid": "prometheus"},
+          "description": "Durchsatz je virtueller Disk der VM (scsi0:0, scsi0:1, ...). Filter: $host + $vm.",
+          "fieldConfig": {"defaults": {"unit": "KBs", "custom": {"fillOpacity": 10}}},
+          "targets": [{"expr": "topk(20, vcenter_vm_disk_throughput{vcenter=~\"$vcenter\", vcenter_host=~\"$host\", vcenter_vm=~\"$vm\", object!=\"\"})", "legendFormat": "{{vcenter_vm}} {{object}} {{direction}}"}],
+          "options": {"legend": {"displayMode": "table", "placement": "bottom", "calcs": ["lastNotNull", "max"]}}
         }
       ]
     }
