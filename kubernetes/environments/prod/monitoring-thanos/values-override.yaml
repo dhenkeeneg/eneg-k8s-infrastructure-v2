@@ -7,15 +7,30 @@
 # 10Gi war zu klein und fuehrte zu KubePersistentVolumeFillingUp Alerts
 # und ThanosCompactionFailed (in DEV/TEST bereits aufgetreten).
 # Identische Loesung wie DEV (05.05.2026) und TEST (06.05.2026).
+#
+# CA-Bundle fuer NAS20 TLS (Secret eneg-s3-ca, NS monitoring, bereits durch die
+# Loki-Migration 07.07.2026 vorhanden). Gemountet an compactor + storegateway,
+# Pfad /etc/ca/ca.crt deckt sich mit http_config.tls_config.ca_file im objstore.yml
+# (thanos-objstore-config Secret). P4a Thanos-Migration NAS10->NAS20 (16.07.2026),
+# analog DEV/TEST-Muster.
 compactor:
-  # TEMPORAER (P4a Thanos-Migration NAS10->NAS20, 16.07.2026): Compactor pausiert,
-  # damit waehrend der rclone-Datenkopie NAS10->NAS20 keine Kompaktierung laeuft.
-  # Wird in Phase (c) wieder aktiviert (enabled:false entfernen), gemeinsam mit
-  # Secret-Cutover + CA-Mounts (Split-Brain-sicher in EINEM Sync).
-  # HINWEIS: compactor.replicaCount greift beim bitnami-Chart NICHT (Compactor ist
-  # Singleton) -> enabled:false ist der wirksame Schalter (Lehre aus TEST 16.07.).
-  # Das Compactor-PVC (30Gi) wird durch ArgoCD prune:true mit entfernt und in
-  # Phase (c) neu (leer) angelegt - beim Compactor folgenlos.
-  enabled: false
   persistence:
     size: 30Gi
+  extraVolumes:
+    - name: s3-ca
+      secret:
+        secretName: eneg-s3-ca
+  extraVolumeMounts:
+    - name: s3-ca
+      mountPath: /etc/ca
+      readOnly: true
+
+storegateway:
+  extraVolumes:
+    - name: s3-ca
+      secret:
+        secretName: eneg-s3-ca
+  extraVolumeMounts:
+    - name: s3-ca
+      mountPath: /etc/ca
+      readOnly: true

@@ -48,6 +48,21 @@ prometheus:
             requests:
               storage: 50Gi
 
+    # CA-Bundle fuer NAS20 TLS im Thanos-Sidecar (schreibt Bloecke nach S3).
+    # Sidecar nutzt thanos-objstore-config (objstore.yml mit ca_file:/etc/ca/ca.crt).
+    # volumes = Pod-Ebene, thanos.volumeMounts = nur Sidecar-Container.
+    # Secret eneg-s3-ca durch Loki-Migration (07.07.2026) bereits vorhanden.
+    # P4a Thanos-Migration NAS10->NAS20 (16.07.2026), analog DEV/TEST-Muster.
+    volumes:
+      - name: s3-ca
+        secret:
+          secretName: eneg-s3-ca
+    thanos:
+      volumeMounts:
+        - name: s3-ca
+          mountPath: /etc/ca
+          readOnly: true
+
 # --- AlertManager Config ---
 alertmanager:
   config:
