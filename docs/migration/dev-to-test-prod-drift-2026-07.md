@@ -511,12 +511,12 @@ strategische Migrationsfrage, sondern ECHTER DRIFT DEV vs TEST/PROD.
 | Loki | NAS20 | NAS20 | NAS20 | ERLEDIGT (14a/b/c) |
 | Velero | NAS20 | NAS10* | NAS10* | *bewusst: P1 nur Checksum-Fix auf NAS10; NAS20 hier in P4 |
 | Thanos | NAS20 | NAS20 (16.07.) | NAS20 (16.07.) | **P4a ERLEDIGT (TEST+PROD)** |
-| CNPG objectstore erp+shared | NAS20 | NAS10 | NAS10 | **JA** (WAL+Backup-Bucket) |
-| CNPG-backup cronjob erp+shared | NAS20 | NAS10 | NAS10 | **JA** |
-| MariaDB physical-backup | NAS20 | NAS10 | NAS10 | **JA** |
-| Garage-backup cronjob | NAS20 | NAS10 | NAS10 | **JA** |
-| Odoo-backup cronjob | NAS20 | NAS10 | NAS10 | **JA** (in apps/) |
-| i-doit-backup cronjob | NAS20 | (pruefen) | (pruefen) | **wahrscheinlich JA** |
+| CNPG objectstore erp+shared | NAS20 | NAS20 (16.07.) | NAS10 | **P4b TEST ERLEDIGT** (WAL-Bucket) |
+| CNPG-backup cronjob erp+shared | NAS20 | NAS20 (16.07.) | NAS10 | **P4b TEST ERLEDIGT** |
+| MariaDB physical-backup | NAS20 | NAS20 (16.07.) | NAS10 | **P4b TEST ERLEDIGT** |
+| Garage-backup cronjob | NAS20 | NAS20 (16.07.) | NAS10 | **P4b TEST ERLEDIGT** |
+| Odoo-backup cronjob | NAS20 | NAS20 (16.07.) | NAS10 | **P4b TEST ERLEDIGT** (in apps/) |
+| i-doit-backup cronjob | NAS20 | NAS20 (16.07.) | NAS10 | **P4b TEST ERLEDIGT** |
 | Registry/Zot | NAS20 | n/a (DEV-only) | n/a | separat (Phase 9a) |
 
 *Velero: values-override ist seit P1 gefixt (checksumAlgorithm), Backend aber
@@ -594,6 +594,10 @@ danach die Backup-Dienste als P4b in einem eigenen, sorgfaeltig geplanten Schrit
    alle drei Cluster auf NAS20). P4b (CNPG-backup, MariaDB-physical, Garage, Odoo,
    i-doit) bleibt als eigener, spaeter freizugebender Schritt offen - NICHT mit
    P4a vermischt.
+-- P4b TEST ERLEDIGT 16.07.2026: alle NIEDRIG-Dienste (MariaDB/Garage/Odoo/idoit)
+   + CNPG (objectstore + pg_dumpall, beide Cluster) auf NAS20, live verifiziert.
+   Doc: phases/phase-14-p4b-nas10-nas20-test.md. PROD offen (Handoff:
+   handoff/P4b-PROD-Cutover-Handoff.md). Danach OF-8 + P4 komplett.
 
 ---
 
@@ -632,5 +636,6 @@ via Desktop-Commander; Daniel: git commit/push, ArgoCD-Sync, Server-Zugriffe).
 *Analyse-Datei, urspruenglicher Stand 14.07.2026. Fortlaufend aktualisiert bei
 Umsetzung der Nachzieh-Schritte: P1 (Velero) erledigt 14.07.; P2 (DB-Resilienz)
 erledigt 14./15.07.; P3 (Monitoring-Resilienz) erledigt 15.07.; P4a (Thanos NAS20)
-erledigt 16.07. (TEST + PROD). Offen: P4b (uebrige NAS10-Dienste), P5 (Grenzfaelle),
+erledigt 16.07. (TEST + PROD); P4b (uebrige NAS10-Dienste) TEST erledigt 16.07.
+(PROD offen). Offen: P4b PROD, P5 (Grenzfaelle),
 Query-sidecarsService-Discovery-Fix (base, migrations-unabhaengig).*
