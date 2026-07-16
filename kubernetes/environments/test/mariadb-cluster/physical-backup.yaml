@@ -22,7 +22,7 @@ spec:
 
   storage:
     s3:
-      endpoint: "nas10.eneg.de:8010"
+      endpoint: "nas20.eneg.de:8010"
       bucket: k8s-test-mariadb-backup
       prefix: mariadb-galera/
       accessKeyIdSecretKeyRef:
@@ -31,8 +31,14 @@ spec:
       secretAccessKeySecretKeyRef:
         name: mariadb-credentials
         key: S3_SECRET_ACCESS_KEY
+      # P4b NAS10->NAS20: sauberes TLS. QuObjects (8010) sendet nur das Leaf-Zert
+      # -> Sectigo-Bundle (R36+R46) clientseitig via caSecretKeyRef (Secret
+      # mariadb-s3-ca im NS databases, analog DEV).
       tls:
-        enabled: false
+        enabled: true
+        caSecretKeyRef:
+          name: mariadb-s3-ca
+          key: ca.crt
 
   backoffLimit: 3
   successfulJobsHistoryLimit: 3

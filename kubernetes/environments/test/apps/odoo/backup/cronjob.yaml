@@ -1,5 +1,6 @@
 ---
 # ConfigMap: rclone Konfiguration fuer Odoo Filestore Backup (TEST)
+# P4b NAS10->NAS20: endpoint https + CA-Bundle (RCLONE_CA_CERT), analog DEV.
 apiVersion: v1
 kind: ConfigMap
 metadata:
@@ -11,11 +12,11 @@ metadata:
     app.kubernetes.io/managed-by: argocd
 data:
   rclone.conf: |
-    [nas10]
+    [nas20]
     type = s3
     provider = Other
     env_auth = true
-    endpoint = http://nas10.eneg.de:8010
+    endpoint = https://nas20.eneg.de:8010
     region = us-east-1
     force_path_style = true
     no_check_bucket = true
@@ -26,17 +27,17 @@ data:
 
     echo "=== Odoo Filestore Backup gestartet: $(date -Iseconds) ==="
 
-    # rclone ENV-Variablen fuer Destination (NAS10)
-    export RCLONE_CONFIG_NAS10_ACCESS_KEY_ID="${NAS10_ACCESS_KEY_ID}"
-    export RCLONE_CONFIG_NAS10_SECRET_ACCESS_KEY="${NAS10_SECRET_ACCESS_KEY}"
+    # rclone ENV-Variablen fuer Destination (NAS20)
+    export RCLONE_CONFIG_NAS20_ACCESS_KEY_ID="${NAS_ACCESS_KEY_ID}"
+    export RCLONE_CONFIG_NAS20_SECRET_ACCESS_KEY="${NAS_SECRET_ACCESS_KEY}"
 
     BACKUP_DATE=$(date +%Y-%m-%d)
 
     echo "--- Sichere Odoo Filestore ---"
     rclone sync \
       "/filestore/" \
-      "nas10:k8s-test-odoo-backup/filestore" \
-      --backup-dir "nas10:k8s-test-odoo-backup/_backups/${BACKUP_DATE}/filestore" \
+      "nas20:k8s-test-odoo-backup/filestore" \
+      --backup-dir "nas20:k8s-test-odoo-backup/_backups/${BACKUP_DATE}/filestore" \
       --config /config/rclone.conf \
       --checksum \
       --fast-list \
@@ -52,10 +53,10 @@ data:
     CUTOFF_DATE=$(date -d "@$(($(date +%s) - 32*86400))" +%Y-%m-%d)
 
     if [ -n "$CUTOFF_DATE" ]; then
-      rclone lsd "nas10:k8s-test-odoo-backup/_backups/" --config /config/rclone.conf 2>/dev/null | awk '{print $NF}' | while read DIR; do
+      rclone lsd "nas20:k8s-test-odoo-backup/_backups/" --config /config/rclone.conf 2>/dev/null | awk '{print $NF}' | while read DIR; do
         if [ "$DIR" \< "$CUTOFF_DATE" ] || [ "$DIR" = "$CUTOFF_DATE" ]; then
           echo "Loesche altes Backup: _backups/${DIR}"
-          rclone purge "nas10:k8s-test-odoo-backup/_backups/${DIR}" \
+          rclone purge "nas20:k8s-test-odoo-backup/_backups/${DIR}" \
             --config /config/rclone.conf
         fi
       done
@@ -66,7 +67,7 @@ data:
     echo ""
     echo "=== Odoo Filestore Backup abgeschlossen: $(date -Iseconds) ==="
 ---
-# CronJob: Odoo Filestore Backup auf NAS10 (TEST)
+# CronJob: Odoo Filestore Backup auf NAS20 (TEST)
 apiVersion: batch/v1
 kind: CronJob
 metadata:
@@ -108,16 +109,22 @@ spec:
                 - /bin/sh
                 - /scripts/backup.sh
               env:
-                - name: NAS10_ACCESS_KEY_ID
+                - name: NAS_ACCESS_KEY_ID
                   valueFrom:
                     secretKeyRef:
                       name: odoo-backup-credentials
-                      key: NAS10_ACCESS_KEY_ID
-                - name: NAS10_SECRET_ACCESS_KEY
+                      key: NAS_ACCESS_KEY_ID
+                - name: NAS_SECRET_ACCESS_KEY
                   valueFrom:
                     secretKeyRef:
                       name: odoo-backup-credentials
-                      key: NAS10_SECRET_ACCESS_KEY
+                      key: NAS_SECRET_ACCESS_KEY
+                # P4b NAS10->NAS20: sauberes TLS. QuObjects (8010) sendet nur das
+                # Leaf-Zert -> Sectigo-Bundle (R36+R46) clientseitig via
+                # RCLONE_CA_CERT (additiv zum System-Trust). Secret odoo-s3-ca
+                # (NS odoo), Mount /etc/ca/ca.crt. Analog DEV.
+                - name: RCLONE_CA_CERT
+                  value: /etc/ca/ca.crt
               volumeMounts:
                 - name: config
                   mountPath: /config/rclone.conf
@@ -129,6 +136,9 @@ spec:
                   readOnly: true
                 - name: filestore
                   mountPath: /filestore
+                  readOnly: true
+                - name: s3-ca
+                  mountPath: /etc/ca
                   readOnly: true
               resources:
                 requests:
@@ -154,3 +164,6 @@ spec:
             - name: filestore
               persistentVolumeClaim:
                 claimName: odoo-filestore
+            - name: s3-ca
+              secret:
+                secretName: odoo-s3-ca

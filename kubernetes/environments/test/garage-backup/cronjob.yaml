@@ -1,5 +1,6 @@
 ---
 # ConfigMap: rclone Konfiguration fuer Garage Backup (TEST)
+# P4b NAS10->NAS20: endpoint https + CA-Bundle (RCLONE_CA_CERT), analog DEV.
 apiVersion: v1
 kind: ConfigMap
 metadata:
@@ -22,11 +23,11 @@ data:
     force_path_style = true
     no_check_bucket = true
 
-    [nas10]
+    [nas20]
     type = s3
     provider = Other
     env_auth = true
-    endpoint = http://nas10.eneg.de:8010
+    endpoint = https://nas20.eneg.de:8010
     region = us-east-1
     force_path_style = true
     no_check_bucket = true
@@ -39,8 +40,8 @@ data:
 
     export RCLONE_CONFIG_GARAGE_ACCESS_KEY_ID="${GARAGE_ACCESS_KEY_ID}"
     export RCLONE_CONFIG_GARAGE_SECRET_ACCESS_KEY="${GARAGE_SECRET_ACCESS_KEY}"
-    export RCLONE_CONFIG_NAS10_ACCESS_KEY_ID="${NAS10_ACCESS_KEY_ID}"
-    export RCLONE_CONFIG_NAS10_SECRET_ACCESS_KEY="${NAS10_SECRET_ACCESS_KEY}"
+    export RCLONE_CONFIG_NAS20_ACCESS_KEY_ID="${NAS_ACCESS_KEY_ID}"
+    export RCLONE_CONFIG_NAS20_SECRET_ACCESS_KEY="${NAS_SECRET_ACCESS_KEY}"
 
     BACKUP_DATE=$(date +%Y-%m-%d)
 
@@ -59,8 +60,8 @@ data:
       echo "--- Sichere Bucket: ${BUCKET} ---"
       rclone sync \
         "garage:${BUCKET}" \
-        "nas10:k8s-test-garage-backup/${BUCKET}" \
-        --backup-dir "nas10:k8s-test-garage-backup/_backups/${BACKUP_DATE}/${BUCKET}" \
+        "nas20:k8s-test-garage-backup/${BUCKET}" \
+        --backup-dir "nas20:k8s-test-garage-backup/_backups/${BACKUP_DATE}/${BUCKET}" \
         --config /config/rclone.conf \
         --checksum \
         --fast-list \
@@ -77,10 +78,10 @@ data:
     CUTOFF_DATE=$(date -d "@$(($(date +%s) - 32*86400))" +%Y-%m-%d)
 
     if [ -n "$CUTOFF_DATE" ]; then
-      rclone lsd "nas10:k8s-test-garage-backup/_backups/" --config /config/rclone.conf 2>/dev/null | awk '{print $NF}' | while read DIR; do
+      rclone lsd "nas20:k8s-test-garage-backup/_backups/" --config /config/rclone.conf 2>/dev/null | awk '{print $NF}' | while read DIR; do
         if [ "$DIR" \< "$CUTOFF_DATE" ] || [ "$DIR" = "$CUTOFF_DATE" ]; then
           echo "Loesche altes Backup: _backups/${DIR}"
-          rclone purge "nas10:k8s-test-garage-backup/_backups/${DIR}" \
+          rclone purge "nas20:k8s-test-garage-backup/_backups/${DIR}" \
             --config /config/rclone.conf
         fi
       done
@@ -91,7 +92,7 @@ data:
     echo ""
     echo "=== Garage S3 Backup abgeschlossen: $(date -Iseconds) ==="
 ---
-# CronJob: Garage S3 Backup auf NAS10 (TEST)
+# CronJob: Garage S3 Backup auf NAS20 (TEST)
 apiVersion: batch/v1
 kind: CronJob
 metadata:
@@ -136,16 +137,22 @@ spec:
                     secretKeyRef:
                       name: garage-backup-credentials
                       key: GARAGE_SECRET_ACCESS_KEY
-                - name: NAS10_ACCESS_KEY_ID
+                - name: NAS_ACCESS_KEY_ID
                   valueFrom:
                     secretKeyRef:
                       name: garage-backup-credentials
-                      key: NAS10_ACCESS_KEY_ID
-                - name: NAS10_SECRET_ACCESS_KEY
+                      key: NAS_ACCESS_KEY_ID
+                - name: NAS_SECRET_ACCESS_KEY
                   valueFrom:
                     secretKeyRef:
                       name: garage-backup-credentials
-                      key: NAS10_SECRET_ACCESS_KEY
+                      key: NAS_SECRET_ACCESS_KEY
+                # P4b NAS10->NAS20: sauberes TLS. QuObjects (8010) sendet nur das
+                # Leaf-Zert -> Sectigo-Bundle (R36+R46) clientseitig via
+                # RCLONE_CA_CERT (additiv zum System-Trust). Secret garage-s3-ca
+                # (NS garage), Mount /etc/ca/ca.crt. Analog DEV.
+                - name: RCLONE_CA_CERT
+                  value: /etc/ca/ca.crt
               volumeMounts:
                 - name: config
                   mountPath: /config/rclone.conf
@@ -154,6 +161,9 @@ spec:
                 - name: scripts
                   mountPath: /scripts/backup.sh
                   subPath: backup.sh
+                  readOnly: true
+                - name: s3-ca
+                  mountPath: /etc/ca
                   readOnly: true
               resources:
                 requests:
@@ -176,3 +186,6 @@ spec:
                 items:
                   - key: backup.sh
                     path: backup.sh
+            - name: s3-ca
+              secret:
+                secretName: garage-s3-ca

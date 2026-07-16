@@ -1,6 +1,7 @@
 ---
 # ConfigMap: rclone Konfiguration fuer i-doit Backup (TEST)
 # Phase 2: Tarball-basiertes Backup (1 PUT/GET pro Verzeichnis statt N tausend)
+# P4b NAS10->NAS20: endpoint https + CA-Bundle (RCLONE_CA_CERT), analog DEV.
 apiVersion: v1
 kind: ConfigMap
 metadata:
@@ -12,11 +13,11 @@ metadata:
     app.kubernetes.io/managed-by: argocd
 data:
   rclone.conf: |
-    [nas10]
+    [nas20]
     type = s3
     provider = Other
     env_auth = true
-    endpoint = http://nas10.eneg.de:8010
+    endpoint = https://nas20.eneg.de:8010
     region = us-east-1
     force_path_style = true
     no_check_bucket = true
@@ -29,9 +30,9 @@ data:
 
     echo "=== i-doit Backup gestartet: $(date -Iseconds) ==="
 
-    # rclone ENV-Variablen fuer Destination (NAS10)
-    export RCLONE_CONFIG_NAS10_ACCESS_KEY_ID="${NAS10_ACCESS_KEY_ID}"
-    export RCLONE_CONFIG_NAS10_SECRET_ACCESS_KEY="${NAS10_SECRET_ACCESS_KEY}"
+    # rclone ENV-Variablen fuer Destination (NAS20)
+    export RCLONE_CONFIG_NAS20_ACCESS_KEY_ID="${NAS_ACCESS_KEY_ID}"
+    export RCLONE_CONFIG_NAS20_SECRET_ACCESS_KEY="${NAS_SECRET_ACCESS_KEY}"
 
     BACKUP_DATE=$(date +%Y-%m-%d)
     DAY_OF_WEEK=$(date +%u)
@@ -59,8 +60,8 @@ data:
       echo "Verifiziere Tarball-Integrity..."
       tar -tzf "${TARBALL}" >/dev/null
 
-      echo "Upload nach nas10:k8s-test-idoit/upload/upload-${BACKUP_DATE}.tar.gz"
-      rclone copyto "${TARBALL}" "nas10:k8s-test-idoit/upload/upload-${BACKUP_DATE}.tar.gz" \
+      echo "Upload nach nas20:k8s-test-idoit/upload/upload-${BACKUP_DATE}.tar.gz"
+      rclone copyto "${TARBALL}" "nas20:k8s-test-idoit/upload/upload-${BACKUP_DATE}.tar.gz" \
         --timeout 300s ${RCLONE_OPTS}
       rm -f "${TARBALL}"
       echo "Upload-Tarball abgeschlossen"
@@ -85,8 +86,8 @@ data:
       echo "Verifiziere Tarball-Integrity..."
       tar -tzf "${TARBALL}" >/dev/null
 
-      echo "Upload nach nas10:k8s-test-idoit/src/src-${BACKUP_DATE}.tar.gz"
-      rclone copyto "${TARBALL}" "nas10:k8s-test-idoit/src/src-${BACKUP_DATE}.tar.gz" \
+      echo "Upload nach nas20:k8s-test-idoit/src/src-${BACKUP_DATE}.tar.gz"
+      rclone copyto "${TARBALL}" "nas20:k8s-test-idoit/src/src-${BACKUP_DATE}.tar.gz" \
         --timeout 600s ${RCLONE_OPTS}
       rm -f "${TARBALL}"
       echo "src-Tarball abgeschlossen"
@@ -98,15 +99,15 @@ data:
     echo
     echo "--- Cleanup alte Tarballs (>7 Tage) ---"
     for PREFIX in upload src; do
-      echo "Pruefe nas10:k8s-test-idoit/${PREFIX}/"
-      rclone delete "nas10:k8s-test-idoit/${PREFIX}/" --min-age 7d ${RCLONE_OPTS} || \
+      echo "Pruefe nas20:k8s-test-idoit/${PREFIX}/"
+      rclone delete "nas20:k8s-test-idoit/${PREFIX}/" --min-age 7d ${RCLONE_OPTS} || \
         echo "WARNUNG: cleanup ${PREFIX} hatte Fehler (nicht fatal)"
     done
 
     echo
     echo "=== i-doit Backup abgeschlossen: $(date -Iseconds) ==="
 ---
-# CronJob: i-doit Backup auf NAS10 (TEST)
+# CronJob: i-doit Backup auf NAS20 (TEST)
 # Phase 2: Tarball-basiertes Backup - 1 PUT/Verzeichnis statt N tausend
 # Retention: 7 Tage via rclone delete --min-age 7d
 apiVersion: batch/v1
@@ -150,16 +151,22 @@ spec:
                 - /bin/sh
                 - /scripts/backup.sh
               env:
-                - name: NAS10_ACCESS_KEY_ID
+                - name: NAS_ACCESS_KEY_ID
                   valueFrom:
                     secretKeyRef:
                       name: idoit-backup-credentials
-                      key: NAS10_ACCESS_KEY_ID
-                - name: NAS10_SECRET_ACCESS_KEY
+                      key: NAS_ACCESS_KEY_ID
+                - name: NAS_SECRET_ACCESS_KEY
                   valueFrom:
                     secretKeyRef:
                       name: idoit-backup-credentials
-                      key: NAS10_SECRET_ACCESS_KEY
+                      key: NAS_SECRET_ACCESS_KEY
+                # P4b NAS10->NAS20: sauberes TLS. QuObjects (8010) sendet nur das
+                # Leaf-Zert -> Sectigo-Bundle (R36+R46) clientseitig via
+                # RCLONE_CA_CERT (additiv zum System-Trust). Secret idoit-s3-ca
+                # (NS idoit), Mount /etc/ca/ca.crt. Analog DEV.
+                - name: RCLONE_CA_CERT
+                  value: /etc/ca/ca.crt
                 # src/ wird nur Sonntags gesichert. Fuer manuellen Force-Run:
                 # CronJob temporaer patchen mit BACKUP_FORCE_SRC=yes,
                 # einmal triggern (kubectl create job --from=cronjob/idoit-backup),
@@ -185,6 +192,9 @@ spec:
                   readOnly: true
                 - name: work
                   mountPath: /tmp/idoit-backup
+                - name: s3-ca
+                  mountPath: /etc/ca
+                  readOnly: true
               resources:
                 requests:
                   cpu: 100m
@@ -213,3 +223,6 @@ spec:
             - name: work
               emptyDir:
                 sizeLimit: 500Mi
+            - name: s3-ca
+              secret:
+                secretName: idoit-s3-ca
