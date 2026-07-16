@@ -49,6 +49,18 @@ data:
             "multi": true,
             "current": {"text": "All", "value": "$__all"},
             "sort": 1
+          },
+          {
+            "name": "lun",
+            "label": "Disk/LUN",
+            "type": "query",
+            "datasource": {"type": "prometheus", "uid": "prometheus"},
+            "query": "label_values(vcenter_host_disk_throughput{vcenter=~\"$vcenter\", vcenter_host=~\"$host\", object!=\"\"}, object)",
+            "refresh": 2,
+            "includeAll": true,
+            "multi": true,
+            "current": {"text": "All", "value": "$__all"},
+            "sort": 1
           }
         ]
       },
@@ -209,6 +221,58 @@ data:
             "thresholds": {"mode": "absolute", "steps": [{"color": "green", "value": null}, {"color": "yellow", "value": 20}, {"color": "red", "value": 100}]}}},
           "targets": [{"expr": "topk(20, vcenter_host_disk_latency_avg_milliseconds{vcenter=~\"$vcenter\", vcenter_host=~\"$host\"})", "legendFormat": "{{vcenter_host}} {{direction}} {{object}}"}],
           "options": {"legend": {"displayMode": "table", "placement": "bottom", "calcs": ["lastNotNull", "max"]}}
+        },
+        {
+          "type": "row", "title": "Disk-Durchsatz (Host) - Storage-Performance",
+          "gridPos": {"h": 1, "w": 24, "x": 0, "y": 58}, "collapsed": false
+        },
+        {
+          "title": "Host Disk-Durchsatz je Host (KB/s)", "type": "timeseries",
+          "gridPos": {"h": 8, "w": 12, "x": 0, "y": 59},
+          "datasource": {"type": "prometheus", "uid": "prometheus"},
+          "fieldConfig": {"defaults": {"unit": "KBs", "custom": {"fillOpacity": 10}}},
+          "targets": [
+            {"expr": "sum by (vcenter, vcenter_host) (vcenter_host_disk_throughput{vcenter=~\"$vcenter\", vcenter_host=~\"$host\", object=~\"$lun\", direction=\"read\"})", "legendFormat": "read {{vcenter}}/{{vcenter_host}}"},
+            {"expr": "sum by (vcenter, vcenter_host) (vcenter_host_disk_throughput{vcenter=~\"$vcenter\", vcenter_host=~\"$host\", object=~\"$lun\", direction=\"write\"})", "legendFormat": "write {{vcenter}}/{{vcenter_host}}"}
+          ],
+          "options": {"legend": {"displayMode": "table", "placement": "right", "calcs": ["lastNotNull", "max"]}}
+        },
+        {
+          "title": "Host Disk-Durchsatz je Disk/LUN (Detail, Top 20)", "type": "timeseries",
+          "gridPos": {"h": 8, "w": 12, "x": 12, "y": 59},
+          "datasource": {"type": "prometheus", "uid": "prometheus"},
+          "fieldConfig": {"defaults": {"unit": "KBs", "custom": {"fillOpacity": 10}}},
+          "targets": [{"expr": "topk(20, vcenter_host_disk_throughput{vcenter=~\"$vcenter\", vcenter_host=~\"$host\", object=~\"$lun\", object!=\"\"})", "legendFormat": "{{vcenter_host}} {{direction}} {{object}}"}],
+          "options": {"legend": {"displayMode": "table", "placement": "bottom", "calcs": ["lastNotNull", "max"]}}
+        },
+        {
+          "title": "Durchsatz + Latenz je Host (Korrelation)", "type": "timeseries",
+          "gridPos": {"h": 9, "w": 24, "x": 0, "y": 67},
+          "datasource": {"type": "prometheus", "uid": "prometheus"},
+          "description": "Aggregiert je Host: Durchsatz = Summe read+write ueber LUN-Serien (linke Achse, KB/s); Latenz = max avg-Latenz (rechte Achse, ms). Beide respektieren $host und $lun.",
+          "fieldConfig": {
+            "defaults": {"custom": {"axisPlacement": "left", "fillOpacity": 8, "lineWidth": 1}},
+            "overrides": [
+              {"matcher": {"id": "byRegexp", "options": "/^Latenz .*/"},
+               "properties": [
+                 {"id": "unit", "value": "ms"},
+                 {"id": "custom.axisPlacement", "value": "right"},
+                 {"id": "custom.axisLabel", "value": "Latenz (ms)"},
+                 {"id": "custom.drawStyle", "value": "line"},
+                 {"id": "custom.lineStyle", "value": {"fill": "dash", "dash": [8, 4]}}
+               ]},
+              {"matcher": {"id": "byRegexp", "options": "/^Durchsatz .*/"},
+               "properties": [
+                 {"id": "unit", "value": "KBs"},
+                 {"id": "custom.axisLabel", "value": "Durchsatz (KB/s)"}
+               ]}
+            ]
+          },
+          "targets": [
+            {"expr": "sum by (vcenter, vcenter_host) (vcenter_host_disk_throughput{vcenter=~\"$vcenter\", vcenter_host=~\"$host\", object=~\"$lun\", object!=\"\"})", "legendFormat": "Durchsatz {{vcenter}}/{{vcenter_host}}"},
+            {"expr": "max by (vcenter, vcenter_host) (vcenter_host_disk_latency_avg_milliseconds{vcenter=~\"$vcenter\", vcenter_host=~\"$host\", object=~\"$lun\", object!=\"\"})", "legendFormat": "Latenz {{vcenter}}/{{vcenter_host}}"}
+          ],
+          "options": {"legend": {"displayMode": "table", "placement": "right", "calcs": ["lastNotNull", "max"]}}
         }
       ]
     }
