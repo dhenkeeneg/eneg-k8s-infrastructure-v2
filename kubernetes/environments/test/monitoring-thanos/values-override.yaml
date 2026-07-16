@@ -11,8 +11,14 @@ compactor:
   # TEMPORAER (P4a Thanos-Migration NAS10->NAS20, 16.07.2026): Compactor pausiert,
   # damit waehrend der rclone-Datenkopie NAS10->NAS20 keine Kompaktierung laeuft
   # (Thanos-Bloecke sind immutable, aber der Compactor wuerde sonst waehrend der
-  # Kopie neue Bloecke schreiben/aufraeumen). Wird in Phase (c) wieder auf 1 gesetzt,
-  # gemeinsam mit dem Secret-Cutover + CA-Mounts (Split-Brain-sicher in EINEM Sync).
-  replicaCount: 0
+  # Kopie neue Bloecke schreiben/aufraeumen). Wird in Phase (c) wieder aktiviert
+  # (enabled: true), gemeinsam mit dem Secret-Cutover + CA-Mounts (Split-Brain-
+  # sicher in EINEM Sync).
+  # HINWEIS: compactor.replicaCount greift beim bitnami-Chart NICHT (Compactor ist
+  # Singleton, Template zieht Replicas nicht aus diesem Value) -> enabled:false ist
+  # der wirksame Schalter. Das Compactor-PVC (30Gi) wird durch ArgoCD prune:true
+  # mit entfernt und in Phase (c) neu (leer) angelegt - beim Compactor folgenlos,
+  # da der Working-Space ohnehin frisch aus dem objstore aufgebaut wird.
+  enabled: false
   persistence:
     size: 30Gi
