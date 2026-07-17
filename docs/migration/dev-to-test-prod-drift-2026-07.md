@@ -598,6 +598,13 @@ danach die Backup-Dienste als P4b in einem eigenen, sorgfaeltig geplanten Schrit
    + CNPG (objectstore + pg_dumpall, beide Cluster) auf NAS20, live verifiziert.
    Doc: phases/phase-14-p4b-nas10-nas20-test.md. PROD offen (Handoff:
    handoff/P4b-PROD-Cutover-Handoff.md). Danach OF-8 + P4 komplett.
+-- P4b PROD ERLEDIGT 17.07.2026: NIEDRIG-Block (17.07.) + HOCH-Block CNPG
+   (objectstore + pg_dumpall, beide Cluster) auf NAS20, live verifiziert
+   (WAL-Archiving Sidecar-Logs, Base-Backups completed, pg_dumpall-Testjobs).
+   Doc: phases/phase-14-p4b-nas10-nas20-prod.md.
+-- OF-8 GESCHLOSSEN 17.07.2026: P4 (a+b) komplett. Alle S3-Dienste in DEV/TEST/PROD
+   auf NAS20. Kein NAS10-Drift mehr. Einziger offener Rest im Drift-Kontext: P5
+   (Longhorn replica-auto-balance).
 
 ---
 
