@@ -300,16 +300,28 @@ phases/phase-14-p4a-thanos-nas20-test-prod.md.
 
 | Setting | DEV | TEST | PROD | Nachziehen? |
 |---------|-----|------|------|-------------|
-| `replica-auto-balance` | least-effort | best-effort | best-effort | GRENZFALL (Phase-13-Haertung; laut Projektplan "nicht pauschal porten ohne Review") |
-| `orphan-resource-auto-deletion` | replica-data | (leer) | (leer) | GRENZFALL (DEV raeumt Orphans automatisch) |
+| `replica-auto-balance` | least-effort | least-effort (17.07.) | least-effort (17.07.) | **ERLEDIGT (P5, base)** |
+| `orphan-resource-auto-deletion` | replica-data | replica-data (17.07.) | replica-data (17.07.) | **ERLEDIGT (P5, base)** |
 | Alle uebrigen (rebuild-limit=2, over-provisioning=200, priority-class, etc.) | identisch | identisch | identisch | ERLEDIGT |
 
 Longhorn-Version v1.9.2, StorageClasses (longhorn / longhorn-db Retain /
 longhorn-static) und `concurrent-replica-rebuild-per-node-limit=2` sind in allen
-drei identisch. Der einzige echte Live-Unterschied ist `replica-auto-balance`
-(Phase 13) - dieser liegt im DEV-Overlay `environments/dev/longhorn/values-override.yaml`
-(DEV-only) und ist bewusst nicht in base, daher als eigene Review-Entscheidung
-zu behandeln (Phase 13 DO-NOT-PORT-Hinweis).
+drei identisch.
+
+> **P5 ERLEDIGT 17.07.2026 (Weg A/base):** `replicaAutoBalance` (best-effort ->
+> least-effort) und `orphanResourceAutoDeletion` (-> replica-data, +GracePeriod 300)
+> vom DEV-only-Overlay nach `base/longhorn/values.yaml` gezogen. Gelten jetzt
+> cluster-weit fuer DEV/TEST/PROD - der letzte Longhorn-Live-Drift ist strukturell
+> und dauerhaft aufgeloest. DEV-Overlay entschlackt (`defaultSettings: {}`, valueFiles-
+> Struktur bewusst erhalten). least-effort ist die konservativere (I/O-aermere)
+> Einstellung und passt zur strict-local/1-Replica-DB-Architektur (P2) in allen drei
+> Clustern; orphanResourceAutoDeletion ist reine Konsistenz (war NICHT Ursache
+> Incident 05.07.). Beide nicht-disruptiv (kein Pod-Restart/Volume-Detach). Live
+> verifiziert alle drei Cluster: `settings.longhorn.io` = least-effort / replica-data,
+> `status.applied=true`; defaultSettings-Merge griff nach Hard-Refresh auf Anhieb
+> (kein manueller manager-Reconcile noetig). Docs:
+> phases/phase-13-kyverno-longhorn-stabilization-dev.md (TEST/PROD-Rollout ergaenzt),
+> Projektplanung v2.40.
 
 ---
 
@@ -368,6 +380,9 @@ Schritt durch Daniel.**
 >    NAS10 -> NAS20 umzustellen sind (Backups etc., s. P4-Erweiterung).
 >    [P4a Thanos: TEST + PROD erledigt 16.07.2026. P4b (uebrige Dienste) offen.]
 > 5. **Longhorn `replica-auto-balance`** (P5) - erst im Anschluss diskutieren.
+>    [ERLEDIGT 17.07.2026 - Weg A/base, beide Settings (replica-auto-balance +
+>    orphan-resource-auto-deletion) cluster-weit in base, alle drei Cluster live
+>    verifiziert. GESAMTE Drift-Angleichung P1-P5 damit abgeschlossen.]
 
 ### Prioritaet 1 - Backup-Integritaet (hoechstes Risiko bei Nichtstun)
 
@@ -537,9 +552,24 @@ bewusst noch NAS10. In P4 mit auf NAS20 ziehen (dann konsistent).
 
 - **Longhorn `replica-auto-balance` least-effort** (Phase 13): laut Projektplan
   "DO-NOT-PORT pauschal ohne getrennte Review-Session". Bewusste Entscheidung.
+  [ERLEDIGT 17.07.2026 - nach Diskussion Weg A/base gewaehlt; least-effort ist die
+  konservativere Einstellung und passt zur strict-local-DB-Architektur aller drei
+  Cluster. In base gezogen, live verifiziert. Siehe 5.7.]
 - **backup-alerts-overdue-Patch** (36h/idoit): env-Anpassung noetig, falls
-  gewuenscht.
+  gewuenscht. [OF-6-Rest: bewusst DEV-only belassen (17.07.) - DEV-spezifischer
+  idoit-Selector + DEV-Zeitfenster; als eigenes kleines Thema fuer spaeter vermerkt,
+  NICHT Teil der P5-Umsetzung.]
 - **Longhorn `orphan-resource-auto-deletion`**: klein, optional.
+  [ERLEDIGT 17.07.2026 - zusammen mit replica-auto-balance in base (replica-data,
+  +GracePeriod 300), reine Konsistenz. Siehe 5.7.]
+
+> **Damit ist die gesamte Drift-Angleichung P1-P5 abgeschlossen.** Alle echten
+> Drift-Punkte zwischen DEV und TEST/PROD sind aufgeloest (P1 Velero, P2 DB-Resilienz,
+> P3 Monitoring-Resilienz, P4 S3-NAS20, P5 Longhorn). Bewusst ausgenommen bleiben:
+> Trivy/Kyverno (Abschnitt 6, zurueckgestellt), alloy-vcenter (DEV-only per Design),
+> Registry/Zot (Phase 9a Etappe B offen), backup-alerts-overdue-Patch (OF-6-Rest,
+> DEV-only). Einziger migrations-unabhaengiger Rest: der Query-sidecars-Service-
+> Discovery-Fix (base, Nebenbefund aus P4a, eigener Chat).
 
 ---
 
@@ -579,6 +609,14 @@ beibehalten. Siehe incidents/2026-07-14-nas-reboot-verifikation-cnpg-backup-clea
 **OF-6: Longhorn Phase-13-Settings** (`replica-auto-balance` least-effort):
 nach TEST/PROD portieren oder bewusst DEV-only lassen? (Projektplan-Hinweis:
 getrennte Review.)
+-- ENTSCHIEDEN + ERLEDIGT 17.07.2026: nach Diskussion (Weg A vs. Weg B) NACHZIEHEN
+   beschlossen, Weg A (base). Beide Settings (`replica-auto-balance` least-effort +
+   `orphan-resource-auto-deletion` replica-data +GracePeriod 300) von DEV-Overlay
+   nach `base/longhorn/values.yaml` gezogen -> cluster-weit DEV/TEST/PROD, DEV-Overlay
+   entschlackt. Live verifiziert alle drei Cluster (applied=true). backup-alerts-
+   overdue-Patch (36h/idoit) bewusst DEV-only belassen (env-Anpassung noetig, eigenes
+   Thema). Siehe Abschnitt 5.7 + Prioritaet 5. OF-6 GESCHLOSSEN. Damit ist die
+   GESAMTE Drift-Angleichung P1-P5 abgeschlossen.
 
 **OF-7: Doku-Kommentare** in `test/prod/.../cnpg-operator-app.yaml` ("v1.28.1")
 an Live-Stand 1.28.3 angleichen (Hygiene, kein Funktionsdrift).
@@ -645,6 +683,10 @@ Umsetzung der Nachzieh-Schritte: P1 (Velero) erledigt 14.07.; P2 (DB-Resilienz)
 erledigt 14./15.07.; P3 (Monitoring-Resilienz) erledigt 15.07.; P4a (Thanos NAS20)
 erledigt 16.07. (TEST + PROD); P4b (uebrige NAS10-Dienste) TEST erledigt 16.07.,
 PROD erledigt 17.07. -> P4 (a+b) komplett, OF-8 geschlossen (alle S3-Dienste in
-DEV/TEST/PROD auf NAS20). Offen: nur noch P5 (Longhorn replica-auto-balance,
-Grenzfall/Diskussion) und der Query-sidecars-Service-Discovery-Fix (base,
-migrations-unabhaengig).*
+DEV/TEST/PROD auf NAS20); P5 (Longhorn replica-auto-balance + orphan-resource-auto-
+deletion) erledigt 17.07. via Weg A/base, OF-6 geschlossen. **GESAMTE Drift-Angleichung
+P1-P5 ABGESCHLOSSEN.** Alle echten Drift-Punkte zwischen DEV und TEST/PROD sind
+aufgeloest. Bewusst ausgenommen: Trivy/Kyverno (zurueckgestellt), alloy-vcenter
+(DEV-only per Design), Registry/Zot (Phase 9a Etappe B), backup-alerts-overdue-Patch
+(OF-6-Rest, DEV-only). Einziger migrations-unabhaengiger Rest: der Query-sidecars-
+Service-Discovery-Fix (base, eigener Chat).*

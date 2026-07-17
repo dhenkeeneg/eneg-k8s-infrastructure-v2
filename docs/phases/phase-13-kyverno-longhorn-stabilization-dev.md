@@ -266,3 +266,100 @@ Bereits gepurgte Snapshots sind NICHT reversibel - aber sie waren ohnehin
 - **PROD-Rollout** (nach TEST-Burn-In): Phase 13c.
 - **Spaeter**: Kyverno HA (3 Repliken) als separate Phase fuer alle Kyverno-Controller in
   der Base. Bis dahin bleibt `failurePolicy: Ignore` die richtige Schutzmassnahme.
+
+---
+
+## Nachtrag 17.07.2026: Longhorn-Settings nach TEST/PROD (P5 Drift-Angleich, Weg A/base)
+
+**Kontext:** Im Rahmen der Drift-Angleichung DEV -> TEST/PROD
+(`docs/migration/dev-to-test-prod-drift-2026-07.md`) war der Longhorn-Teil dieser
+Phase (der DEV-only `replicaAutoBalance: least-effort`) als **P5 / Grenzfall**
+gefuehrt - mit dem hier oben festgehaltenen DO-NOT-PORT-Hinweis (nicht pauschal
+ohne getrennte Review portieren). Diese Review hat am 17.07.2026 stattgefunden.
+
+**WICHTIGE ABGRENZUNG:** Nur der **Longhorn**-Teil (Auto-Balance + Orphan-Deletion)
+wurde nach TEST/PROD gezogen. Der **Kyverno**-Teil dieser Phase (failurePolicy:
+Ignore, policyExclude) bleibt weiterhin **DEV-only** - Kyverno ist insgesamt bewusst
+zurueckgestellt und nicht in TEST/PROD deployed (siehe Drift-Doc Abschnitt 6). Das
+Kyverno-Webhook-Hardening ist also NICHT Teil dieses Nachtrags.
+
+### Entscheidung (Daniel, 17.07.2026)
+
+Beide Longhorn-Settings werden nach TEST/PROD nachgezogen, und zwar ueber **Weg A
+(base)** statt env-spezifischer Overlays:
+
+- `replicaAutoBalance: least-effort` - die urspruenglich DEV-only-Haertung wird zum
+  cluster-weiten Default. Begruendung greift fuer TEST/PROD identisch: dieselbe
+  strict-local/1-Replica-DB-Architektur (aus P2 DB-Resilienz-Haertung) -> best-effort
+  wuerde dort ebenso permanente Rebuilds fuer 1-Replica-Volumes (CNPG-WAL) ausloesen.
+  least-effort ist die konservativere (I/O-aermere) Einstellung -> geringes Risiko.
+- `orphanResourceAutoDeletion: "replica-data"` (+ `orphanResourceAutoDeletionGracePeriod:
+  "300"`) - ebenfalls von DEV-only nach base. Reine Konsistenz, KEIN Sicherheitsgewinn
+  (der 05.07.-Incident hat gezeigt, dass verwaiste Replicas auf gestressten/evicteten
+  Nodes ohnehin nicht auto-geloescht werden). In Longhorn v1.9 Typ-Liste
+  (`replica-data;instance`), nicht true/false - nur `replica-data` gesetzt. Ersetzt
+  den alten boolean-Stil `orphanAutoDeletion: true` in base.
+
+Der DEV-only `backup-alerts-overdue-Patch` (36h/idoit, OF-6-Rest) wurde bewusst
+NICHT mitgenommen (DEV-spezifischer idoit-Selector + DEV-Zeitfenster, braucht
+env-Anpassung; eigenes kleines Thema fuer spaeter).
+
+### Aenderungen (2 Dateien)
+
+| # | Datei | Aktion |
+|---|---|---|
+| 1 | `kubernetes/base/longhorn/values.yaml` | Edit: `replicaAutoBalance` best-effort -> least-effort; `orphanAutoDeletion: true` ersetzt durch `orphanResourceAutoDeletion: "replica-data"` + `orphanResourceAutoDeletionGracePeriod: "300"` (mit Begruendungs-Kommentaren) |
+| 2 | `kubernetes/environments/dev/longhorn/values-override.yaml` | Edit: die drei jetzt redundanten Override-Zeilen entfernt, `defaultSettings: {}` (leerer Block bewusst erhalten fuer valueFiles-Referenz + kuenftige DEV-only-Overrides). Aenderungshistorie-Kommentar behalten. |
+
+Damit liegen die gehaerteten Werte NICHT mehr im DEV-Overlay, sondern cluster-weit
+in base. Der TEST- und PROD-Longhorn-App-Sync zieht sie automatisch (beide Apps
+referenzieren dieselbe `base/longhorn/values.yaml`).
+
+### Rollout
+
+1. base-Edit + DEV-Overlay-Entschlackung (Desktop-Commander).
+2. git commit/push (Daniel).
+3. ArgoCD Hard-Refresh-Annotation (`argocd.argoproj.io/refresh: hard`) auf alle
+   drei `longhorn`-Application-CRs (namespace `argocd`) via Kubernetes-MCP -
+   noetig, weil Longhorn `defaultSettings`-Aenderungen aus den Helm-Values nicht
+   immer sofort in `settings.longhorn.io` uebernimmt (Helm-Sub-Map-Diff).
+4. Sync (alle drei Apps Synced + Healthy, Commit `fcacc74`).
+
+### Verifikation (live, alle drei Cluster - 17.07.2026)
+
+```bash
+# je Kontext k8s-dev / k8s-test / k8s-prod:
+kubectl --context k8s-<env> -n longhorn-system get settings.longhorn.io \
+  replica-auto-balance -o jsonpath='{.value}{"|applied="}{.status.applied}'
+kubectl --context k8s-<env> -n longhorn-system get settings.longhorn.io \
+  orphan-resource-auto-deletion -o jsonpath='{.value}{"|applied="}{.status.applied}'
+```
+
+| Cluster | replica-auto-balance | orphan-resource-auto-deletion |
+|---------|----------------------|-------------------------------|
+| DEV  | least-effort (applied=true) | replica-data (applied=true) |
+| TEST | least-effort (applied=true) | replica-data (applied=true) |
+| PROD | least-effort (applied=true) | replica-data (applied=true) |
+
+Vorher: TEST/PROD hatten `best-effort` / leer. Alle drei `longhorn`-Apps
+Synced + Healthy.
+
+### Learnings (Nachtrag)
+
+5. **defaultSettings-Merge griff auf Anhieb** - der befuerchtete "klebrige"
+   Setting-Reconcile (Longhorn uebernimmt geaenderte defaultSettings nicht immer
+   sofort in `settings.longhorn.io`, v.a. wenn ein Wert schon anderweitig gesetzt
+   war) trat NICHT ein. Nach dem ArgoCD-Hard-Refresh war der neue Wert in allen
+   drei Clustern `applied=true`, KEIN manueller longhorn-manager-Reconcile noetig.
+6. **Weg A (base) ist fuer konservativere Settings unkritisch trotz "wirkt sofort
+   ueberall"** - base umgeht das gestaffelte DEV->TEST->PROD, aber beide Aenderungen
+   sind nicht-disruptiv (kein Pod-Restart, kein Volume-Detach) und least-effort ist
+   die I/O-aermere Richtung. Direkt nach dem Sync alle drei Cluster live verifizieren
+   bleibt trotzdem Pflicht.
+7. **Longhorn-Teil und Kyverno-Teil dieser Phase haben unterschiedliche Ziel-Scopes:**
+   Longhorn -> jetzt cluster-weit (base, alle drei); Kyverno -> weiterhin DEV-only
+   (zurueckgestellt). Bei kuenftigen Phase-13-Referenzen diese Trennung beachten.
+
+**Status Longhorn-Teil:** ERLEDIGT alle drei Cluster (17.07.2026). Damit ist der
+letzte offene Punkt der Drift-Angleichung (P5) geschlossen und die GESAMTE
+Drift-Angleichung P1-P5 abgeschlossen. Kyverno-Teil unveraendert DEV-only.
