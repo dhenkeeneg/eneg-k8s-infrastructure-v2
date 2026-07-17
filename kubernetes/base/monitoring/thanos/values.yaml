@@ -34,13 +34,20 @@ query:
   enabled: true
   replicaCount: 1
 
-  # Thanos Sidecar im Prometheus Pod als Store-Endpunkt
-  stores:
-    - dnssrv+_grpc._tcp.kube-prometheus-stack-thanos-discovery.monitoring.svc.cluster.local
+  # Thanos Sidecar im Prometheus Pod als Store-Endpunkt.
+  # Der Sidecar-gRPC-Port (10901, benannt "grpc") wird vom operator-
+  # verwalteten headless-Service "prometheus-operated" exponiert.
+  # Der frueher referenzierte Service "kube-prometheus-stack-thanos-discovery"
+  # wird vom kube-prometheus-stack nur mit prometheus.thanosService.enabled=true
+  # erzeugt (hier NICHT gesetzt) und existierte daher in KEINEM Cluster ->
+  # SRV-Lookup lief ins Leere, Query fand den Sidecar-Store nicht.
+  # dnsDiscovery.sidecarsService erzeugt den passenden --endpoint bereits;
+  # ein zusaetzlicher Eintrag in stores wuerde ihn doppeln -> stores leer.
+  stores: []
 
   dnsDiscovery:
     enabled: true
-    sidecarsService: kube-prometheus-stack-thanos-discovery
+    sidecarsService: prometheus-operated
     sidecarsNamespace: monitoring
 
   resources:
