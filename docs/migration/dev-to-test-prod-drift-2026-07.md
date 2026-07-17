@@ -643,6 +643,8 @@ via Desktop-Commander; Daniel: git commit/push, ArgoCD-Sync, Server-Zugriffe).
 *Analyse-Datei, urspruenglicher Stand 14.07.2026. Fortlaufend aktualisiert bei
 Umsetzung der Nachzieh-Schritte: P1 (Velero) erledigt 14.07.; P2 (DB-Resilienz)
 erledigt 14./15.07.; P3 (Monitoring-Resilienz) erledigt 15.07.; P4a (Thanos NAS20)
-erledigt 16.07. (TEST + PROD); P4b (uebrige NAS10-Dienste) TEST erledigt 16.07.
-(PROD offen). Offen: P4b PROD, P5 (Grenzfaelle),
-Query-sidecarsService-Discovery-Fix (base, migrations-unabhaengig).*
+erledigt 16.07. (TEST + PROD); P4b (uebrige NAS10-Dienste) TEST erledigt 16.07.,
+PROD erledigt 17.07. -> P4 (a+b) komplett, OF-8 geschlossen (alle S3-Dienste in
+DEV/TEST/PROD auf NAS20). Offen: nur noch P5 (Longhorn replica-auto-balance,
+Grenzfall/Diskussion) und der Query-sidecars-Service-Discovery-Fix (base,
+migrations-unabhaengig).*
