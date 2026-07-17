@@ -508,11 +508,14 @@ Reihenfolge je Umgebung zwingend:
 > Stolpersteine (Lehren griffen). Doc: phases/phase-14-p4a-thanos-nas20-test-prod.md.
 > **P4a damit vollstaendig - alle drei Cluster auf NAS20.**
 >
-> **Nebenbefund (NICHT P4a, dokumentiert fuer spaeter):** Thanos-Query
-> sidecarsService `kube-prometheus-stack-thanos-discovery` existiert in KEINEM
-> Cluster (real: `prometheus-operated`:10901). Query bezieht Historie ueber
-> Storegateway, findet aber den Sidecar-Store nicht direkt. Vorbestehend, cluster-
-> uebergreifend, migrations-unabhaengig. Eigener base-Fix in separatem Chat.
+> **Nebenbefund (NICHT P4a) - ERLEDIGT 17.07.2026:** Thanos-Query
+> sidecarsService `kube-prometheus-stack-thanos-discovery` existierte in KEINEM
+> Cluster (real: `prometheus-operated`:10901). Query bezog Historie ueber
+> Storegateway, fand aber den Sidecar-Store nicht direkt. Vorbestehend, cluster-
+> uebergreifend, migrations-unabhaengig. Gefixt via Weg B (base): `thanos/
+> values.yaml` `sidecarsService: prometheus-operated` + `stores: []` (doppelten
+> Endpoint bereinigt). Alle drei Cluster live verifiziert (Sidecar-Store "up",
+> keine SRV-Fehler mehr). Doc: phases/thanos-query-sidecar-discovery-fix.md.
 
 **P4-Erweiterung: Welche Dienste liegen noch auf NAS10? (Live-Inventur 15.07.2026)**
 
@@ -568,8 +571,9 @@ bewusst noch NAS10. In P4 mit auf NAS20 ziehen (dann konsistent).
 > P3 Monitoring-Resilienz, P4 S3-NAS20, P5 Longhorn). Bewusst ausgenommen bleiben:
 > Trivy/Kyverno (Abschnitt 6, zurueckgestellt), alloy-vcenter (DEV-only per Design),
 > Registry/Zot (Phase 9a Etappe B offen), backup-alerts-overdue-Patch (OF-6-Rest,
-> DEV-only). Einziger migrations-unabhaengiger Rest: der Query-sidecars-Service-
-> Discovery-Fix (base, Nebenbefund aus P4a, eigener Chat).
+> DEV-only). Der migrations-unabhaengige Query-sidecars-Service-Discovery-Fix
+> (base, Nebenbefund aus P4a) ist am 17.07.2026 erledigt (Weg B; Doc:
+> phases/thanos-query-sidecar-discovery-fix.md).
 
 ---
 
