@@ -25,12 +25,17 @@
 #   NICHT true/false. Nur replica-data gesetzt (verwaiste Replica-Verzeichnisse).
 #   Siehe: docs/incidents/2026-07-05-longhorn-orphan-diskpressure-dev.md
 
-defaultSettings:
-  # DEV: Conservatives Auto-Balance (nur bei echten degraded Volumes)
-  replicaAutoBalance: least-effort
-  # DEV: Verwaiste Replica-Daten automatisch aufraeumen. War bereits Cluster-Default
-  # (seit ~136d aktiv); hier nur explizit dokumentiert. Wert ist eine Typ-Liste
-  # (v1.9+), nicht true/false. Nur replica-data.
-  orphanResourceAutoDeletion: "replica-data"
-  # Grace-Period bis Auto-Loeschung eines Orphan-CR (Sekunden). Default 300.
-  orphanResourceAutoDeletionGracePeriod: "300"
+# 2026-07-17 (P5 Drift-Angleich): replicaAutoBalance (least-effort),
+#   orphanResourceAutoDeletion (replica-data) und
+#   orphanResourceAutoDeletionGracePeriod (300) wurden nach base/longhorn/
+#   values.yaml gezogen (Weg A) und gelten jetzt cluster-weit fuer alle drei
+#   Umgebungen. Die vormaligen DEV-Overrides sind damit redundant und wurden
+#   hier entfernt -> DEV bezieht diese Werte nun aus base.
+#   Siehe: docs/migration/dev-to-test-prod-drift-2026-07.md (P5)
+#
+# Dieses Overlay enthaelt aktuell keine DEV-spezifischen Abweichungen mehr.
+# Es wird bewusst beibehalten (leerer defaultSettings-Block), damit die
+# Kustomize/ArgoCD-Struktur (valueFiles-Referenz) stabil bleibt und kuenftige
+# DEV-only-Longhorn-Overrides hier eingehaengt werden koennen.
+
+defaultSettings: {}

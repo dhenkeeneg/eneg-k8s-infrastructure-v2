@@ -14,7 +14,19 @@ defaultSettings:
   defaultDataLocality: best-effort
 
   # Replica Auto-Balance zwischen Nodes
-  replicaAutoBalance: best-effort
+  # 2026-07-17 (P5 Drift-Angleich): best-effort -> least-effort als
+  # cluster-weiter Default fuer ALLE drei Umgebungen.
+  # Begruendung: best-effort triggert permanente Rebuild-Operationen fuer
+  # 1-Replica-Volumes (CNPG-WAL etc. auf strict-local, siehe P2), was zu
+  # staendigen System-Snapshots ('becomes not ready to use') und unnoetiger
+  # I/O-Last fuehrt. least-effort balanciert nur bei echt degradierten Volumes
+  # und ist damit die konservativere (I/O-aermere) Einstellung. Gilt fuer
+  # TEST/PROD identisch, da dort dieselbe strict-local/1-Replica-Architektur
+  # existiert. War zuvor DEV-only-Override (seit 2026-05-18), jetzt in base
+  # gezogen -> Drift strukturell aufgeloest.
+  # Siehe: docs/phases/phase-13-kyverno-longhorn-stabilization-dev.md
+  #        docs/migration/dev-to-test-prod-drift-2026-07.md (P5)
+  replicaAutoBalance: least-effort
 
   # Disk-Reservierung: 25% des Disk-Space werden freigehalten
   storageReservedPercentageForDefaultDisk: 25
@@ -32,8 +44,19 @@ defaultSettings:
   # Node-Drain-Verhalten: Replicas vor Drain auf andere Nodes verschieben
   nodeDrainPolicy: block-if-contains-last-replica
 
-  # Automatisches Aufräumen von verwaisten Ressourcen
-  orphanAutoDeletion: true
+  # Automatisches Aufraeumen von verwaisten Ressourcen
+  # 2026-07-17 (P5 Drift-Angleich): Als cluster-weiter Default fuer ALLE drei
+  # Umgebungen explizit gesetzt (war zuvor DEV-only-Override seit 2026-07-05;
+  # in DEV faktisch ohnehin ~136d Cluster-Default). In Longhorn v1.9 erwartet
+  # das Setting eine Typ-Liste (replica-data;instance), NICHT true/false.
+  # Nur replica-data gesetzt (verwaiste Replica-Verzeichnisse). Konsistenz-
+  # Massnahme (kein Sicherheitsgewinn: verwaiste Replicas auf gestressten/
+  # evictedeten Nodes werden ohnehin nicht auto-geloescht, siehe Incident
+  # 2026-07-05). GracePeriod bis Auto-Loeschung eines Orphan-CR (Sekunden).
+  # Siehe: docs/incidents/2026-07-05-longhorn-orphan-diskpressure-dev.md
+  #        docs/migration/dev-to-test-prod-drift-2026-07.md (P5)
+  orphanResourceAutoDeletion: "replica-data"
+  orphanResourceAutoDeletionGracePeriod: "300"
 
   # --- Storm-Protection (Lessons Learned aus Incident 10.-12.05.2026) ----
   # Siehe docs/incidents/2026-05-11-mariadb-galera-recovery.md
