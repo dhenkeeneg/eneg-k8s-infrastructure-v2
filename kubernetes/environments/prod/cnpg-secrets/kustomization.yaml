@@ -3,5 +3,8 @@ kind: Kustomization
 
 namespace: databases
 
+resources:
+  - cnpg-s3-ca.yaml
+
 generators:
   - secret-generator.yaml
