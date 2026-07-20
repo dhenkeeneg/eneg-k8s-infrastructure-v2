@@ -1,8 +1,8 @@
 # Runbook: K8s-Cluster Recovery nach Storage-Storm
 
-**Letzte Aktualisierung:** 2026-05-15 (v6 — ksops-Defekt im Repo-Server dokumentiert, Section 3.10 korrigiert: Unknown *-secrets ist KEIN Normalzustand)
+**Letzte Aktualisierung:** 2026-07-20 (v7 — Phase D.7 ergaenzt: Backup-Schedule-Nachlauf nach Recovery. TEST blieb suspendiert, PROD hatte Failed-Job-Altlasten)
 **Erstmals verifiziert:** DEV-Cluster (k8s-dev), 2026-05-14/15
-**Status TEST/PROD:** ausstehend
+**Status TEST/PROD:** Phase D (Backup-Schedules) in TEST + PROD durchgefuehrt 2026-07-20
 **Verwandte Docs:**
 - `docs/incidents/2026-05-11-mariadb-galera-recovery.md` (Ursprung)
 - `docs/runbooks/longhorn-volume-expansion-deadlock.md`
@@ -831,6 +831,84 @@ kubectl --context $CTX logs deployment/prometheus-msteams -n monitoring --since=
 
 Auf DEV waren Mails ab 15:58 nachweisbar (User-Bestaetigung).
 
+### D.8 Backup-Schedule-Nachlauf Wochen nach Recovery (Learning 2026-07-20)
+
+**Kontext:** Auch nachdem Phase A-C laengst abgeschlossen sind, koennen
+Backup-Schedules in einem inkonsistenten Zustand haengenbleiben und
+`CronJobFailed` / `KubeJobFailed` (severity warning) dauerhaft feuern lassen.
+Am 2026-07-20 wurden bei einem Alert-Review in TEST + PROD zwei
+unterschiedliche Nachlauf-Zustaende gefunden:
+
+- **TEST:** logical-backup CronJobs standen noch auf `suspend: true` (live
+  gesetzt waehrend Recovery, siehe 4.4 Drift-Check). `suspend` steht NICHT im
+  Git-Manifest → aus ArgoCD-Sicht war die App trotzdem `Synced` (ArgoCD
+  ignoriert das nicht-verwaltete Feld). Ein normaler `argocd app sync` haette
+  `suspend` daher NICHT entfernt.
+- **PROD:** CronJobs liefen bereits regulaer (`suspend: false`, taegliche Runs
+  erfolgreich). Es lagen aber 6 alte Failed-Job-Objekte (Mai-Altlasten +
+  manuelle Fehllaeufe 07.07.) herum, die der Controller nicht rotiert hatte,
+  weil sie aus aelteren CronJob-Generationen stammten.
+
+**Diagnose:**
+
+```bash
+# 1. Suspend-Status pruefen (Live vs. Git)
+kubectl --context $CTX get cronjob -n databases \
+  cnpg-erp-logical-backup cnpg-shared-logical-backup \
+  -o jsonpath='{range .items[*]}{.metadata.name}{"\tsuspend="}{.spec.suspend}{"\n"}{end}'
+
+# 2. Failed-Jobs identifizieren
+kubectl --context $CTX get jobs -n databases \
+  -o jsonpath='{range .items[*]}{.metadata.name}{"\tsucc="}{.status.succeeded}{"\tfail="}{.status.failed}{"\n"}{end}' \
+  | grep "fail=1"
+```
+
+**Fix A — Suspend via ArgoCD aufloesen (nur wenn Git kein `suspend` kennt):**
+Weil `suspend` nicht im Manifest steht, ist ein `--replace` noetig (echtes
+`kubectl replace` statt `apply`) — dabei wird das Live-Objekt komplett durch
+das Git-Manifest ersetzt und `suspend` verschwindet:
+
+```bash
+argocd app sync cnpg-logical-backup \
+  --resource batch:CronJob:databases/cnpg-shared-logical-backup \
+  --resource batch:CronJob:databases/cnpg-erp-logical-backup \
+  --force --replace
+```
+
+Nebeneffekt: Beim Replace werden die CronJobs geloescht + neu erstellt; alte
+Jobs mit `ownerReference` auf den CronJob werden per Cascading Delete
+mitentfernt (ein separates `delete job` lief danach ins `NotFound` — erwartet).
+
+**Fix B — Failed-Jobs gezielt loeschen (wenn CronJob bereits laeuft):**
+Failed-Jobs immer explizit benennen (nicht pauschal `$4=="0/1"`), damit
+nichts anderes getroffen wird:
+
+```bash
+kubectl --context $CTX -n databases delete job <failed-job-1> <failed-job-2> ...
+```
+
+**Verifikation nach dem Fix — WICHTIG (KSM-Staleness):**
+Nach dem Loeschen feuern die Alerts noch bis zu ~5 min weiter, weil
+kube-state-metrics die `kube_job_failed`-Serie erst nach dem Staleness-Fenster
+verwirft. Nicht als Fehlschlag interpretieren. Reihenfolge zur Bestaetigung:
+
+```promql
+# Zuerst die Ursache-Metrik pruefen (verschwindet SOFORT):
+kube_job_failed{namespace="databases",job_name=~"cnpg-.*-logical-backup-.*"} > 0
+# Danach der Alert (verschwindet 1 Eval-Zyklus spaeter):
+count(ALERTS{alertstate="firing",alertname=~"KubeJobFailed|CronJobFailed"})
+```
+
+**Manueller Verifikationslauf** (falls Suspend aufgeloest wurde, analog D.3):
+Nach dem Reaktivieren je einen Job manuell starten, Logs auf `Upload complete`
+(KEIN `InvalidDigest`) pruefen. Erst dann gilt der CronJob als verifiziert.
+
+**Prevention:** Nach jeder Recovery Phase D.4/D.7 explizit mit einem
+Alert-Review abschliessen (Grafana pro Cluster:
+`ALERTS{alertstate="firing",severity="warning"}`), nicht nur Live-Ressourcen
+pruefen. Suspend-Zustaende gehoeren NICHT dauerhaft in den Cluster wenn Git
+sie nicht kennt.
+
 ---
 
 ## 10. Verifikation (Post-Recovery Komplett-Check)
@@ -1010,3 +1088,8 @@ kubectl --context $CTX annotate cluster cnpg-shared -n databases cnpg.io/hiberna
 |             | failure), Pre-Flight 4.3 mit ksops-Existenz-Check,       |        |
 |             | Quick-Fix + Permanent-Fix (Patch-v2 mit set -e + curl).  |        |
 |             | Learning 17 + Phase D.6 Erwartung korrigiert.            |        |
+| 2026-07-20  | v7: Phase D.8 ergaenzt (Backup-Schedule-Nachlauf Wochen  | TEST+PROD |
+|             | nach Recovery). TEST logical-backups blieben suspend=true| Alert-Review |
+|             | (Git kennt kein suspend → ArgoCD Synced trotz Drift, Fix |        |
+|             | via --replace); PROD hatte 6 Failed-Job-Altlasten.       |        |
+|             | KSM-Staleness bei Alert-Verifikation dokumentiert.       |        |
