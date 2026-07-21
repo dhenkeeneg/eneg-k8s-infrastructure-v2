@@ -202,8 +202,21 @@ max_slot_wal_keep_size 6GB, priorityClassName an cnpg-erp/cnpg-shared/mariadb-ga
 > `enablePodMonitor` doppelt (einmal true, einmal false). Kein Drift-Thema,
 > aber bei Gelegenheit bereinigen (der zweite `false`-Block gewinnt).
 
-### 5.4 Velero (echter Drift - hohe Prioritaet)  [P1 ERLEDIGT 14.07.2026]
+### 5.4 Velero (echter Drift - hohe Prioritaet)  [P1 ERLEDIGT 14.07.2026, NAS20-Migration ERLEDIGT 21.07.2026, OF-2 GESCHLOSSEN]
 
+> **Status 21.07.2026 (OF-2 GESCHLOSSEN):** NAS20-Migration fuer Velero TEST+PROD
+> nachgeholt (der bei P1 auf P4 verschobene Teil). BSL beider Cluster jetzt auf
+> `https://nas20.eneg.de:8010` mit CA-Bundle (Secret velero-s3-ca, Sectigo
+> R36+R46, kein SOPS - byte-identisch aus DEV) statt insecureSkipTLSVerify;
+> `AWS_CA_BUNDLE=/etc/ca/ca.crt` (configuration.extraEnvVars) + extraVolumes/
+> extraVolumeMounts Mount /etc/ca (DEV-14a-Muster); checksumAlgorithm:"" bleibt.
+> velero-s3-credentials via SOPS auf NAS20-Keys umgestellt. Pod-Restart noetig
+> (S3-Creds werden nur beim Start gelesen, nicht zur Laufzeit). Beide live
+> verifiziert: BSL `Available` gegen NAS20, CA-Mount+ENV aktiv, Test-Backup
+> `Completed` 0 errors/warnings (TEST 252/252, PROD 1126/1126). Velero war der
+> LETZTE aktive NAS10-Client - alle Backup-/Storage-Dienste aller 3 Cluster
+> jetzt auf NAS20. Doc-Ref: docs/phases/phase-14-p1-velero-nas20-test-prod.md.
+>
 > **Status 14.07.2026:** checksumAlgorithm-Fix + Resource-Limits auf TEST und
 > PROD nachgezogen (NAS10/HTTP-Backend beibehalten, OF-2). Beide Cluster live
 > verifiziert: BSL zeigt `checksumAlgorithm: ""` (`Available`), velero 2Gi /
@@ -217,24 +230,23 @@ max_slot_wal_keep_size 6GB, priorityClassName an cnpg-erp/cnpg-shared/mariadb-ga
 
 | Aspekt | DEV | TEST | PROD | Nachziehen? |
 |--------|-----|------|------|-------------|
-| S3-Backend | NAS20 / HTTPS + CA-Bundle | NAS10 / HTTP skip-verify | NAS10 / HTTP skip-verify | JA (Teil 14x) |
+| S3-Backend | NAS20 / HTTPS + CA-Bundle | NAS20 / HTTPS + CA-Bundle (21.07.) | NAS20 / HTTPS + CA-Bundle (21.07.) | ERLEDIGT |
 | `checksumAlgorithm: ""` | gesetzt | gesetzt (14.07.) | gesetzt (14.07.) | ERLEDIGT |
 | Resource-Limits (2Gi, OOM-Fix) | gesetzt | gesetzt (14.07.) | gesetzt (14.07.) | ERLEDIGT |
 | nodeAgent-Limits | gesetzt | gesetzt (14.07.) | gesetzt (14.07.) | ERLEDIGT |
 | Retention (TTL) | 120h (5d) | 336h (14d) | 336h (14d) | env-abhaengig pruefen |
-| Schedule | 05:45 | 03:30 | 03:30 | NEIN (env, gestaffelt) |
+| Schedule | 05:45 | 03:30 | 01:15 | NEIN (env, gestaffelt) |
 
 **`checksumAlgorithm: ""` ist der wichtigste Punkt:** Ohne ihn schlagen Velero-
 Backups gegen QNAP QuObjects mit `InvalidDigest` fehl (aws-sdk-go-v2 v1.30+
-Trailing-Checksums). In DEV seit 19.05. gefixt und verifiziert, TEST+PROD offen.
-Solange TEST/PROD auf NAS10/HTTP laufen, ist der Fix dort ebenso noetig (der
-Bug ist backend-unabhaengig).
+Trailing-Checksums). In DEV seit 19.05. gefixt, TEST+PROD am 14.07. nachgezogen.
+Der Bug ist backend-unabhaengig - der Wert bleibt auch nach dem NAS20-Umzug
+(21.07.) in allen drei Env-Overrides gesetzt.
 
 > **Wichtig (Helm-Listen-Merge):** `backupStorageLocation` ist eine YAML-Liste;
 > Override ersetzt die ganze Liste. `checksumAlgorithm: ""` muss daher **im
-> jeweiligen Env-Override** stehen, nicht nur in base. Ob TEST/PROD gleich auf
-> NAS20 migriert werden oder erst nur den Checksum-Fix auf NAS10 bekommen, ist
-> eine Freigabe-Entscheidung (siehe OF-2).
+> jeweiligen Env-Override** stehen, nicht nur in base. Die NAS20-Migration
+> (OF-2) ist am 21.07. abgeschlossen - alle drei Envs auf NAS20/HTTPS+CA.
 
 ### 5.5 Monitoring (kube-prometheus-stack)
 
@@ -398,6 +410,13 @@ Schritt durch Daniel.**
   verifiziert (BSL `checksumAlgorithm: ""` Available, velero 2Gi/nodeAgent 1Gi,
   Test-Backup Completed ohne InvalidDigest). PROD-Cleanup: PartiallyFailed-Lauf
   07.07. (Reaktivierungs-Artefakt) entfernt. NAS20-Migration verschoben auf P4.
+- **NAS20-Migration nachgeholt 21.07.2026 (OF-2 GESCHLOSSEN):** BSL TEST+PROD auf
+  `https://nas20.eneg.de:8010` + CA-Bundle (velero-s3-ca) statt skip-verify,
+  AWS_CA_BUNDLE + Mount /etc/ca, velero-s3-credentials via SOPS auf NAS20-Keys,
+  rollout restart. Beide live verifiziert (BSL Available, Test-Backup Completed
+  0 Fehler: TEST 252/252, PROD 1126/1126). Velero war der letzte aktive
+  NAS10-Client - alle Storage-Dienste aller 3 Cluster jetzt auf NAS20.
+  Doc-Ref: docs/phases/phase-14-p1-velero-nas20-test-prod.md.
 
 ### Prioritaet 2 - DB-Resilienz (Schutz vor WAL-Deadlock / Verdraengung)
 
@@ -588,11 +607,12 @@ Einfluss darauf, wie "Promotion" beim Nachziehen ueberhaupt funktioniert** - bei
 Single-Branch wirkt jeder Push auf `environments/dev|test|prod/**` nur auf das
 jeweilige Overlay, aber jede `base/`-Aenderung sofort ueberall.
 
-**OF-2: Velero TEST/PROD - Ziel-Backend.**  [ENTSCHIEDEN + ERLEDIGT 14.07.2026]
-Nur Checksum-Fix auf NAS10 (schnell,
-kleiner Eingriff) ODER gleich NAS20-Migration mitnehmen (konsistenter mit
-Loki/Thanos-Richtung, aber CA-Bundle-Secret + Bucket noetig)? Empfehlung:
-mind. Checksum-Fix sofort (P1), NAS20 optional im Zug von P4.
+**OF-2: Velero TEST/PROD - Ziel-Backend.**  [VOLLSTAENDIG GESCHLOSSEN 21.07.2026]
+Zweistufig geloest: (1) 14.07. nur Checksum-Fix + Limits auf NAS10 (schnell,
+Backup-Integritaet sofort hergestellt); (2) 21.07. NAS20-Migration nachgeholt
+(konsistent mit Loki/Thanos-Richtung) - CA-Bundle-Secret velero-s3-ca + NAS20-
+Bucket + SOPS-Credentials umgestellt, beide Envs live verifiziert. Velero war
+der letzte aktive NAS10-Client; alle Storage-Dienste aller 3 Cluster auf NAS20.
 
 **OF-3: WAL-Volume-Resize.** Recreate von cnpg-Instanzen in TEST/PROD zieht
 kurzzeitigen Rebuild/Basebackup nach sich. Wartungsfenster gewuenscht? Reihenfolge
