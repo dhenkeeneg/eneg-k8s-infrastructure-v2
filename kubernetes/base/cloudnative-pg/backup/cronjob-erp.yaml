@@ -48,7 +48,7 @@ spec:
                 - name: S3_PREFIX
                   value: "cnpg-erp/"
                 - name: S3_ENDPOINT
-                  value: "http://nas10.eneg.de:8010"
+                  value: "https://nas20.eneg.de:8010"
                 - name: RETENTION_DAYS
                   value: "32"
                 - name: AWS_ACCESS_KEY_ID

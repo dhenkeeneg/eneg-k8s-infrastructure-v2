@@ -82,20 +82,6 @@ spec:
       memory: "2Gi"
       cpu: "2"
 
-  # Backup auf S3 (WAL-Archivierung)
-  backup:
-    barmanObjectStore:
-      destinationPath: s3://k8s-dev-postgres-wal/cnpg-erp/
-      endpointURL: http://nas10.eneg.de:8010
-      s3Credentials:
-        accessKeyId:
-          name: cnpg-s3-credentials
-          key: ACCESS_KEY_ID
-        secretAccessKey:
-          name: cnpg-s3-credentials
-          key: SECRET_ACCESS_KEY
-    retentionPolicy: "7d"
-
   # Monitoring (vorbereitet fuer Phase 7)
   monitoring:
     enablePodMonitor: false
