@@ -2,7 +2,7 @@
 # Umgebungsspezifisch: S3-Endpoint, Bucket, Backup-Schedule
 
 # -----------------------------------------------------------------------
-# Backup Storage Location: TEST S3 Bucket auf NAS10
+# Backup Storage Location: TEST S3 Bucket auf NAS20
 # -----------------------------------------------------------------------
 configuration:
   backupStorageLocation:
@@ -14,14 +14,22 @@ configuration:
       config:
         region: us-east-1
         s3ForcePathStyle: "true"
-        s3Url: http://nas10.eneg.de:8010
-        insecureSkipTLSVerify: "true"
-        # Workaround NAS10 QuObjects: AWS-SDK-go-v2 sendet seit ~v1.30
+        s3Url: https://nas20.eneg.de:8010
+        # Sauberes TLS gegen NAS20: kein skip-verify. QuObjects (8010) sendet
+        # nur das Leaf-Zert -> CA-Bundle (Sectigo R36+R46) clientseitig via
+        # AWS_CA_BUNDLE (siehe configuration.extraEnvVars + extraVolumes unten).
+        # Secret velero-s3-ca (NS velero), Mount /etc/ca/ca.crt.
+        # Workaround QuObjects: AWS-SDK-go-v2 sendet seit ~v1.30
         # Trailing-Checksums (x-amz-sdk-checksum-algorithm), die QNAP
         # QuObjects mit 400 InvalidDigest ablehnt. Leer-String unterdrueckt
-        # SDK-side Checksum-Generierung. Backend-unabhaengig (auch NAS10/HTTP).
+        # SDK-side Checksum-Generierung.
         # Ref: docs/phases/velero-aws-sdk-checksum-fix-dev.md, velero#8265
         checksumAlgorithm: ""
+
+  # CA-Bundle dem AWS-SDK bekanntmachen (sauberes TLS gegen NAS20).
+  extraEnvVars:
+    - name: AWS_CA_BUNDLE
+      value: /etc/ca/ca.crt
 
 # -----------------------------------------------------------------------
 # Backup Schedule: Taeglich 04:30 Europe/Berlin, 14 Tage Retention
@@ -60,3 +68,20 @@ nodeAgent:
     limits:
       cpu: 500m
       memory: 1Gi
+
+
+# -----------------------------------------------------------------------
+# CA-Bundle Mount fuer sauberes TLS gegen NAS20
+# Top-Level extraVolumes/extraVolumeMounts gelten fuer das velero-Server-
+# Deployment (dort laeuft das AWS-SDK -> BSL-Validierung + Backup-Upload).
+# Secret velero-s3-ca (NS velero, Sectigo R36+R46), referenziert von
+# AWS_CA_BUNDLE=/etc/ca/ca.crt (siehe configuration.extraEnvVars).
+# -----------------------------------------------------------------------
+extraVolumes:
+  - name: s3-ca
+    secret:
+      secretName: velero-s3-ca
+extraVolumeMounts:
+  - name: s3-ca
+    mountPath: /etc/ca
+    readOnly: true
