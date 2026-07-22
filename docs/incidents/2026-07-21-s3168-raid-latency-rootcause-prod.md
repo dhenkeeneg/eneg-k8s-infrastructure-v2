@@ -1,6 +1,6 @@
 # Incident: Root-Cause s3168 RAID-Latenz -> Virt-Resets -> Longhorn-Faults k8s-prod-23 (2026-07-21)
 
-**Status:** Root Cause identifiziert (Diagnose abgeschlossen bis auf perccli-Einzelplatten-Verifikation nach naechstem s3168-Reboot). Massnahmen noch offen (Entscheidung ausstehend).
+**Status:** Root Cause identifiziert und per perccli verifiziert (Diagnose abgeschlossen). Erste gering-invasive Massnahme umgesetzt (Patrol Read auf SSDs deaktiviert, 21.07.). Weitere Massnahmen in Abstimmung.
 **Umgebung:** k8s-prod (k8s-prod-23 auf ESXi s3168.eneg.de), PERC H755 Front, ESXi 8.0.3 build-24784735
 **Schweregrad:** mittel — kein Datenverlust, aber wiederkehrende Rebuild-Wellen und Storage-Latenzspitzen auf Produktiv-Node.
 **Vorlaeufer:** `docs/incidents/2026-07-13-s3168-io-stall-longhorn-faults-prod.md` (dort war die vSphere-/Storage-Ursache als offen markiert; dieses Dokument loest sie auf).
@@ -115,8 +115,11 @@ Timeout-Schwelle.
 - Firmware-Bug (52.30.0-6115 aktuell, kein bekannter H755-Bug)
 - Einzelne SMART-auffaellige Platte (alle SmartAlertAbsent)
 - Degradiertes/nicht-redundantes RAID (alle VDs Health OK)
-- Bay-7-Foreign-Platte als aktiver Bus-Stoerer (Platte gesund; nicht Member)
+- Slot 7 als aktiver Bus-Stoerer (perccli: Slot 7 = Dedicated Hot Spare, KEIN
+  Foreign, Seagate BL2400MM0159, alle Fehlerzaehler 0; bedient keine reg. I/Os)
 - RAID6-Ueberlast/Queue-Saturation (QAVG=0, Spike bei Leerlast)
+- Platten-Fehlerakkumulation (perccli /eall/sall: alle 16 PD Media/Other/Predictive/
+  Shield-Counter = 0, S.M.A.R.T alert = No, Temp 28-35C)
 
 ## Root Cause (Fazit)
 
@@ -128,23 +131,80 @@ Zwei getrennte, strukturelle Probleme auf s3168, verstaerkt durch den Dauer-Patr
    Longhorn-Fault-Welle. RAID10 (4 SSDs) verstaerkt vs. RAID1 (Gegenprobe: 0 Resets).
 
 2. **VD237 HDD-RAID6:** Sporadischer 14-s-Latenz-Haenger einer Einzelplatte bei
-   Leerlast. Gemischter Verbund; Bay 6 (Toshiba 2023) weicht als einzige ab ->
-   Hauptverdaechtiger. Verifikation via perccli nach Reboot ausstehend.
+   Leerlast. Heterogener Verbund: Slot 6 (Toshiba AL15SEB24EQY, Bj. 2023, FW EF09,
+   **512B phys. Sektor**) ist als einzige Platte technisch abweichend gegenueber den
+   homogenen Seagate BL2400MM0159 (Slot 8-15, **4K phys. Sektor**). perccli bestaetigt:
+   Toshiba ist aktives RAID6-Member (DriveGroup:0, Row:8), alle Fehlerzaehler 0.
+   -> Verdacht "strukturell langsam" (Modell/FW/Sektorformat), NICHT "defekt". Der
+   sporadische Ausreisser erzeugt keinen Fehlerzaehler-Inkrement (kein Media/Other-Error).
 
-## Offene Verifikation (nach s3168-Reboot)
+## perccli-Verifikation (21.07., nach s3168-Reboot aufgeloest)
 
-perccli 007.3208.0000.0000-02 (BCM, VMwareAccepted) wurde am 21.07. **gestaged**
-(`esxcli software component apply`, Reboot Required=true, NICHT rebootet). Wird nach
-dem naechsten regulaeren s3168-Reboot aktiv. Damit dann:
-- `perccli /c0 /eall /sall show all` -> Media/Other-Error-Count + Command-Timeouts pro
-  Platte -> definitive Identifikation der haengenden HDD (Verdacht Bay 6 vs. Bay 7).
-- Patrol-Read-Fortschritt/Dauer pro Platte pruefen.
+perccli 007.3208.0000.0000-02 ist nach dem s3168-Reboot aktiv (Komponente Status
+`host`). Binary-Pfad: **`/opt/perccli/bin/perccli64`** (nicht `/opt/lsi/...`, wie
+urspruenglich vermutet). Ausfuehrung read-only via ESXi-SSH-Diag-User.
+
+**Physische Slot-Belegung (perccli `/c0 show all`, deckungsgleich mit iDRAC):**
+
+| Slot | Modell            | Typ      | DG / Rolle                    | Phys. Sektor |
+|------|-------------------|----------|-------------------------------|--------------|
+| 0,1  | HUC101860CSS204   | SAS-HDD  | DG2 Boot-RAID1 (VD239)        | 512B         |
+| 2-5  | WD Red SA500 4TB  | SATA-SSD | DG1 RAID10 (VD238)=k8s-prod-23| 512B         |
+| 6    | AL15SEB24EQY (Toshiba) | SAS-HDD | DG0 RAID6-Member (Row 8)  | **512B**     |
+| 7    | BL2400MM0159 (Seagate) | SAS-HDD | **DHS** (Ded. Hot Spare)  | 4K           |
+| 8-15 | BL2400MM0159 (Seagate) | SAS-HDD | DG0 RAID6-Member (Row 0-7)| 4K           |
+
+**Korrekturen gegenueber der urspruenglichen Redfish/racadm-Lesart (13.07.):**
+- Slot 7 ist **kein Foreign**, sondern ein sauberer **Dedicated Hot Spare** (Seagate).
+  Der fruehere "Foreign/Warning/StandbyOffline"-Befund war eine Fehlinterpretation des
+  DHS-Zustands durch iDRAC-Redfish. -> These "PatrolReadUnconfiguredArea scannt
+  Foreign-Bay-7 mit" entfaellt.
+- Der Verbund enthaelt **4 SSDs** (Slot 2-5), nicht 5. Slot 6 ist eine HDD (Toshiba).
+- Toshiba = **Slot 6**, aktives RAID6-Member (bestaetigt via `Drive position =
+  DriveGroup:0, Span:0, Row:8`). Bleibt einzige technisch abweichende Platte:
+  512B phys. Sektor + FW EF09 + Bj. 2023 vs. homogene Seagate-4K-Platten.
+
+**Per-PD-Fehlerzaehler (`/c0 /eall /sall show all`) — alle 16 Platten:**
+- Media Error Count = 0, Other Error Count = 0, Predictive Failure Count = 0
+- Shield Counter = 0, S.M.A.R.T alert = No, Last Predictive Failure Event = 0
+- Drive Temperature 28-35C (unauffaellig)
+- Ergebnis: **keine per-Platte-Fehlerakkumulation** auf irgendeiner Platte, auch nicht
+  auf der verdaechtigten Toshiba (Slot 6). Der 14-s-Haenger ist damit kein
+  "sterbende Platte"-Fall. (Hinweis: H755/perccli exponiert keinen separaten
+  "Command Timeout"-Zaehler; Timeouts wuerden als Other Error Count erscheinen = 0.)
+
+**Patrol-Read-Status nach Reboot (`/c0 show patrolread`):**
+- PR Mode = Auto, Reoccurrence/Execution Delay = 168 h (woechentlich)
+- PR Current State = Stopped (Reboot hat den Dauerlauf unterbrochen)
+- PR Next Start = 25.07.2026, 03:00
+- PR iterations completed = 50, MaxConcurrentPd = 240, Excluded VDs = None
+- **PR on SSD = Enabled** (Ausgangszustand) -> Patrol Read scannte auch VD238-SSDs
+- Hintergrundraten unveraendert 30 % (Rebuild/BGI/Reconstruction/PR), Cache Flush 4 s
+- VD-Cache-Policies (VD237 + VD238 identisch): WriteBack, Strip 256 KB,
+  Disk Cache Policy = Disk's Default, Cachebypass Intelligent
+
+## Umgesetzte Massnahme (21.07.)
+
+**Patrol Read auf SSDs deaktiviert** (gering-invasiv, reversibel, kein Datenrisiko):
+```
+perccli64 /c0 set patrolread includessds=off
+```
+- Vorher: `PR on SSD = Enabled`; nachher verifiziert: `PR on SSD = Disabled`.
+- Wirkung: Ab naechstem PR-Lauf (25.07. 03:00) werden die 4 Consumer-SSDs (VD238,
+  k8s-prod-23) nicht mehr patrol-gelesen -> nimmt Dauer-Zusatzlast von den SSDs.
+- Reversierbefehl: `perccli64 /c0 set patrolread includessds=on` (oder `=onlymixed`).
+- **Erwartung (ehrlich):** Reset-Frequenz auf VD238 sinkt, verschwindet aber
+  voraussichtlich NICHT vollstaendig — die fsync-Latenz-Spikes der Consumer-SSDs ohne
+  PLP treten auch ohne Patrol Read unter DB-/WAL-Dauerlast auf. Nachhaltige Loesung
+  bleibt Enterprise-SSD mit PLP.
+- Ausfuehrung: durch Daniel (schreibender Controller-Eingriff), Verifikation read-only
+  durch Claude. Kein GitOps-Pfad moeglich (Controller-Einstellung).
 
 ## Handlungsoptionen (nach Eingriffstiefe; noch nicht entschieden)
 
 **Gering-invasiv:**
-- Bay 7 Foreign-Config bereinigen (Clear Foreign) -> entfaellt Mitscan durch Patrol Read;
-  Platte danach als Ready/Hot-Spare nutzbar. (Aenderung am Controller -> Freigabe noetig.)
+- [ERLEDIGT 21.07.] Patrol Read auf SSDs deaktiviert (`includessds=off`) -> siehe
+  Abschnitt "Umgesetzte Massnahme".
 - Alert auf `vcenter_host_disk_latency_max_milliseconds` je ESXi-Host (aus 13.07.-Doku
   uebernommen, weiterhin empfohlen).
 
@@ -158,8 +218,8 @@ dem naechsten regulaeren s3168-Reboot aktiv. Damit dann:
 **Nachhaltig:**
 - WD Red SA500 (Consumer, kein PLP) -> Enterprise-SSD mit PLP auf s3168. Loest das
   SSD-Grundproblem RAID-Level-unabhaengig.
-- RAID6-Verbund vereinheitlichen (Bay 6 Toshiba durch passende Seagate ersetzen; Bay 7
-  sauber integrieren oder ziehen).
+- RAID6-Verbund vereinheitlichen (Slot 6 Toshiba durch passende Seagate ersetzen, damit
+  der Verbund homogen 4K wird; der Seagate-DHS auf Slot 7 steht bereits als Ersatz bereit).
 
 ## Diagnose-Zugaenge (eingerichtet, fuer Wiederverwendung)
 
@@ -168,7 +228,8 @@ dem naechsten regulaeren s3168-Reboot aktiv. Damit dann:
 - iDRAC-Redfish s3168 (192.168.159.60), ReadOnly-User svc-diag-claude,
   Credentials in WSL `~/.idrac-diag.env` (chmod 600).
 - racadm (idracadm7 11.4.0.0) in WSL installiert (Remote-Modus, read-only genutzt).
-- perccli 007.3208 auf s3168 gestaged (aktiv nach Reboot).
+- perccli 007.3208 auf s3168 aktiv (Binary `/opt/perccli/bin/perccli64`). Diag-User
+  hat auch Schreibrechte auf Controller-Properties (fuer `set patrolread` genutzt).
 
 ## Referenzen
 
