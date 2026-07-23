@@ -39,9 +39,9 @@
     KUBECONFIG: "{{ kubeconfig_path | default('/home/admin-ubuntu/.kube/config') }}"
 
   pre_tasks:
-    - name: SOPS-encrypted govc-Credentials laden
+    - name: SOPS-encrypted govc-Credentials laden (pro Environment)
       community.sops.load_vars:
-        file: "{{ playbook_dir }}/../secrets/govc-credentials.yaml"
+        file: "{{ playbook_dir }}/../secrets/govc-credentials-{{ target_env }}.yaml"
       no_log: true
       tags: [always]
 

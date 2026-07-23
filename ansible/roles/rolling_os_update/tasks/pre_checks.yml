@@ -23,6 +23,7 @@
       GOVC_USERNAME: "{{ govc_username }}"
       GOVC_PASSWORD: "{{ govc_password }}"
       GOVC_INSECURE: "{{ govc_insecure }}"
+      GOVC_DATACENTER: "{{ govc_datacenter }}"
   no_log: true
 
 - name: kubectl client-Version pruefen
