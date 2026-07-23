@@ -131,12 +131,15 @@ Zwei getrennte, strukturelle Probleme auf s3168, verstaerkt durch den Dauer-Patr
    Longhorn-Fault-Welle. RAID10 (4 SSDs) verstaerkt vs. RAID1 (Gegenprobe: 0 Resets).
 
 2. **VD237 HDD-RAID6:** Sporadischer 14-s-Latenz-Haenger einer Einzelplatte bei
-   Leerlast. Heterogener Verbund: Slot 6 (Toshiba AL15SEB24EQY, Bj. 2023, FW EF09,
-   **512B phys. Sektor**) ist als einzige Platte technisch abweichend gegenueber den
-   homogenen Seagate BL2400MM0159 (Slot 8-15, **4K phys. Sektor**). perccli bestaetigt:
-   Toshiba ist aktives RAID6-Member (DriveGroup:0, Row:8), alle Fehlerzaehler 0.
-   -> Verdacht "strukturell langsam" (Modell/FW/Sektorformat), NICHT "defekt". Der
-   sporadische Ausreisser erzeugt keinen Fehlerzaehler-Inkrement (kein Media/Other-Error).
+   Leerlast. Leicht heterogener Verbund: Slot 6 (Toshiba AL15SEB24EQY, Bj. 2023, FW EF09)
+   ist die einzige nicht-Seagate-Platte gegenueber den homogenen Seagate BL2400MM0159
+   (Slot 8-15, FW SBSA). perccli bestaetigt: Toshiba ist aktives RAID6-Member
+   (DriveGroup:0, Row:8), alle Fehlerzaehler 0. WICHTIG: Sektorformat ist NICHT
+   abweichend - Toshiba und Seagate sind beide Logical 512B / Physical 4 KB (512e),
+   verifiziert via perccli. Damit bleibt als Unterschied nur Modell/Hersteller, FW und
+   Baujahr. -> Verdacht auf die Toshiba ist SCHWACH und nicht durch harte Fakten belegt;
+   der 14-s-Haenger ist aktuell KEINER Einzelplatte eindeutig zuzuordnen (alle Zaehler 0,
+   keine Sektor-Heterogenitaet).
 
 ## perccli-Verifikation (21.07., nach s3168-Reboot aufgeloest)
 
@@ -146,13 +149,18 @@ urspruenglich vermutet). Ausfuehrung read-only via ESXi-SSH-Diag-User.
 
 **Physische Slot-Belegung (perccli `/c0 show all`, deckungsgleich mit iDRAC):**
 
-| Slot | Modell            | Typ      | DG / Rolle                    | Phys. Sektor |
-|------|-------------------|----------|-------------------------------|--------------|
-| 0,1  | HUC101860CSS204   | SAS-HDD  | DG2 Boot-RAID1 (VD239)        | 512B         |
-| 2-5  | WD Red SA500 4TB  | SATA-SSD | DG1 RAID10 (VD238)=k8s-prod-23| 512B         |
-| 6    | AL15SEB24EQY (Toshiba) | SAS-HDD | DG0 RAID6-Member (Row 8)  | **512B**     |
-| 7    | BL2400MM0159 (Seagate) | SAS-HDD | **DHS** (Ded. Hot Spare)  | 4K           |
-| 8-15 | BL2400MM0159 (Seagate) | SAS-HDD | DG0 RAID6-Member (Row 0-7)| 4K           |
+| Slot | Modell            | Typ      | DG / Rolle                    | Log/Phys Sektor |
+|------|-------------------|----------|-------------------------------|-----------------|
+| 0,1  | HUC101860CSS204   | SAS-HDD  | DG2 Boot-RAID1 (VD239)        | 512B / 512B     |
+| 2-5  | WD Red SA500 4TB  | SATA-SSD | DG1 RAID10 (VD238)=k8s-prod-23| 512B / 512B     |
+| 6    | AL15SEB24EQY (Toshiba) | SAS-HDD | DG0 RAID6-Member (Row 8)  | 512B / 4 KB     |
+| 7    | BL2400MM0159 (Seagate) | SAS-HDD | **DHS** (Ded. Hot Spare)  | 512B / 4 KB     |
+| 8-15 | BL2400MM0159 (Seagate) | SAS-HDD | DG0 RAID6-Member (Row 0-7)| 512B / 4 KB     |
+
+Anmerkung: iDRAC zeigt die *logische* Blockgroesse (512B, bei allen Platten einheitlich).
+Die *physische* Sektorgroesse ist bei allen HDDs (Toshiba UND Seagate) 4 KB, bei den SSDs
+und Boot-HDDs 512B. Es gibt somit KEINE Sektor-Heterogenitaet zwischen Toshiba und Seagate
+im RAID6 - beide sind 512e (Logical 512B / Physical 4 KB).
 
 **Korrekturen gegenueber der urspruenglichen Redfish/racadm-Lesart (13.07.):**
 - Slot 7 ist **kein Foreign**, sondern ein sauberer **Dedicated Hot Spare** (Seagate).
@@ -161,8 +169,10 @@ urspruenglich vermutet). Ausfuehrung read-only via ESXi-SSH-Diag-User.
   Foreign-Bay-7 mit" entfaellt.
 - Der Verbund enthaelt **4 SSDs** (Slot 2-5), nicht 5. Slot 6 ist eine HDD (Toshiba).
 - Toshiba = **Slot 6**, aktives RAID6-Member (bestaetigt via `Drive position =
-  DriveGroup:0, Span:0, Row:8`). Bleibt einzige technisch abweichende Platte:
-  512B phys. Sektor + FW EF09 + Bj. 2023 vs. homogene Seagate-4K-Platten.
+  DriveGroup:0, Span:0, Row:8`). Einzige nicht-Seagate-Platte im Verbund - unterscheidet
+  sich aber NUR in Modell/Hersteller, FW (EF09 vs. SBSA) und Baujahr (2023 vs. 2025).
+  Sektorformat identisch zu den Seagates (Logical 512B / Physical 4 KB). Die zuvor
+  vermutete "512B vs. 4K"-Heterogenitaet war ein Auswertungsfehler und ist widerlegt.
 
 **Per-PD-Fehlerzaehler (`/c0 /eall /sall show all`) — alle 16 Platten:**
 - Media Error Count = 0, Other Error Count = 0, Predictive Failure Count = 0
