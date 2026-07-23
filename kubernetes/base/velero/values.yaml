@@ -38,6 +38,22 @@ nodeAgent:
     limits:
       cpu: 500m
       memory: 512Mi
+  # CA-Bundle-Mount fuer sauberes TLS gegen NAS20 (QuObjects liefert nur
+  # das Leaf-Zert auf 8010). Der node-agent oeffnet die Kopia-Backup-Repos
+  # direkt gegen S3 und braucht daher DASSELBE CA-Bundle wie der Server.
+  # Ohne diesen Mount schlagen ALLE PodVolumeBackups mit
+  # "certificate signed by unknown authority" fehl (BackupRepository NotReady).
+  # AWS_CA_BUNDLE=/etc/ca/ca.crt wird vom Chart global gesetzt; hier fehlte
+  # bisher nur der Volume-Mount fuer das DaemonSet.
+  # Secret velero-s3-ca (NS velero, Sectigo R36+R46), verwaltet von velero-secrets.
+  extraVolumes:
+    - name: s3-ca
+      secret:
+        secretName: velero-s3-ca
+  extraVolumeMounts:
+    - name: s3-ca
+      mountPath: /etc/ca
+      readOnly: true
 
 # -----------------------------------------------------------------------
 # Backup-Konfiguration
