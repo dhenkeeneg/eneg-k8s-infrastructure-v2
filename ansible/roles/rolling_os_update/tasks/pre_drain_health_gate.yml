@@ -1,0 +1,59 @@
+---
+# =============================================================================
+# Pre-Drain Health-Gate (Hebel 3)
+# =============================================================================
+# Laeuft pro Node (serial: 1) UNMITTELBAR vor pre_drain_prep/drain.
+# Wartet aktiv, bis der Cluster wieder voll gesund ist:
+#   1. Alle CNPG-Cluster: readyInstances == instances (echtes 3/3)
+#   2. MariaDB Galera: alle erwarteten Pods ready
+#   3. Keine aktiven Longhorn-Replica-Rebuilds (optional)
+# Bricht nach health_gate_timeout_seconds ab, statt auf krankem Cluster zu
+# drainen. Wird auf localhost (mgmt-10) ausgefuehrt.
+#
+# Ansatz: Ein Poll-Skript liefert genau "HEALTHY" oder "WAIT: <grund>".
+# Ansible 'until' wiederholt bis "HEALTHY" oder retries erschoepft sind.
+# Das haelt die until-Bedingung trivial und die Diagnose lesbar.
+#
+# Hintergrund: docs/incidents/2026-07-23-dev-os-update-rebuild-storm.md
+# =============================================================================
+
+- name: "[Health-Gate] Start-Banner"
+  ansible.builtin.debug:
+    msg: |
+      ============================================================
+      Pre-Drain Health-Gate fuer {{ inventory_hostname }}
+      Warte bis Cluster voll gesund
+      (CNPG 3/3, Galera 3/3{{ ', keine Rebuilds' if health_gate_check_longhorn_rebuilds else '' }}).
+      Timeout: {{ health_gate_timeout_seconds }}s, Poll alle {{ health_gate_poll_interval_seconds }}s
+      ============================================================
+  when: enable_pre_drain_health_gate
+
+- name: "[Health-Gate] Poll bis Cluster gesund (oder Timeout)"
+  ansible.builtin.command:
+    cmd: "bash {{ role_path }}/files/health_gate_check.sh {{ kubectl_context }} {{ mariadb_galera_namespace }} {{ 'yes' if health_gate_check_longhorn_rebuilds else 'no' }}"
+  delegate_to: localhost
+  register: hg_result
+  changed_when: false
+  failed_when: false
+  retries: "{{ (health_gate_timeout_seconds | int // health_gate_poll_interval_seconds | int) | int }}"
+  delay: "{{ health_gate_poll_interval_seconds | int }}"
+  until: hg_result.stdout is defined and hg_result.stdout.startswith('HEALTHY')
+  when: enable_pre_drain_health_gate
+
+- name: "[Health-Gate] Letzten Status anzeigen"
+  ansible.builtin.debug:
+    msg: "Health-Gate-Ergebnis fuer {{ inventory_hostname }}: {{ hg_result.stdout | default('(kein Output)') }}"
+  when: enable_pre_drain_health_gate
+
+- name: "[Health-Gate] ABBRUCH wenn Cluster nach Timeout nicht gesund"
+  ansible.builtin.assert:
+    that:
+      - hg_result.stdout is defined
+      - hg_result.stdout.startswith('HEALTHY')
+    fail_msg: |
+      Health-Gate NICHT erfuellt nach {{ health_gate_timeout_seconds }}s.
+      Letzter Status: {{ hg_result.stdout | default('(kein Output)') }}
+      Update wird gestoppt, um keinen Drain auf krankem Cluster auszuloesen.
+      Bitte Cluster-Zustand pruefen (CNPG/Galera/Longhorn) und Update erneut starten.
+    success_msg: "Cluster voll gesund - Drain von {{ inventory_hostname }} freigegeben."
+  when: enable_pre_drain_health_gate

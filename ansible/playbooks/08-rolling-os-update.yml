@@ -100,6 +100,12 @@
         tasks_from: snapshot_create.yml
       tags: [snapshot]
 
+    - name: Pre-Drain Health-Gate (warte bis Cluster 3/3 gesund)
+      ansible.builtin.import_role:
+        name: rolling_os_update
+        tasks_from: pre_drain_health_gate.yml
+      tags: [health-gate, drain]
+
     - name: CNPG Primary-Switchover (falls noetig)
       ansible.builtin.import_role:
         name: rolling_os_update

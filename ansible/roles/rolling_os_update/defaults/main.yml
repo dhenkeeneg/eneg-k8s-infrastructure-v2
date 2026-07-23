@@ -20,6 +20,24 @@ kubeconfig_path: "/home/admin-ubuntu/.kube/config"
 # Pause zwischen Nodes (Sekunden) - gibt dem Cluster Zeit zur Stabilisierung
 cooldown_seconds: 60
 
+# =============================================================================
+# Pre-Drain Health-Gate (Hebel 3, eingefuehrt 2026-07-23 nach DEV-Incident)
+# =============================================================================
+# Prueft UNMITTELBAR VOR dem Drain jedes einzelnen Nodes, ob der Cluster
+# wirklich gesund ist (CNPG 3/3, Galera 3/3, keine laufenden Longhorn-Rebuilds).
+# Grund: Die einmaligen Pre-Flight-Checks (run_once) sehen nur den Startzustand.
+# Beim Incident war cnpg-erp nach dem ersten Node-Zyklus angeschlagen (nur 1-2
+# gesunde Instanzen), als der Drain des zweiten Nodes startete -> PDB-Blockade
+# -> Drain-Timeout -> Abbruch -> Rebuild-Sturm. Das Gate wartet aktiv bis der
+# Cluster wieder voll gesund ist und bricht erst nach Timeout ab.
+enable_pre_drain_health_gate: true
+# Maximale Wartezeit auf Cluster-Gesundheit vor dem Drain (Sekunden)
+health_gate_timeout_seconds: 900
+# Poll-Intervall waehrend des Wartens (Sekunden)
+health_gate_poll_interval_seconds: 15
+# Longhorn-Rebuilds ins Gate einbeziehen (warten bis keine aktiven Rebuilds)
+health_gate_check_longhorn_rebuilds: true
+
 # kubectl drain Timeout (erhoeht wegen Volume-Detach + Maintenance-Operations)
 drain_timeout_seconds: 900
 
@@ -70,7 +88,21 @@ enable_cnpg_maintenance_mode: true
 # Longhorn: Temporaere Aenderung der node-drain-policy waehrend des Drains.
 # Ermoeglicht Eviction der instance-manager Pods auch bei strict-local Volumes,
 # da Replica nach Reboot wieder verfuegbar sein wird.
-# Quelle: https://longhorn.io/docs/1.11.0/maintenance/maintenance/
+#
+# WICHTIG (2026-07-23, nach DEV-Incident geprueft): Diese Policy MUSS aktiv
+#   bleiben. Alle DB-Volumes (CNPG, Galera) sind Single-Replica (strict-local,
+#   P2-Architektur). Bei 'block-if-contains-last-replica' wuerde der Drain an
+#   der instance-manager-PDB blockieren, weil der Node die letzte (einzige)
+#   Replica dieser Volumes haelt. 'allow-if-replica-is-stopped' erlaubt den
+#   Drain, sobald die Volumes detached sind (Replica gestoppt) - was durch die
+#   CNPG-/Galera-Maintenance-Modes vor dem Drain passiert. Der Rebuild-Sturm
+#   aus dem Incident wurde NICHT durch diese Policy verursacht, sondern durch
+#   den abgebrochenen Drain (dev-22 kam nie zurueck -> Wait-Interval lief ab).
+#   Gegenmassnahme ist daher replicaReplenishmentWaitInterval=1200 (base),
+#   NICHT das Abschalten dieser Policy.
+#   Longhorn-Doc: "allow-if-replica-is-stopped so that the drain is not blocked
+#   by the last healthy replica of a detached volume."
+# Quelle: https://longhorn.io/docs/1.9.2/maintenance/maintenance/
 enable_longhorn_drain_policy_override: true
 longhorn_namespace: "longhorn-system"
 longhorn_drain_policy_during_update: "allow-if-replica-is-stopped"

@@ -79,7 +79,16 @@ defaultSettings:
   # kurze Storage-Stutzen) Zeit, sich von selbst zu loesen, und vermeidet
   # unnoetige Rebuilds. Hier explizit eingetragen, damit nicht versehentlich
   # per kubectl patch dauerhaft reduziert wird.
-  replicaReplenishmentWaitInterval: 600
+  #
+  # 2026-07-23: 600 -> 1200 erhoeht als Teil der Gegenmassnahmen nach dem
+  #   DEV-OS-Update-Incident (Rebuild-Sturm beim Drain von dev-22 saettigte
+  #   die SSDs am gemeinsamen Controller in DEV/TEST). Groesserer Puffer,
+  #   damit ein Node-Reboot (2-3 min) sicher innerhalb des Wait-Fensters
+  #   liegt und gestoppte Replicas wiederverwendet statt neu gebaut werden.
+  #   Zusammen mit enable_longhorn_drain_policy_override=false (Playbook)
+  #   der Kern-Hebel gegen Drain-Rebuilds. Siehe:
+  #   docs/incidents/2026-07-23-dev-os-update-rebuild-storm.md
+  replicaReplenishmentWaitInterval: 1200
 
   # Max 1 paralleler Backup-Restore pro Node (statt Default 5).
   # Schuetzt Storage bei Velero-Mass-Restore (z.B. nach Cluster-Recovery).
