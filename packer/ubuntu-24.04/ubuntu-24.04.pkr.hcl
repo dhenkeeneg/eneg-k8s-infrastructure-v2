@@ -176,6 +176,13 @@ source "vsphere-iso" "ubuntu" {
   }
 
   # Storage
+  # VMware Paravirtual (PVSCSI) statt Builder-Default "lsilogic".
+  # Erforderlich fuer fsync-lastige K8s-Workloads (CNPG WAL, MariaDB Galera,
+  # Loki, Prometheus): eigene Queue pro Controller, deutlich niedrigerer
+  # CPU-Overhead pro I/O. Das Modul vmw_pvscsi ist in der initramfs der
+  # Ubuntu-24.04-Kernel enthalten (MODULES=most), Root liegt auf LVM dm-uuid.
+  disk_controller_type = ["pvscsi"]
+
   storage {
     disk_size             = var.vm_disk_size
     disk_thin_provisioned = true

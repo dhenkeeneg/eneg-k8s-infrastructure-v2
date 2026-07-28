@@ -63,6 +63,12 @@ variable "disk_size" {
   description = "Disk-Größe in GB"
 }
 
+variable "scsi_type" {
+  type        = string
+  default     = "pvscsi"
+  description = "SCSI-Controller-Typ (pvscsi = VMware Paravirtual). Bewusst explizit gesetzt und NICHT vom Template geerbt: solange das Packer-Template noch lsilogic ausliefert, würde ein geerbter Wert die manuell auf PVSCSI umgestellten Nodes bei jedem Plan zurückdrehen wollen."
+}
+
 variable "ip_address" {
   type        = string
   description = "Statische IP-Adresse"

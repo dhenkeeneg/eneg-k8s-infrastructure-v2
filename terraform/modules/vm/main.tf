@@ -57,7 +57,8 @@ resource "vsphere_virtual_machine" "vm" {
   guest_id         = data.vsphere_virtual_machine.template.guest_id
   firmware         = data.vsphere_virtual_machine.template.firmware
 
-  scsi_type        = data.vsphere_virtual_machine.template.scsi_type
+  # Explizit, nicht vom Template geerbt - siehe variables.tf
+  scsi_type        = var.scsi_type
 
   network_interface {
     network_id   = data.vsphere_network.network.id
