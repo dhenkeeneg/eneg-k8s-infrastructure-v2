@@ -22,15 +22,30 @@
     msg: |
       ============================================================
       Pre-Drain Health-Gate fuer {{ inventory_hostname }}
-      Warte bis Cluster voll gesund
-      (CNPG 3/3, Galera 3/3{{ ', keine Rebuilds' if health_gate_check_longhorn_rebuilds else '' }}).
+      Warte bis Cluster voll gesund. Aktive Checks:
+        Nodes Ready/kein Restcordon: {{ health_gate_check_nodes }}
+        CNPG readyInstances == spec.instances: immer
+        CNPG Timeline + Primary:     {{ health_gate_check_cnpg_timeline }}
+        Galera StatefulSet ready:    immer
+        Longhorn Robustness:         {{ health_gate_check_longhorn_robustness }}
+        Longhorn aktive Rebuilds:    {{ health_gate_check_longhorn_rebuilds }}
+        Pods nicht schedulebar:      {{ health_gate_check_pending_pods }}
       Timeout: {{ health_gate_timeout_seconds }}s, Poll alle {{ health_gate_poll_interval_seconds }}s
       ============================================================
   when: enable_pre_drain_health_gate
 
 - name: "[Health-Gate] Poll bis Cluster gesund (oder Timeout)"
   ansible.builtin.command:
-    cmd: "bash {{ role_path }}/files/health_gate_check.sh {{ kubectl_context }} {{ mariadb_galera_namespace }} {{ 'yes' if health_gate_check_longhorn_rebuilds else 'no' }}"
+    cmd: "bash {{ role_path }}/files/health_gate_check.sh"
+  environment:
+    HG_CTX: "{{ kubectl_context }}"
+    HG_GALERA_NS: "{{ mariadb_galera_namespace }}"
+    HG_CHECK_REBUILDS: "{{ 'yes' if health_gate_check_longhorn_rebuilds else 'no' }}"
+    HG_CHECK_LH_ROBUSTNESS: "{{ 'yes' if health_gate_check_longhorn_robustness else 'no' }}"
+    HG_CHECK_CNPG_TIMELINE: "{{ 'yes' if health_gate_check_cnpg_timeline else 'no' }}"
+    HG_CHECK_NODES: "{{ 'yes' if health_gate_check_nodes else 'no' }}"
+    HG_CHECK_PENDING_PODS: "{{ 'yes' if health_gate_check_pending_pods else 'no' }}"
+    HG_ALLOW_CORDONED: "{{ health_gate_allow_cordoned }}"
   delegate_to: localhost
   register: hg_result
   changed_when: false

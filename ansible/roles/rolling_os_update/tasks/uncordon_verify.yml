@@ -77,6 +77,77 @@
   delay: 10
   when: hostvars['localhost'].cnpg_clusters_inventory | length > 0
 
+# =============================================================================
+# Post-Uncordon-Health-Gate (2026-07-28)
+# =============================================================================
+# Dasselbe Skript wie das Pre-Drain-Gate, aber NACH dem Uncordon dieses Nodes
+# und VOR dem Cooldown. Damit stoppt ein Lauf beim verursachenden Node selbst.
+#
+# Der CNPG-Phasen-Check oben genuegt dafuer nicht: die Phase kann
+# "Cluster in healthy state" melden, waehrend eine Replica noch auf einer
+# aelteren Timeline nachspielt oder ein Longhorn-Volume degraded ist und der
+# Rebuild wegen replicaReplenishmentWaitInterval=1200s noch nicht begonnen hat.
+# Genau diese Kombination hat cnpg-shared-3 am 23.07.2026 gestrandet.
+#
+# Timeout hier deutlich hoeher als beim Pre-Drain-Gate: nach der Rueckkehr des
+# Nodes muessen erst die Longhorn-Rebuilds durchlaufen.
+# =============================================================================
+
+- name: "[Post-Uncordon-Gate] Start-Banner"
+  ansible.builtin.debug:
+    msg: |
+      ============================================================
+      Post-Uncordon-Health-Gate fuer {{ inventory_hostname }}
+      Warte bis Cluster wieder voll gesund, bevor der naechste Node dran ist.
+      Timeout: {{ post_uncordon_gate_timeout_seconds }}s,
+      Poll alle {{ post_uncordon_gate_poll_interval_seconds }}s
+      ============================================================
+  when: enable_post_uncordon_health_gate
+
+- name: "[Post-Uncordon-Gate] Poll bis Cluster gesund (oder Timeout)"
+  ansible.builtin.command:
+    cmd: "bash {{ role_path }}/files/health_gate_check.sh"
+  environment:
+    HG_CTX: "{{ kubectl_context }}"
+    HG_GALERA_NS: "{{ mariadb_galera_namespace }}"
+    HG_CHECK_REBUILDS: "{{ 'yes' if health_gate_check_longhorn_rebuilds else 'no' }}"
+    HG_CHECK_LH_ROBUSTNESS: "{{ 'yes' if health_gate_check_longhorn_robustness else 'no' }}"
+    HG_CHECK_CNPG_TIMELINE: "{{ 'yes' if health_gate_check_cnpg_timeline else 'no' }}"
+    HG_CHECK_NODES: "{{ 'yes' if health_gate_check_nodes else 'no' }}"
+    HG_CHECK_PENDING_PODS: "{{ 'yes' if health_gate_check_pending_pods else 'no' }}"
+    HG_ALLOW_CORDONED: "{{ health_gate_allow_cordoned }}"
+  delegate_to: localhost
+  register: pug_result
+  changed_when: false
+  failed_when: false
+  retries: "{{ (post_uncordon_gate_timeout_seconds | int // post_uncordon_gate_poll_interval_seconds | int) | int }}"
+  delay: "{{ post_uncordon_gate_poll_interval_seconds | int }}"
+  until: pug_result.stdout is defined and pug_result.stdout.startswith('HEALTHY')
+  when: enable_post_uncordon_health_gate
+
+- name: "[Post-Uncordon-Gate] Letzten Status anzeigen"
+  ansible.builtin.debug:
+    msg: "Post-Uncordon-Gate fuer {{ inventory_hostname }}: {{ pug_result.stdout | default('(kein Output)') }}"
+  when: enable_post_uncordon_health_gate
+
+- name: "[Post-Uncordon-Gate] ABBRUCH wenn Cluster nach Timeout nicht gesund"
+  ansible.builtin.assert:
+    that:
+      - pug_result.stdout is defined
+      - pug_result.stdout.startswith('HEALTHY')
+    fail_msg: |
+      Post-Uncordon-Gate NICHT erfuellt nach {{ post_uncordon_gate_timeout_seconds }}s.
+      Letzter Status: {{ pug_result.stdout | default('(kein Output)') }}
+      Node {{ inventory_hostname }} ist uncordoned, der Cluster aber nicht
+      gesund. Update wird HIER gestoppt, damit der naechste Node nicht auf
+      einem angeschlagenen Cluster gedraint wird.
+      Vor dem Neustart des Playbooks pruefen:
+        - CNPG: kubectl cnpg --context {{ kubectl_context }} status <cluster> -n {{ mariadb_galera_namespace }}
+        - Longhorn: Volumes mit robustness != healthy
+        - kubectl get nodes (kein SchedulingDisabled)
+    success_msg: "Cluster nach Uncordon von {{ inventory_hostname }} voll gesund."
+  when: enable_post_uncordon_health_gate
+
 - name: Verifikation erfolgreich
   ansible.builtin.debug:
-    msg: "Node {{ inventory_hostname }} uncordoned, Pods OK, CNPG-Cluster healthy."
+    msg: "Node {{ inventory_hostname }} uncordoned, Pods OK, CNPG-Cluster healthy, Health-Gate bestanden."

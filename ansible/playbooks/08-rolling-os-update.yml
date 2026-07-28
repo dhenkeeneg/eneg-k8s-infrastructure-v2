@@ -9,7 +9,8 @@
 #   - Cordon + Drain
 #   - APT Update + Upgrade
 #   - Reboot (Strategie: "Immer wenn Pakete installiert")
-#   - Uncordon + Pod-/CNPG-Verifikation
+#     ODER Shutdown + manuelle vSphere-Aenderung (node_power_action=shutdown)
+#   - Uncordon + Pod-/CNPG-Verifikation + Post-Uncordon-Health-Gate
 #   - Snapshot Cleanup
 #
 # Aufruf:
@@ -25,6 +26,15 @@
 # Variablen-Override:
 #   -e enable_prewarm=false             : Pre-Warming deaktivieren
 #   -e snapshot_delete_on_success=false : Snapshots behalten (manuell loeschen)
+#   -e node_power_action=shutdown       : Node ausschalten statt rebooten, dann
+#                                         passiv auf SSH-Rueckkehr warten.
+#                                         Fuer Hardware-Aenderungen an der VM,
+#                                         z.B. SCSI-Controller LSI -> PVSCSI.
+#                                         Runbook: docs/runbooks/
+#                                         scsi-controller-lsilogic-to-pvscsi.md
+#   -e post_uncordon_gate_timeout_seconds=7200
+#                                       : PROD, wenn grosse Longhorn-Rebuilds
+#                                         erwartet werden (vgl. 152 GB am 25.07.)
 # =============================================================================
 
 # -----------------------------------------------------------------------------
@@ -134,7 +144,15 @@
       ansible.builtin.import_role:
         name: rolling_os_update
         tasks_from: reboot_if_changed.yml
+      when: node_power_action | default('reboot') == 'reboot'
       tags: [reboot]
+
+    - name: Shutdown fuer Hardware-Aenderung (statt Reboot)
+      ansible.builtin.import_role:
+        name: rolling_os_update
+        tasks_from: shutdown_for_hw_change.yml
+      when: node_power_action | default('reboot') == 'shutdown'
+      tags: [reboot, hw-change]
 
     - name: Uncordon und Verifikation
       ansible.builtin.import_role:

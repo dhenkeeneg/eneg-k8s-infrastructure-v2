@@ -1,0 +1,207 @@
+---
+# =============================================================================
+# Shutdown fuer Hardware-Aenderung an der VM (Alternative zu reboot_if_changed)
+# =============================================================================
+# Aktivierung: -e node_power_action=shutdown
+#
+# Anlass 2026-07-28: Umstellung des SCSI-Controllers aller K8s-Nodes von
+# LSI Logic Parallel (mptspi) auf VMware Paravirtual (vmw_pvscsi). Diese
+# Aenderung ist nur bei ausgeschalteter VM moeglich, ein Reboot genuegt nicht.
+#
+# Ablauf:
+#   1. initramfs ALLER installierten Kernel gegen das Zielmodul pruefen (Assert)
+#   2. Node herunterfahren, warten bis SSH weg ist
+#   3. Passiv warten bis SSH zurueck ist - in dieser Zeit stellt der
+#      Administrator in vSphere den Controller um und schaltet die VM ein
+#   4. Verifikation des SCSI-Host-Treibers (Assert)
+#   5. Warten bis Node aus Cluster-Sicht Ready ist
+#
+# Der Node bleibt in dieser ganzen Phase cordoned und gedraint. Uncordon macht
+# erst uncordon_verify.yml im Anschluss.
+#
+# ZEITBUDGET: Schritt 2 bis 5 sollten unter Longhorns
+# replicaReplenishmentWaitInterval (1200s, gesetzt in base/) bleiben.
+# =============================================================================
+
+- name: "[HW-Change] Laufenden Kernel vor dem Shutdown protokollieren"
+  ansible.builtin.command:
+    cmd: uname -r
+  register: hw_kernel_before
+  changed_when: false
+
+- name: "[HW-Change] Ausgangszustand des SCSI-Treibers protokollieren"
+  ansible.builtin.shell:
+    cmd: "cat /sys/class/scsi_host/host*/proc_name 2>/dev/null | sort -u | paste -sd, -"
+  register: hw_scsi_before
+  changed_when: false
+
+- name: "[HW-Change] Ausgangszustand anzeigen"
+  ansible.builtin.debug:
+    msg: |
+      {{ inventory_hostname }} vor der Umstellung:
+        Kernel:        {{ hw_kernel_before.stdout }}
+        SCSI-Treiber:  {{ hw_scsi_before.stdout | default('(nicht lesbar)') }}
+
+# -----------------------------------------------------------------------------
+# 1) Boot-Faehigkeit sicherstellen, BEVOR ausgeschaltet wird
+# -----------------------------------------------------------------------------
+# Kritisch: apt_update.yml kann in diesem Lauf einen neuen Kernel installiert
+# haben, dessen initramfs frisch gebaut wurde. Fehlt dort vmw_pvscsi, findet der
+# Kernel nach der Controller-Umstellung kein Root-Device und die VM bootet nicht
+# mehr. Deshalb Assert und nicht nur Warnung - und deshalb an dieser Stelle,
+# nach dem Upgrade.
+- name: "[HW-Change] Installierte initramfs ermitteln"
+  ansible.builtin.find:
+    paths: /boot
+    patterns: "initrd.img-*"
+    file_type: file
+  register: hw_initramfs
+
+- name: "[HW-Change] ABBRUCH wenn keine initramfs gefunden"
+  ansible.builtin.assert:
+    that:
+      - hw_initramfs.files | length > 0
+    fail_msg: "Keine /boot/initrd.img-* auf {{ inventory_hostname }} gefunden - Abbruch vor dem Shutdown."
+    success_msg: "{{ hw_initramfs.files | length }} initramfs gefunden."
+
+- name: "[HW-Change] Pruefen ob {{ hw_change_verify_initramfs_module }} in jeder initramfs liegt"
+  ansible.builtin.shell:
+    cmd: "lsinitramfs {{ item.path | quote }} 2>/dev/null | grep -c '{{ hw_change_verify_initramfs_module }}' || true"
+  register: hw_initramfs_check
+  changed_when: false
+  loop: "{{ hw_initramfs.files }}"
+  loop_control:
+    label: "{{ item.path }}"
+
+- name: "[HW-Change] ABBRUCH wenn Modul in einer initramfs fehlt"
+  ansible.builtin.assert:
+    that:
+      - item.stdout | int > 0
+    fail_msg: |
+      Modul {{ hw_change_verify_initramfs_module }} fehlt in {{ item.item.path }}.
+      Nach der Umstellung des SCSI-Controllers wuerde dieser Kernel kein
+      Root-Device finden und nicht mehr booten.
+      ABBRUCH VOR DEM SHUTDOWN - die VM laeuft unveraendert weiter.
+      Bitte pruefen:
+        grep MODULES /etc/initramfs-tools/initramfs.conf   (soll: most)
+        update-initramfs -u -k all
+    success_msg: "{{ hw_change_verify_initramfs_module }} in {{ item.item.path }} vorhanden."
+  loop: "{{ hw_initramfs_check.results }}"
+  loop_control:
+    label: "{{ item.item.path }}"
+
+# -----------------------------------------------------------------------------
+# 2) Herunterfahren
+# -----------------------------------------------------------------------------
+# poll: 0 = fire and forget. Die SSH-Verbindung bricht waehrend des Shutdowns
+# ab, ein wartender Task wuerde als fehlgeschlagen gelten.
+- name: "[HW-Change] Node herunterfahren"
+  ansible.builtin.shell:
+    cmd: "sleep 2 && /sbin/shutdown -h now 'Ansible: Shutdown fuer Hardware-Aenderung'"
+  async: 30
+  poll: 0
+  changed_when: true
+
+- name: "[HW-Change] Warten bis SSH-Port weg ist (VM ist aus)"
+  ansible.builtin.wait_for:
+    host: "{{ ansible_host | default(inventory_hostname) }}"
+    port: 22
+    state: stopped
+    timeout: 300
+  delegate_to: localhost
+  become: false
+
+# -----------------------------------------------------------------------------
+# 3) Manuelle vSphere-Aenderung, passives Warten
+# -----------------------------------------------------------------------------
+- name: "[HW-Change] HANDLUNGSAUFFORDERUNG"
+  ansible.builtin.debug:
+    msg: |
+      ============================================================
+      {{ inventory_hostname }} ist heruntergefahren.
+
+      Jetzt in vSphere (vcenter-a.eneg.de):
+        1. VM {{ inventory_hostname }} -> Einstellungen bearbeiten
+        2. SCSI-Controller 0 -> Typ: VMware Paravirtual
+        3. OK, dann VM einschalten
+
+      Das Playbook wartet passiv bis zu {{ hw_change_wait_timeout_seconds }}s
+      auf die SSH-Rueckkehr. Kein Enter noetig.
+
+      Zeitbudget im Blick behalten: unter 1200s bleiben, sonst startet
+      Longhorn Replica-Replenishment waehrend der Node aus ist.
+      ============================================================
+  delegate_to: localhost
+  become: false
+
+- name: "[HW-Change] Passiv warten bis Node wieder erreichbar ist"
+  ansible.builtin.wait_for_connection:
+    delay: 15
+    sleep: 10
+    timeout: "{{ hw_change_wait_timeout_seconds | int }}"
+
+# -----------------------------------------------------------------------------
+# 4) Verifikation: laeuft der Zieltreiber?
+# -----------------------------------------------------------------------------
+# /sys/class/scsi_host/host*/proc_name ist die verlaessliche Quelle:
+#   vmw_pvscsi = VMware Paravirtual, mptspi = LSI Logic Parallel.
+# Auf einer VM koennen mehrere SCSI-Hosts existieren (z.B. ata_piix), daher
+# Substring-Pruefung statt Gleichheit.
+- name: "[HW-Change] Neuen SCSI-Host-Treiber auslesen"
+  ansible.builtin.shell:
+    cmd: "cat /sys/class/scsi_host/host*/proc_name 2>/dev/null | sort -u | paste -sd, -"
+  register: hw_scsi_after
+  changed_when: false
+
+- name: "[HW-Change] Laufenden Kernel nach dem Boot auslesen"
+  ansible.builtin.command:
+    cmd: uname -r
+  register: hw_kernel_after
+  changed_when: false
+
+- name: "[HW-Change] dmesg-Auszug zum Treiber (Protokoll)"
+  ansible.builtin.shell:
+    cmd: "dmesg | grep -i '{{ hw_change_expect_scsi_driver }}' || true"
+  register: hw_dmesg
+  changed_when: false
+
+- name: "[HW-Change] Vorher/Nachher anzeigen"
+  ansible.builtin.debug:
+    msg: |
+      {{ inventory_hostname }}:
+        Kernel        {{ hw_kernel_before.stdout }}  ->  {{ hw_kernel_after.stdout }}
+        SCSI-Treiber  {{ hw_scsi_before.stdout | default('?') }}  ->  {{ hw_scsi_after.stdout | default('?') }}
+      dmesg:
+      {{ hw_dmesg.stdout | default('(keine passenden Zeilen)') }}
+
+- name: "[HW-Change] ABBRUCH wenn Zieltreiber nicht aktiv ist"
+  ansible.builtin.assert:
+    that:
+      - hw_change_expect_scsi_driver in (hw_scsi_after.stdout | default(''))
+    fail_msg: |
+      Erwarteter SCSI-Treiber {{ hw_change_expect_scsi_driver }} ist nicht aktiv.
+      Gefunden: {{ hw_scsi_after.stdout | default('(nicht lesbar)') }}
+      Der Controller wurde in vSphere offenbar nicht umgestellt.
+      Der Node bleibt cordoned, das Update wird gestoppt.
+    success_msg: "{{ inventory_hostname }} laeuft jetzt mit {{ hw_change_expect_scsi_driver }}."
+
+# -----------------------------------------------------------------------------
+# 5) Cluster-Sicht abwarten
+# -----------------------------------------------------------------------------
+- name: "[HW-Change] Warten bis Node aus Cluster-Sicht Ready ist (max 5 Min)"
+  ansible.builtin.command:
+    argv:
+      - kubectl
+      - --context
+      - "{{ kubectl_context }}"
+      - get
+      - node
+      - "{{ inventory_hostname }}"
+      - -o
+      - 'jsonpath={.status.conditions[?(@.type=="Ready")].status}'
+  delegate_to: localhost
+  register: hw_node_ready
+  until: hw_node_ready.stdout == "True"
+  retries: 30
+  delay: 10
+  changed_when: false

@@ -38,11 +38,93 @@ health_gate_poll_interval_seconds: 15
 # Longhorn-Rebuilds ins Gate einbeziehen (warten bis keine aktiven Rebuilds)
 health_gate_check_longhorn_rebuilds: true
 
+# ---------------------------------------------------------------------------
+# Health-Gate: Erweiterte Checks (2026-07-28, nach Timeline-Divergenz DEV)
+# ---------------------------------------------------------------------------
+# Anlass: cnpg-shared-3 (DEV) ist am 23.07. beim zweiten Update-Anlauf auf
+# Timeline 22 gestrandet, waehrend der Cluster ueber die Switchovers der
+# Node-Zyklen auf Timeline 24 weitergelaufen ist. Das alte Gate hat den Sturm
+# verhindert (Abbruch beim naechsten Node), die Divergenz selbst aber erst
+# einen Node zu spaet gesehen.
+
+# Longhorn-Volume-Robustness pruefen (attached muss healthy sein, faulted
+# blockiert immer). WICHTIG: schliesst das 20-Minuten-Fenster, in dem ein
+# Volume degraded ist, aber wegen replicaReplenishmentWaitInterval=1200s noch
+# KEIN Rebuild laeuft - dort meldete das alte Gate faelschlich HEALTHY.
+health_gate_check_longhorn_robustness: true
+
+# CNPG-Timeline und Primary-Rolle pruefen:
+#   - genau ein isPrimary=true
+#   - alle Instanzen melden dieselbe timeLineID
+#   - currentPrimary == targetPrimary (kein Switchover in flight)
+# Quelle: .status.instancesReportedState, ausgewertet von hg_cnpg_timeline.py.
+# Benoetigt python3 auf dem Ansible-Controller (durch Ansible selbst gegeben).
+health_gate_check_cnpg_timeline: true
+
+# Alle Nodes Ready und keiner unerwartet cordoned.
+# Adressiert den Fall k8s-prod-23 (drei Tage Restcordon -> DB-Pods Pending).
+health_gate_check_nodes: true
+
+# Keine Pods Pending mit PodScheduled=False (nicht platzierbar).
+health_gate_check_pending_pods: true
+
+# Escape-Hatch: Nodes, die cordoned sein DUERFEN, komma-separiert.
+# Normalfall leer - zum Gate-Zeitpunkt soll kein Node cordoned sein.
+health_gate_allow_cordoned: ""
+
+# ---------------------------------------------------------------------------
+# Post-Uncordon-Health-Gate
+# ---------------------------------------------------------------------------
+# Ruft dasselbe Skript NACH dem Uncordon des gerade aktualisierten Nodes auf,
+# bevor der Cooldown laeuft und der naechste Node dran ist. Damit stoppt ein
+# Lauf beim verursachenden Node selbst und nicht erst beim naechsten.
+enable_post_uncordon_health_gate: true
+
+# Timeout muss deutlich ueber replicaReplenishmentWaitInterval (1200s) liegen,
+# plus der eigentlichen Rebuild-Dauer. PROD-Erfahrung 25.07.2026: rund 152 GB
+# Rebuild-Volumen nach Rueckkehr von k8s-prod-23 (prometheus TSDB ~77,6 GB,
+# thanos-compactor ~50 GB, loki ~21 GB). Fuer PROD daher ggf. hochsetzen:
+#   -e post_uncordon_gate_timeout_seconds=7200
+post_uncordon_gate_timeout_seconds: 3600
+post_uncordon_gate_poll_interval_seconds: 20
+
 # kubectl drain Timeout (erhoeht wegen Volume-Detach + Maintenance-Operations)
 drain_timeout_seconds: 900
 
 # Reboot-Timeout (Ansible reboot module wartet auf SSH zurueck)
 reboot_timeout_seconds: 600
+
+# ---------------------------------------------------------------------------
+# Power-Aktion nach dem APT-Upgrade: reboot | shutdown
+# ---------------------------------------------------------------------------
+#   reboot   - Normalfall. reboot_if_changed.yml, Node kommt selbst zurueck.
+#   shutdown - Wartungsfenster mit Hardware-Aenderung an der VM. Der Node wird
+#              ausgeschaltet, das Playbook wartet passiv auf die SSH-Rueckkehr,
+#              waehrend der Administrator in vSphere die Aenderung vornimmt und
+#              die VM wieder einschaltet. Danach Treiber-Verifikation.
+# Aufruf: -e node_power_action=shutdown
+node_power_action: "reboot"
+
+# Passive Wartezeit auf die SSH-Rueckkehr nach dem Shutdown (Sekunden).
+# Grosszuegig, weil in dieser Zeit manuell in vSphere gearbeitet wird.
+# ACHTUNG Zeitbudget: Shutdown bis Node-Ready sollte unter Longhorns
+# replicaReplenishmentWaitInterval (1200s) bleiben, sonst beginnt Longhorn mit
+# Replica-Replenishment, waehrend der Node aus ist. Der scsi_type-Wechsel in
+# vSphere dauert unter einer Minute - in dem Fenster nichts anderes am Host tun.
+hw_change_wait_timeout_seconds: 1800
+
+# Erwarteter SCSI-Host-Treiber NACH der Umstellung.
+# Gelesen aus /sys/class/scsi_host/host*/proc_name.
+#   vmw_pvscsi = VMware Paravirtual (Ziel)
+#   mptspi     = LSI Logic Parallel (Ausgangszustand)
+hw_change_expect_scsi_driver: "vmw_pvscsi"
+
+# Kernel-Modul, das VOR dem Shutdown in jeder installierten initramfs liegen
+# muss. Ohne dieses Modul bootet der Kernel nach der Controller-Umstellung
+# nicht mehr (kein Root-Device). Der Check ist deshalb ein Assert und laeuft
+# NACH dem APT-Upgrade: ein frisch installierter Kernel bringt eine frisch
+# gebaute initramfs mit, die vorherige Pruefungen nicht abdecken.
+hw_change_verify_initramfs_module: "vmw_pvscsi"
 
 # Pakete, die waehrend Update geschuetzt sind (apt-mark hold)
 apt_hold_packages:
