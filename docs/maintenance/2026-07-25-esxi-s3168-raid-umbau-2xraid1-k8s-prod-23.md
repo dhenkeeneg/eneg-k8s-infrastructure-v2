@@ -342,6 +342,18 @@ kein Defektindiz. Ebenso `Charging Status: None` - das Modul ist voll, nicht lad
    Seither ueber drei Tage durchgehend stabil (`Ready-since 2026-07-25T07:28:49Z`).
    Journals sind inzwischen vermutlich ueberrollt. Bei Wiederholung sofort sichern.
 2. **Wirksamkeitsnachweis Virt-Resets** nach 7 und 30 Tagen Dauerlast nachtragen.
+   **ACHTUNG bei der Auswertung:** Ab 04.08.2026 wird k8s-prod-23 zusaetzlich vom
+   Legacy-SCSI-Controller (LSI Logic Parallel / mptspi) auf VMware Paravirtual
+   (vmw_pvscsi) umgestellt - Entscheidung vom 28.07.2026, Runbook
+   `docs/runbooks/scsi-controller-lsilogic-to-pvscsi.md`.
+   Damit gilt:
+   - Die **7-Tage-Messung (ab 04.08.)** ist noch sauber dem RAID-Umbau zuzuordnen,
+     sofern sie VOR der Controller-Umstellung erhoben wird. Sie ist der eigentliche
+     Wirksamkeitsnachweis und muss deshalb zwingend zuerst dokumentiert werden.
+   - Die **30-Tage-Messung** ist eine Mischmessung aus RAID-Umbau UND
+     Controller-Wechsel. Bewusst akzeptiert. Aus ihr darf keine kausale Aussage
+     ueber den RAID-Umbau allein abgeleitet werden - siehe Lessons Learned Punkt 8
+     in diesem Dokument.
 3. **UNMAP/TRIM-Durchreichung ungeklaert.** Beide VDs melden `Unmap Enabled = N/A`. Ob
    der PERC UNMAP an die SSDs weitergibt, ist offen - langfristig relevant fuer Write
    Amplification. VMFS-seitig ist Space Reclamation aktiv (Prioritaet Niedrig).

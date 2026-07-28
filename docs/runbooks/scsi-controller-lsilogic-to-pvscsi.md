@@ -83,21 +83,34 @@ Strikt sequenziell, eine Umgebung pro Wartungsfenster:
 | 2 | TEST, alle drei Nodes | Kernel 6.8.0-136 ist installiert, Reboot stand aus |
 | 3 | k8s-prod-21 einzeln | Kernel 6.8.0-136 installiert, Reboot stand aus |
 | 4 | k8s-prod-22 einzeln | Kernel 6.8.0-136 installiert, laeuft noch auf 6.8.0-111 |
-| 5 | k8s-prod-23 isoliert | siehe Warnung unten, laeuft bereits auf 6.8.0-136 |
+| 5 | k8s-prod-23 isoliert | **erst ab 04.08.2026**, nach der 7-Tage-Messung. Laeuft bereits auf 6.8.0-136 |
 
 Innerhalb einer Umgebung arbeitet Play 3 mit `order: reverse_sorted`, also
 Node 23 zuerst, dann 22, dann 21.
 
-**Warnung zu k8s-prod-23:** Dieser Node ist Messobjekt fuer die Wirksamkeit
-des RAID-Umbaus vom 25.07.2026 (RAID10 auf vier Consumer-SATA-SSDs ohne PLP
-zu zwei unabhaengigen RAID1). Die Virt-Reset-Nachmessung ist fuer 04.08.
-(7 Tage) und Ende August (30 Tage) vorgesehen, dokumentiert in
+**Terminierung k8s-prod-23 - entschieden am 28.07.2026:** Umstellung **ab
+04.08.2026**, also unmittelbar nach der 7-Tage-Nachmessung des RAID-Umbaus vom
+25.07.2026.
+
+Der Node ist Messobjekt fuer die Wirksamkeit dieses Umbaus (RAID10 auf vier
+Consumer-SATA-SSDs ohne PLP zu zwei unabhaengigen RAID1), dokumentiert in
 `docs/maintenance/2026-07-25-esxi-s3168-raid-umbau-2xraid1-k8s-prod-23.md`.
-Eine Controller-Umstellung mitten im Beobachtungsfenster macht die Messung
-nicht mehr eindeutig zuordenbar. Vor Schritt 5 muss entschieden werden, ob
-nach der 7-Tage- oder erst nach der 30-Tage-Messung umgestellt wird. Bis
-dahin bleibt prod-23 als einziger Node auf `lsilogic` - das ist gewollt und
-kein Fehler.
+Daraus folgt eine **harte Vorbedingung**:
+
+> Die 7-Tage-Messung muss erhoben und dokumentiert sein, **bevor** der
+> Controller umgestellt wird. Sie ist der einzige saubere Wirksamkeitsnachweis
+> fuer den RAID-Umbau.
+
+Die 30-Tage-Messung wird damit eine Mischmessung aus RAID-Umbau und
+Controller-Wechsel. Das ist bewusst akzeptiert, weil die Alternative bedeutet
+haette, prod-23 rund vier Wochen als einzigen Node auf dem Legacy-Controller
+zu belassen. Aus der 30-Tage-Messung darf entsprechend **keine kausale Aussage
+ueber den RAID-Umbau allein** abgeleitet werden. Ein Hinweis dazu steht bei
+den offenen Punkten des Wartungsdokuments, damit die Zahl spaeter nicht
+falsch gelesen wird.
+
+Bis zum 04.08. bleibt prod-23 als einziger Node auf `lsilogic` - das ist
+gewollt und kein Fehler.
 
 ---
 
@@ -414,3 +427,4 @@ Nicht Teil dieses Runbooks, aber im selben Themenfeld:
 | Datum | Aenderung |
 |---|---|
 | 2026-07-28 | Erstfassung. Packer und Terraform umgestellt, Health-Gate um Timeline-, Robustness-, Node- und Pending-Checks erweitert, Shutdown-Modus eingefuehrt. |
+| 2026-07-28 | Terminierung k8s-prod-23 entschieden: ab 04.08.2026 nach der 7-Tage-Messung. Mischmessung bei 30 Tagen bewusst akzeptiert, Hinweis im Wartungsdokument ergaenzt. |
