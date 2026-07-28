@@ -37,10 +37,15 @@ k8s-prod-23 trug zwischen 25.07. und 28.07. faktisch keine DB-Last (siehe Abschn
 
 ### Nachher
 
-| VD  | Name              | Layout | Disks      | Groesse   | Datastore          | Belegung        |
-|-----|-------------------|--------|------------|-----------|--------------------|-----------------|
-| 238 | D02-D03_R1_SSD1   | RAID1  | Slot 2 + 3 | 3,638 TB  | S3168_SSD_01_VMS   | k8s-prod-23     |
-| 236 | D04-D05_R1_SSD2   | RAID1  | Slot 4 + 5 | 3,638 TB  | S3168_SSD_02_VMS   | Windows-VMs     |
+| VD  | Name              | Layout | Disks      | Groesse   | Datastore          | Belegung                 |
+|-----|-------------------|--------|------------|-----------|--------------------|--------------------------|
+| 236 | D04-D05_R1_SSD2   | RAID1  | Slot 4 + 5 | 3,638 TB  | S3168_SSD_02_K8s   | k8s-prod-23 (allein)     |
+| 238 | D02-D03_R1_SSD1   | RAID1  | Slot 2 + 3 | 3,638 TB  | S3168_SSD_01_VMS   | SQL01, STREIT3, TS02     |
+
+Der Datastore-Name `S3168_SSD_01_VMS` wurde wiederverwendet, bezeichnet jetzt aber ein
+anderes Device (VD238) und traegt die Windows-VMs. k8s-prod-23 liegt allein auf dem neu
+benannten `S3168_SSD_02_K8s` (VD236). Verifiziert via `esxcli storage vmfs extent list`
+und `vim-cmd vmsvc/getallvms` am 28.07.
 
 Unveraendert: VD237 (D07-D15_R6_HDD, RAID6, 15,278 TB) und VD239 (D00-D01_R1_BOOT,
 RAID1, 558,375 GB). Dedicated Hot Spare auf Slot 7 blieb korrekt an DG0 gebunden.
@@ -51,10 +56,10 @@ perccli-Abfragen daher immer mit `/c0/v236` bzw. `/c0/v238`, nicht `/c0/v0`.
 
 ### NAA-IDs (Zuordnung VD <-> ESXi-Device)
 
-| VD  | Name            | SCSI NAA Id                        |
-|-----|-----------------|------------------------------------|
-| 238 | D02-D03_R1_SSD1 | 6c0470e0e4613e0031f737261ac43758   |
-| 236 | D04-D05_R1_SSD2 | 6c0470e0e4613e0031f73855de95a323   |
+| VD  | Name            | SCSI NAA Id                        | Datastore          |
+|-----|-----------------|------------------------------------|--------------------|
+| 236 | D04-D05_R1_SSD2 | 6c0470e0e4613e0031f73855de95a323   | S3168_SSD_02_K8s   |
+| 238 | D02-D03_R1_SSD1 | 6c0470e0e4613e0031f737261ac43758   | S3168_SSD_01_VMS   |
 
 Die alte RAID10-VD hatte `6c0470e0e4613e0030cea9109aa63fa7` (nach Detach vollstaendig
 aus der Geraeteliste verschwunden, kein `detached remove` noetig).
@@ -118,7 +123,7 @@ den Reboot, den man vermeiden will.
 8. **Zwei Datastores anlegen:** VMFS 6, gesamtes Device (3725,5 GB), Blockgroesse 1 MB,
    Rueckgewinnungs-Granularitaet 1 MB, Prioritaet "Niedrig" (haelt automatisches UNMAP
    aktiv, ohne Lastspitzen).
-9. **BGI abwarten** (siehe unten), dann k8s-prod-23 auf `S3168_SSD_01_VMS`
+9. **BGI abwarten** (siehe unten), dann k8s-prod-23 auf `S3168_SSD_02_K8s` (VD236)
    zurueckmigrieren, Format Thick Provision Eager Zeroed.
 10. **Einschalten** 25.07. ca. 13:48 UTC.
 
