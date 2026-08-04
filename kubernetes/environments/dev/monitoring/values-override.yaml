@@ -23,22 +23,15 @@ defaultRules:
 
 # --- etcd-Monitoring ---
 # k3s exponiert etcd-Metriken bereits (Ansible k3s-config: etcd-expose-metrics: true)
-# auf http://<node>:2381/metrics (HTTP, ohne TLS). Der Chart-Default sucht statische
-# kube-etcd-Pods, die es bei k3s (eingebettetes etcd) nicht gibt -> daher explizite
-# Endpoints auf die Control-Plane-Node-IPs. Damit werden etcd-fsync/commit-Latenzen
-# sichtbar (zentrale Stabilitaetsmetrik fuer das 3-Node-etcd).
+# auf http://<node>:2381/metrics (HTTP, ohne TLS).
+# Der Chart-Weg ueber kubeEtcd.endpoints scheitert hier: ArgoCD schliesst die
+# Ressource /Endpoints per resource.exclusions aus (ExcludedResourceWarning),
+# daher wird das manuelle Endpoints-Objekt nie angewandt und bleibt leer.
+# Loesung: direkter Prometheus-Scrape via additionalScrapeConfigs (static_configs
+# auf die Control-Plane-Node-IPs, siehe prometheusSpec unten) - unabhaengig von
+# Endpoints-Objekten. kubeEtcd-Exporter daher deaktiviert.
 kubeEtcd:
-  enabled: true
-  endpoints:
-    - 192.168.180.21
-    - 192.168.180.22
-    - 192.168.180.23
-  service:
-    enabled: true
-    port: 2381
-    targetPort: 2381
-  serviceMonitor:
-    scheme: http
+  enabled: false
 
 # --- Prometheus DEV ---
 prometheus:
@@ -47,6 +40,21 @@ prometheus:
     # Genutzt von alloy-vcenter (OTel vcenter-Receiver -> prometheus.remote_write).
     # Endpoint: /api/v1/write auf Port 9090. Nur DEV (vCenter-Monitoring startet in DEV).
     enableRemoteWriteReceiver: true
+
+    # etcd-Scrape (k3s eingebettetes etcd, Metriken auf <node>:2381/metrics, HTTP).
+    # Direkter static_configs-Scrape statt kubeEtcd-Exporter, weil ArgoCD /Endpoints
+    # ausschliesst (siehe kubeEtcd-Kommentar oben). Liefert etcd_disk_wal_fsync_*,
+    # etcd_server_has_leader, etcd_network_* etc. job=kube-etcd passt zu den
+    # etcd-Default-Alertregeln.
+    additionalScrapeConfigs:
+      - job_name: kube-etcd
+        metrics_path: /metrics
+        scheme: http
+        static_configs:
+          - targets:
+              - 192.168.180.21:2381
+              - 192.168.180.22:2381
+              - 192.168.180.23:2381
 
     # DEV-Retention: 7 Tage / max. 12 GB (Sicherheitsmarge zu 25Gi PVC, bevor TSDB Schreibstopp)
     # PVC 2026-06-21 von 20Gi auf 25Gi erweitert (TSDB-WAL-Deadlock aufgeloest, siehe Runbook)
