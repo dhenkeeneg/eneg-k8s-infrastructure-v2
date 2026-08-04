@@ -18,8 +18,13 @@ Analyse ueber kubectl (MCP) und Prometheus/Grafana (DEV):
 - **Hauptverursacher: `registry-zot`** (3 Pods) - jeder Pod lief durchgehend am
   CPU-Limit (1 Core), im Leerlauf, zusammen **~2,9 Cores**. 7-Tage-Verlauf flach.
 - **Kyverno ~20m, Trivy-Operator ~6m** - vernachlaessigbar, NICHT die Ursache.
-- Root-Cause: zot-**`search`-Extension** (inkl. internem Trivy/CVE-Scanner) auf
-  S3-Backend (nas20) verursacht einen Dauer-Busy-Loop. Logs zeigten nur Health-Probes.
+- **Root-Cause (final):** die zot-**`sync`-Extension**, konkret der **pollInterval-Mirror**
+  (ghcr `dhenkeeneg/**` alle 15 Min gegen das S3-Backend nas20), verursacht den Dauer-Busy-Loop.
+  Logs zeigten nur Health-Probes.
+- **Korrektur:** Zuerst wurde `search`/CVE vermutet und deaktiviert - das war ein Trugschluss.
+  Das CPU-Abfallen fiel mit einem Pod-Neustart zusammen; mit deaktiviertem search rampte die
+  Last spaeter wieder auf ~1 Core/Pod hoch. Erst das Entfernen des pollInterval-Mirrors
+  (bei erhaltenem onDemand-Pull-Through) senkte zot **dauerhaft** auf ~4m/Pod (25 Min stabil).
 - Gegenprobe: k8s-test hat **keine** zot-Registry und lag entsprechend niedriger.
 
 ## ESXi-Host-Analyse (vCenter-Metriken)
@@ -38,11 +43,14 @@ Analyse ueber kubectl (MCP) und Prometheus/Grafana (DEV):
 
 | Schritt | Aenderung | Effekt |
 |--------|-----------|--------|
-| Phase 1 | zot `replicaCount` 3 -> 1 | ~1,9 Cores frei |
-| Phase 2 | zot `search` + `ui` Extensions = false | zot ~964m -> **3m** (Ursache bestaetigt) |
-| Danach | zot auf **2 Replicas** (HA) | vernachlaessigbare Last (~6m gesamt) |
+| Zwischenschritt | zot `replicaCount` 3 -> 1 | ~1,9 Cores frei (temporaer) |
+| Irrweg | zot `search` + `ui` = false | schien zu wirken, war aber Neustart-Artefakt - Last kam zurueck |
+| HA zurueck | zot auf **2 Replicas** | - |
+| **Eigentlicher Fix** | zot `sync` **pollInterval-Mirror entfernt**, onDemand-Pull-Through bleibt | zot dauerhaft **~4m/Pod** (~8m gesamt) |
 
-- **Ergebnis:** `esx-test` von 88-99% auf **~65-80%** (~20 Prozentpunkte).
+- **Ergebnis:** `esx-test` von 88-99% auf im Mittel **~65-75%**; einzelne Lastspitzen erreichen
+  weiterhin ~85-90% (inhaerente Grundlast des kleinen Hosts, nicht mehr zot).
+- `search`/`ui` bleiben deaktiviert (nicht benoetigt, schaden nicht).
 - Kyverno / Trivy-Operator bewusst **nicht** abgeschaltet (Policy/Security > ~26m Ersparnis).
 
 ## Storage-Check (Nebenbefund)
@@ -92,7 +100,7 @@ Auf Wunsch (esx1 ist verplant, kein k8s-Bezug):
 
 ## Geaenderte Dateien (alle DEV)
 
-- `kubernetes/environments/dev/registry/values-override.yaml` (replicaCount 3->2, search/ui=false)
+- `kubernetes/environments/dev/registry/values-override.yaml` (replicaCount 3->2, search/ui=false, sync-pollInterval-Mirror entfernt = eigentlicher Fix)
 - `kubernetes/environments/dev/monitoring/values-override.yaml` (kubeEtcd=false, additionalScrapeConfigs)
 - `kubernetes/environments/dev/monitoring-alerts/vsphere-hosts-dashboard-cm.yaml` (Host-Variable, esx1-Ausschluss)
 - `kubernetes/environments/dev/alloy-vcenter/values.yaml` (Filter drop_esx1)
