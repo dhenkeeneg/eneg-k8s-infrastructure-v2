@@ -135,7 +135,7 @@ configFiles:
           "enable": false
         },
         "sync": {
-          "enable": true,
+          "enable": false,
           "credentialsFile": "/ghcr-credentials/credentials.json",
           "downloadDir": "/var/lib/registry/sync-tmp",
           "registries": [
