@@ -10,11 +10,11 @@
 # damit der Mirror waehrend Node-Drains immer erreichbar bleibt.
 # Backend ist S3 (NAS10), daher Multi-Replica unproblematisch.
 #
-# 2026-08-04: Temporaer auf 1 Replica reduziert (Phase 1 CPU-Last-Senkung).
-# Jeder zot-Pod laeuft dauerhaft am 1-Core-Limit (Busy-Loop im Leerlauf, vmtl.
-# search/CVE-Extension auf S3-Backend) -> 3 Replicas = ~2,9 Cores Dauerlast.
-# HA in DEV unkritisch. Rueckbau auf 3 nach Ursachenbehebung (search) moeglich.
-replicaCount: 1
+# 2026-08-04: search/CVE-Extension war die Ursache des Busy-Loops (jede Replica
+# lief am 1-Core-Limit). Nach Deaktivierung (Phase 2, search+ui=false) nur noch ~3m/Pod.
+# Daher 2 Replicas fuer HA bei vernachlaessigbarer CPU-Last (S3-Backend, kein Quorum
+# noetig). 3. Replica als unnoetig entfallen.
+replicaCount: 2
 
 affinity:
   podAntiAffinity:
