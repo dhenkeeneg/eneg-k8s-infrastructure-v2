@@ -4,9 +4,11 @@
 # Variablen: $vcenter (a/b), $host (Multi-Select)
 # Sektionen: Cluster-Kapazitaet, Host-CPU, Host-RAM, Overcommit-Druck,
 #            Datastore-Belegung, Disk-Latenz (das ~200ms-Thema)
-# 2026-08-04: Host-Rename (IP->DNS) via label_replace normalisiert
-#             (192.168.160.70->esx-test, 192.168.160.10->esx1), damit die
-#             Zeitreihen ueber die Neu-Einbindung hinweg durchgehen (Ansicht Host=All).
+# 2026-08-04: Host wurde umbenannt (IP->DNS: 192.168.160.70->esx-test,
+#             192.168.160.10->esx1). Alte IP- und neue DNS-Zeitreihe bleiben getrennt;
+#             die alte IP-Serie laeuft mit der 7d-Prometheus-Retention aus, danach
+#             ist alles rein DNS. (label_replace-Merge verworfen: funktioniert in roher
+#             PromQL, bricht aber die Grafana-Panels in Kombination mit $host.)
 # Ordner: Root (General) - bewusst ohne grafana_folder
 apiVersion: v1
 kind: ConfigMap
@@ -124,7 +126,7 @@ data:
           "datasource": {"type": "prometheus", "uid": "prometheus"},
           "fieldConfig": {"defaults": {"unit": "percent", "min": 0, "max": 100,
             "thresholds": {"mode": "absolute", "steps": [{"color": "green", "value": null}, {"color": "yellow", "value": 70}, {"color": "red", "value": 85}]}}},
-          "targets": [{"expr": "label_replace(label_replace(vcenter_host_cpu_utilization_percent{vcenter=~\"$vcenter\", vcenter_host=~\"$host\"}, \"vcenter_host\", \"esx-test.eneg.de\", \"vcenter_host\", \"^192\\.168\\.160\\.70$\"), \"vcenter_host\", \"esx1.eneg.de\", \"vcenter_host\", \"^192\\.168\\.160\\.10$\")", "legendFormat": "{{vcenter}}/{{vcenter_host}}"}],
+          "targets": [{"expr": "vcenter_host_cpu_utilization_percent{vcenter=~\"$vcenter\", vcenter_host=~\"$host\"}", "legendFormat": "{{vcenter}}/{{vcenter_host}}"}],
           "options": {"legend": {"displayMode": "table", "placement": "right", "calcs": ["lastNotNull", "max"]}}
         },
         {
@@ -132,7 +134,7 @@ data:
           "gridPos": {"h": 8, "w": 12, "x": 12, "y": 6},
           "datasource": {"type": "prometheus", "uid": "prometheus"},
           "fieldConfig": {"defaults": {"unit": "rothz", "custom": {}}},
-          "targets": [{"expr": "(label_replace(label_replace(vcenter_host_cpu_capacity_MHz{vcenter=~\"$vcenter\", vcenter_host=~\"$host\"}, \"vcenter_host\", \"esx-test.eneg.de\", \"vcenter_host\", \"^192\\.168\\.160\\.70$\"), \"vcenter_host\", \"esx1.eneg.de\", \"vcenter_host\", \"^192\\.168\\.160\\.10$\") - label_replace(label_replace(vcenter_host_cpu_usage_MHz{vcenter=~\"$vcenter\", vcenter_host=~\"$host\"}, \"vcenter_host\", \"esx-test.eneg.de\", \"vcenter_host\", \"^192\\.168\\.160\\.70$\"), \"vcenter_host\", \"esx1.eneg.de\", \"vcenter_host\", \"^192\\.168\\.160\\.10$\")) * 1000000", "legendFormat": "{{vcenter}}/{{vcenter_host}}"}],
+          "targets": [{"expr": "(vcenter_host_cpu_capacity_MHz{vcenter=~\"$vcenter\", vcenter_host=~\"$host\"} - vcenter_host_cpu_usage_MHz{vcenter=~\"$vcenter\", vcenter_host=~\"$host\"}) * 1000000", "legendFormat": "{{vcenter}}/{{vcenter_host}}"}],
           "options": {"legend": {"displayMode": "table", "placement": "right", "calcs": ["lastNotNull", "min"]}}
         },
         {
@@ -145,7 +147,7 @@ data:
           "datasource": {"type": "prometheus", "uid": "prometheus"},
           "fieldConfig": {"defaults": {"unit": "percent", "min": 0, "max": 100,
             "thresholds": {"mode": "absolute", "steps": [{"color": "green", "value": null}, {"color": "yellow", "value": 75}, {"color": "red", "value": 90}]}}},
-          "targets": [{"expr": "label_replace(label_replace(vcenter_host_memory_utilization_percent{vcenter=~\"$vcenter\", vcenter_host=~\"$host\"}, \"vcenter_host\", \"esx-test.eneg.de\", \"vcenter_host\", \"^192\\.168\\.160\\.70$\"), \"vcenter_host\", \"esx1.eneg.de\", \"vcenter_host\", \"^192\\.168\\.160\\.10$\")", "legendFormat": "{{vcenter}}/{{vcenter_host}}"}],
+          "targets": [{"expr": "vcenter_host_memory_utilization_percent{vcenter=~\"$vcenter\", vcenter_host=~\"$host\"}", "legendFormat": "{{vcenter}}/{{vcenter_host}}"}],
           "options": {"legend": {"displayMode": "table", "placement": "right", "calcs": ["lastNotNull", "max"]}}
         },
         {
@@ -153,7 +155,7 @@ data:
           "gridPos": {"h": 8, "w": 12, "x": 12, "y": 15},
           "datasource": {"type": "prometheus", "uid": "prometheus"},
           "fieldConfig": {"defaults": {"unit": "mebibytes"}},
-          "targets": [{"expr": "label_replace(label_replace(vcenter_host_memory_capacity_mebibytes{vcenter=~\"$vcenter\", vcenter_host=~\"$host\"}, \"vcenter_host\", \"esx-test.eneg.de\", \"vcenter_host\", \"^192\\.168\\.160\\.70$\"), \"vcenter_host\", \"esx1.eneg.de\", \"vcenter_host\", \"^192\\.168\\.160\\.10$\") - label_replace(label_replace(vcenter_host_memory_usage_mebibytes{vcenter=~\"$vcenter\", vcenter_host=~\"$host\"}, \"vcenter_host\", \"esx-test.eneg.de\", \"vcenter_host\", \"^192\\.168\\.160\\.70$\"), \"vcenter_host\", \"esx1.eneg.de\", \"vcenter_host\", \"^192\\.168\\.160\\.10$\")", "legendFormat": "{{vcenter}}/{{vcenter_host}}"}],
+          "targets": [{"expr": "vcenter_host_memory_capacity_mebibytes{vcenter=~\"$vcenter\", vcenter_host=~\"$host\"} - vcenter_host_memory_usage_mebibytes{vcenter=~\"$vcenter\", vcenter_host=~\"$host\"}", "legendFormat": "{{vcenter}}/{{vcenter_host}}"}],
           "options": {"legend": {"displayMode": "table", "placement": "right", "calcs": ["lastNotNull", "min"]}}
         },
         {
