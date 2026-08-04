@@ -21,6 +21,25 @@ defaultRules:
     KubeCPUOvercommit: true
     KubeJobFailed: true
 
+# --- etcd-Monitoring ---
+# k3s exponiert etcd-Metriken bereits (Ansible k3s-config: etcd-expose-metrics: true)
+# auf http://<node>:2381/metrics (HTTP, ohne TLS). Der Chart-Default sucht statische
+# kube-etcd-Pods, die es bei k3s (eingebettetes etcd) nicht gibt -> daher explizite
+# Endpoints auf die Control-Plane-Node-IPs. Damit werden etcd-fsync/commit-Latenzen
+# sichtbar (zentrale Stabilitaetsmetrik fuer das 3-Node-etcd).
+kubeEtcd:
+  enabled: true
+  endpoints:
+    - 192.168.180.21
+    - 192.168.180.22
+    - 192.168.180.23
+  service:
+    enabled: true
+    port: 2381
+    targetPort: 2381
+  serviceMonitor:
+    scheme: http
+
 # --- Prometheus DEV ---
 prometheus:
   prometheusSpec:
