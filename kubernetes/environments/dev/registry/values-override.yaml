@@ -9,7 +9,12 @@
 # Phase 12: 3 Replicas mit Anti-Affinity + topologySpreadConstraints,
 # damit der Mirror waehrend Node-Drains immer erreichbar bleibt.
 # Backend ist S3 (NAS10), daher Multi-Replica unproblematisch.
-replicaCount: 3
+#
+# 2026-08-04: Temporaer auf 1 Replica reduziert (Phase 1 CPU-Last-Senkung).
+# Jeder zot-Pod laeuft dauerhaft am 1-Core-Limit (Busy-Loop im Leerlauf, vmtl.
+# search/CVE-Extension auf S3-Backend) -> 3 Replicas = ~2,9 Cores Dauerlast.
+# HA in DEV unkritisch. Rueckbau auf 3 nach Ursachenbehebung (search) moeglich.
+replicaCount: 1
 
 affinity:
   podAntiAffinity:
