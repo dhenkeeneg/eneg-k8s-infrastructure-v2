@@ -100,6 +100,23 @@ alloy:
           ]
         }
         output {
+          metrics = [otelcol.processor.filter.drop_esx1.input]
+        }
+      }
+
+      // ESX1 (verplanter Leerlauf-Host in vcenter-b) aus Monitoring/Dashboard
+      // ausschliessen: alle Datapoints mit vcenter_host == esx1.eneg.de verwerfen
+      // (Host-Metriken + Metriken von VMs, die auf esx1 laufen).
+      // 2026-08-04 auf Wunsch entfernt; zum Reaktivieren diesen Filter wieder loesen
+      // und den vcenter_b-Transform-Output zurueck auf batch.default legen.
+      otelcol.processor.filter "drop_esx1" {
+        error_mode = "ignore"
+        metrics {
+          datapoint = [
+            `attributes["vcenter_host"] == "esx1.eneg.de"`,
+          ]
+        }
+        output {
           metrics = [otelcol.processor.batch.default.input]
         }
       }
