@@ -135,7 +135,7 @@ configFiles:
           "enable": false
         },
         "sync": {
-          "enable": false,
+          "enable": true,
           "credentialsFile": "/ghcr-credentials/credentials.json",
           "downloadDir": "/var/lib/registry/sync-tmp",
           "registries": [
@@ -181,22 +181,6 @@ configFiles:
               "preserveDigest": true,
               "content": [
                 { "prefix": "**" }
-              ]
-            },
-            {
-              "urls": ["https://ghcr.io"],
-              "pollInterval": "15m",
-              "onDemand": false,
-              "tlsVerify": true,
-              "maxRetries": 3,
-              "retryDelay": "5m",
-              "preserveDigest": true,
-              "content": [
-                {
-                  "prefix": "dhenkeeneg/**",
-                  "destination": "/eneg",
-                  "stripPrefix": true
-                }
               ]
             }
           ]
