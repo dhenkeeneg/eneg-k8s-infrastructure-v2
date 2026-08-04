@@ -129,10 +129,10 @@ configFiles:
           }
         },
         "search": {
-          "enable": true
+          "enable": false
         },
         "ui": {
-          "enable": true
+          "enable": false
         },
         "sync": {
           "enable": true,
