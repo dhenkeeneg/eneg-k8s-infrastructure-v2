@@ -436,11 +436,18 @@ metadata:
     app.kubernetes.io/component: seeder
     app.kubernetes.io/managed-by: argocd
   annotations:
-    argocd.argoproj.io/hook: PostSync
+    # PreSync (nicht PostSync): Die DB-Migration muss VOR dem Rollout der neuen
+    # web/worker-Pods laufen, sonst laeuft neuer Code gegen altes Schema.
+    # Bei PostSync kann der neue web-Pod nicht ready werden -> Sync bleibt
+    # Progressing -> PostSync-Hook feuert nie -> Deadlock.
+    # Umgestellt am 17.08.2026 im Rahmen des Updates 17.1.2 -> 17.7.2.
+    argocd.argoproj.io/hook: PreSync
     argocd.argoproj.io/hook-delete-policy: BeforeHookCreation
 spec:
   backoffLimit: 3
-  activeDeadlineSeconds: 600
+  # 1800s (statt 600s): Die Schema-Aenderungen in 17.3 (Backlogs-Rework) und
+  # 17.7 (Departments, work schedules) brauchen deutlich mehr Zeit.
+  activeDeadlineSeconds: 1800
   template:
     metadata:
       labels:
