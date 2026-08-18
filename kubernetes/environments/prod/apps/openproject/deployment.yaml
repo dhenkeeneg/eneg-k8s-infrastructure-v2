@@ -492,10 +492,21 @@ spec:
           resources:
             requests:
               cpu: 250m
-              memory: 512Mi
+              memory: 768Mi
+            # Speicher am 18.08.2026 von 1Gi auf 2Gi erhoeht.
+            # Anlass: Beim Nachziehen eines Backfill-Jobs per
+            # "kubectl exec ... rails runner" wurde der Container OOMKilled
+            # (Exit 137) - ein zweiter vollstaendiger Rails-Prozess passt
+            # neben dem laufenden Worker nicht in 1Gi. Fuer den
+            # Normalbetrieb reichte 1Gi erwiesen aus, aber ab 17.7 laeuft
+            # Rails 8.1 mit GoodJob 4.19 und 20 Threads, und speicher-
+            # intensive Jobs (PDF/XLS-Exporte, Attachment-Verarbeitung)
+            # hatten damit kaum Reserve.
+            # Hinweis: einmalige rails-runner-Laeufe gehoeren trotzdem in
+            # einen eigenen Job, nicht per exec in den Worker.
             limits:
               cpu: "1"
-              memory: 1Gi
+              memory: 2Gi
 ---
 # OpenProject Seeder Job (PROD)
 apiVersion: batch/v1
