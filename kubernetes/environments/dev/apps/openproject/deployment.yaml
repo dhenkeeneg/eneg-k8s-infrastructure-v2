@@ -39,7 +39,7 @@ spec:
     spec:
       containers:
         - name: memcached
-          image: memcached:1.6.40-alpine
+          image: memcached:1.6.45-alpine
           args:
             - --memory-limit=128
             - --conn-limit=1024
@@ -246,19 +246,21 @@ spec:
             # 17.5.0 blockt ausgehende HTTP-Requests in reservierte Netze
             # (10/8, 172.16/12, 192.168/16, 127/8, 169.254/16) - auch wenn
             # ein Hostname eingetragen ist, der dorthin aufloest.
-            # Betroffen waeren bei uns:
-            #   - Keycloak OIDC: keycloak-dev-v2.eneg.de -> 192.168.180.100
-            #     (Traefik LoadBalancer) -> Login wuerde brechen
-            #   - Garage S3: garage-s3.garage.svc -> 10.43.184.148
-            #     (Service-CIDR) -> Attachment-Upload wuerde brechen
-            # 10.42/16 = Pod-CIDR (Headless Services), 10.43/16 = Service-CIDR
-            # 192.168.161.0/24 ergaenzt am 17.08.2026: eNeG-Servernetz inkl.
-            # NAS mit externem S3-Speicher. OpenProject spricht die NAS
-            # aktuell NICHT an (Attachments gehen an Garage im Cluster) -
-            # der Eintrag ist Vorsorge fuer eine spaetere Storages-Anbindung,
-            # die sonst still am SSRF-Schutz scheitern wuerde.
+            # Einheitlich ueber alle Umgebungen gepflegt, damit ein
+            # verschobener oder geteilter Dienst nicht still blockiert wird:
+            #   192.168.179.0/24  TEST-Netz (Traefik LB 192.168.179.100)
+            #   192.168.180.0/24  DEV-Netz (Traefik LB 192.168.180.100,
+            #                     hier laeuft auch die Registry - die zieht
+            #                     aber containerd, nicht OpenProject)
+            #   192.168.161.0/24  eNeG-Servernetz inkl. NAS mit externem S3.
+            #                     OpenProject spricht die NAS aktuell NICHT
+            #                     an (Attachments gehen an Garage im
+            #                     Cluster) - Vorsorge fuer eine spaetere
+            #                     Storages-Anbindung.
+            #   10.43.0.0/16      Service-CIDR (Garage S3, Memcached)
+            #   10.42.0.0/16      Pod-CIDR (Headless Services)
             - name: OPENPROJECT_SSRF__PROTECTION__IP__ALLOWLIST
-              value: "192.168.180.0/24,192.168.161.0/24,10.43.0.0/16,10.42.0.0/16"
+              value: "192.168.179.0/24,192.168.180.0/24,192.168.161.0/24,10.43.0.0/16,10.42.0.0/16"
             - name: OPENPROJECT_COLLABORATIVE__EDITING__HOCUSPOCUS__URL
               value: "wss://openproject-dev-v2.eneg.de/hocuspocus"
             - name: OPENPROJECT_COLLABORATIVE__EDITING__HOCUSPOCUS__SECRET
@@ -419,7 +421,7 @@ spec:
             # Der Worker laedt Attachments nach Garage S3 hoch und liefert
             # Webhooks aus, braucht die Allowlist also ebenfalls.
             - name: OPENPROJECT_SSRF__PROTECTION__IP__ALLOWLIST
-              value: "192.168.180.0/24,192.168.161.0/24,10.43.0.0/16,10.42.0.0/16"
+              value: "192.168.179.0/24,192.168.180.0/24,192.168.161.0/24,10.43.0.0/16,10.42.0.0/16"
             - name: OPENPROJECT_ATTACHMENTS__STORAGE
               value: "fog"
             - name: OPENPROJECT_FOG_DIRECTORY
