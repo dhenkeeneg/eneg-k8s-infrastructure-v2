@@ -1,5 +1,23 @@
 # Handoff: Phase 6 — OpenProject Update + Odoo Deployment
 
+> ## ⚠️ VERALTET — nicht mehr als Anleitung verwenden
+>
+> Dieses Dokument beschreibt den Stand vom 26.02.2026 (OpenProject 17.1.2).
+> Das Update-Verfahren hat sich am 18.08.2026 grundlegend geaendert:
+>
+> - Die DB-Migration laeuft **automatisch im PreSync-Hook**, nicht mehr
+>   manuell per `kubectl run ... rails db:migrate` (Abschnitt
+>   "OpenProject Update-Prozedur" unten ist damit ueberholt).
+> - Ab 17.4.0 ist `SECRET_KEY_BASE` zwingend, ab 17.5.0 zusaetzlich eine
+>   **SSRF-Allowlist** — ohne sie brechen OIDC-Login und S3-Attachments,
+>   und zwar bei gruenen Pods und gruenem ArgoCD.
+> - Hocuspocus ist nicht mehr `latest`, sondern auf die Core-Version gepinnt.
+>
+> **Aktuelle Anleitung:** `docs/guides/phase-6.3-openproject-update-guide-v2.md`
+>
+> Das Dokument bleibt als Historie erhalten (u. a. wegen der
+> Key-Learnings aus Phase 6.2 und des Odoo-Kontexts).
+
 **Erstellt:** 26.02.2026
 **Naechster Schritt:** OpenProject Update + Odoo Deployment
 **Umgebung:** DEV-Cluster (k8s-dev-21/22/23)
