@@ -234,6 +234,21 @@ spec:
               value: "true"
             - name: OPENPROJECT_HSTS
               value: "true"
+            # SSRF-Schutz-Allowlist (ab 17.5.0 zwingend erforderlich)
+            # 17.5.0 blockt ausgehende HTTP-Requests in reservierte Netze
+            # (10/8, 172.16/12, 192.168/16, 127/8, 169.254/16) - auch wenn
+            # ein Hostname eingetragen ist, der dorthin aufloest.
+            # Einheitlich ueber alle Umgebungen gepflegt, damit ein
+            # verschobener oder geteilter Dienst nicht still blockiert wird:
+            #   192.168.178.0/24  PROD-Netz (Traefik LB 192.168.178.100)
+            #   192.168.179.0/24  TEST-Netz (Traefik LB 192.168.179.100)
+            #   192.168.180.0/24  DEV-Netz (dort laeuft u.a. die Registry,
+            #                     die aber containerd zieht, nicht OpenProject)
+            #   192.168.161.0/24  eNeG-Servernetz inkl. NAS mit externem S3
+            #   10.43.0.0/16      Service-CIDR (Garage S3, Memcached)
+            #   10.42.0.0/16      Pod-CIDR (Headless Services)
+            - name: OPENPROJECT_SSRF__PROTECTION__IP__ALLOWLIST
+              value: "192.168.178.0/24,192.168.179.0/24,192.168.180.0/24,192.168.161.0/24,10.43.0.0/16,10.42.0.0/16"
             - name: OPENPROJECT_COLLABORATIVE__EDITING__HOCUSPOCUS__URL
               value: "wss://openproject.eneg.de/hocuspocus"
             - name: OPENPROJECT_COLLABORATIVE__EDITING__HOCUSPOCUS__SECRET
@@ -414,6 +429,11 @@ spec:
               value: "openproject.eneg.de"
             - name: OPENPROJECT_HTTPS
               value: "true"
+            # SSRF-Schutz-Allowlist (ab 17.5.0) - identisch zu Web.
+            # Der Worker laedt Attachments nach Garage S3 hoch, verschickt
+            # Mails und liefert Webhooks aus, braucht die Allowlist also auch.
+            - name: OPENPROJECT_SSRF__PROTECTION__IP__ALLOWLIST
+              value: "192.168.178.0/24,192.168.179.0/24,192.168.180.0/24,192.168.161.0/24,10.43.0.0/16,10.42.0.0/16"
             - name: OPENPROJECT_ATTACHMENTS__STORAGE
               value: "fog"
             - name: OPENPROJECT_FOG_DIRECTORY
@@ -482,11 +502,22 @@ metadata:
     app.kubernetes.io/component: seeder
     app.kubernetes.io/managed-by: argocd
   annotations:
-    argocd.argoproj.io/hook: PostSync
+    # PreSync (nicht PostSync): Die DB-Migration muss VOR dem Rollout der
+    # neuen web/worker-Pods laufen, sonst laeuft neuer Code gegen altes
+    # Schema. Bei PostSync kann der neue web-Pod nicht ready werden -> Sync
+    # bleibt Progressing -> PostSync-Hook feuert nie -> Deadlock.
+    # Schlaegt der Hook fehl, bricht der Sync ab und die alten Pods laufen
+    # unangetastet weiter - das ist in PROD die entscheidende Eigenschaft.
+    # Auf DEV am 17.08.2026 eingefuehrt (sechs Etappen), auf TEST am
+    # 18.08.2026 bestaetigt (107 Migrationen in einem Lauf).
+    argocd.argoproj.io/hook: PreSync
     argocd.argoproj.io/hook-delete-policy: BeforeHookCreation
 spec:
   backoffLimit: 3
-  activeDeadlineSeconds: 600
+  # 3600s: PROD springt in einem Lauf von 17.1.2 auf 17.7.2. Auf TEST
+  # brauchten die 107 Migrationen dafuer 100 Sekunden. Grosszuegig
+  # bemessen, damit die Deadline nie die Ursache eines Abbruchs ist.
+  activeDeadlineSeconds: 3600
   template:
     metadata:
       labels:
