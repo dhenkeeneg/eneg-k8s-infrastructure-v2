@@ -114,7 +114,7 @@ spec:
           # unbekannten Build, ohne Rollback-Punkt und potenziell
           # inkompatibel zum Core. Ab 17.08.2026 immer identisch zum
           # openproject/openproject-Tag mitziehen.
-          image: openproject/hocuspocus:17.6.0
+          image: openproject/hocuspocus:17.7.2
           env:
             - name: SECRET
               valueFrom:
@@ -175,7 +175,7 @@ metadata:
   namespace: openproject
   labels:
     app.kubernetes.io/name: openproject
-    app.kubernetes.io/version: "17.6.0"
+    app.kubernetes.io/version: "17.7.2"
     app.kubernetes.io/part-of: pilot-apps
     app.kubernetes.io/managed-by: argocd
 spec:
@@ -209,7 +209,7 @@ spec:
               mountPath: /tmp
       containers:
         - name: openproject
-          image: openproject/openproject:17.6.0-slim
+          image: openproject/openproject:17.7.2-slim
           command:
             - bash
             - /app/docker/prod/web
@@ -252,7 +252,11 @@ spec:
             #   - Garage S3: garage-s3.garage.svc -> 10.43.184.148
             #     (Service-CIDR) -> Attachment-Upload wuerde brechen
             # 10.42/16 = Pod-CIDR (Headless Services), 10.43/16 = Service-CIDR
-            # 192.168.161.0/24 ergaenzt am 17.08.2026 (weiteres eNeG-Netz)
+            # 192.168.161.0/24 ergaenzt am 17.08.2026: eNeG-Servernetz inkl.
+            # NAS mit externem S3-Speicher. OpenProject spricht die NAS
+            # aktuell NICHT an (Attachments gehen an Garage im Cluster) -
+            # der Eintrag ist Vorsorge fuer eine spaetere Storages-Anbindung,
+            # die sonst still am SSRF-Schutz scheitern wuerde.
             - name: OPENPROJECT_SSRF__PROTECTION__IP__ALLOWLIST
               value: "192.168.180.0/24,192.168.161.0/24,10.43.0.0/16,10.42.0.0/16"
             - name: OPENPROJECT_COLLABORATIVE__EDITING__HOCUSPOCUS__URL
@@ -366,7 +370,7 @@ metadata:
   labels:
     app.kubernetes.io/name: openproject
     app.kubernetes.io/component: worker
-    app.kubernetes.io/version: "17.6.0"
+    app.kubernetes.io/version: "17.7.2"
     app.kubernetes.io/part-of: pilot-apps
     app.kubernetes.io/managed-by: argocd
 spec:
@@ -388,7 +392,7 @@ spec:
         runAsGroup: 1000
       containers:
         - name: worker
-          image: openproject/openproject:17.6.0-slim
+          image: openproject/openproject:17.7.2-slim
           command:
             - bash
             - /app/docker/prod/worker
@@ -484,7 +488,7 @@ spec:
         runAsGroup: 1000
       containers:
         - name: seeder
-          image: openproject/openproject:17.6.0-slim
+          image: openproject/openproject:17.7.2-slim
           command:
             - bash
             - /app/docker/prod/seeder
