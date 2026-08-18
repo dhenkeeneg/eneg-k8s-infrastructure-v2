@@ -38,7 +38,7 @@ spec:
     spec:
       containers:
         - name: memcached
-          image: memcached:1.6.40-alpine
+          image: memcached:1.6.45-alpine
           args:
             - --memory-limit=128
             - --conn-limit=1024
@@ -107,7 +107,12 @@ spec:
     spec:
       containers:
         - name: hocuspocus
-          image: openproject/hocuspocus:latest
+          # Gepinnt auf die Core-Version (frueher: latest).
+          # latest wird laufend neu gebaut -> ein Pod-Restart zog einen
+          # unbekannten Build, ohne Rollback-Punkt und potenziell
+          # inkompatibel zum Core. Zieht ab jetzt immer mit dem
+          # openproject/openproject-Tag mit.
+          image: openproject/hocuspocus:17.7.2
           env:
             - name: SECRET
               valueFrom:
@@ -168,7 +173,7 @@ metadata:
   namespace: openproject
   labels:
     app.kubernetes.io/name: openproject
-    app.kubernetes.io/version: "17.1.2"
+    app.kubernetes.io/version: "17.7.2"
     app.kubernetes.io/part-of: pilot-apps
     app.kubernetes.io/managed-by: argocd
 spec:
@@ -201,7 +206,7 @@ spec:
               mountPath: /tmp
       containers:
         - name: openproject
-          image: openproject/openproject:17.1.2-slim
+          image: openproject/openproject:17.7.2-slim
           command:
             - bash
             - /app/docker/prod/web
@@ -384,7 +389,7 @@ metadata:
   labels:
     app.kubernetes.io/name: openproject
     app.kubernetes.io/component: worker
-    app.kubernetes.io/version: "17.1.2"
+    app.kubernetes.io/version: "17.7.2"
     app.kubernetes.io/part-of: pilot-apps
     app.kubernetes.io/managed-by: argocd
 spec:
@@ -405,7 +410,7 @@ spec:
         runAsGroup: 1000
       containers:
         - name: worker
-          image: openproject/openproject:17.1.2-slim
+          image: openproject/openproject:17.7.2-slim
           command:
             - bash
             - /app/docker/prod/worker
@@ -529,7 +534,7 @@ spec:
         runAsGroup: 1000
       containers:
         - name: seeder
-          image: openproject/openproject:17.1.2-slim
+          image: openproject/openproject:17.7.2-slim
           command:
             - bash
             - /app/docker/prod/seeder
