@@ -245,6 +245,7 @@ spec:
             # ein Hostname eingetragen ist, der dorthin aufloest.
             # Einheitlich ueber alle Umgebungen gepflegt, damit ein
             # verschobener oder geteilter Dienst nicht still blockiert wird:
+            #   192.168.178.0/24  PROD-Netz (Traefik LB 192.168.178.100)
             #   192.168.179.0/24  TEST-Netz (Traefik LB 192.168.179.100)
             #   192.168.180.0/24  DEV-Netz (dort laeuft u.a. die Registry,
             #                     die aber containerd zieht, nicht OpenProject)
@@ -252,7 +253,7 @@ spec:
             #   10.43.0.0/16      Service-CIDR (Garage S3, Memcached)
             #   10.42.0.0/16      Pod-CIDR (Headless Services)
             - name: OPENPROJECT_SSRF__PROTECTION__IP__ALLOWLIST
-              value: "192.168.179.0/24,192.168.180.0/24,192.168.161.0/24,10.43.0.0/16,10.42.0.0/16"
+              value: "192.168.178.0/24,192.168.179.0/24,192.168.180.0/24,192.168.161.0/24,10.43.0.0/16,10.42.0.0/16"
             - name: OPENPROJECT_COLLABORATIVE__EDITING__HOCUSPOCUS__URL
               value: "wss://openproject-test.eneg.de/hocuspocus"
             - name: OPENPROJECT_COLLABORATIVE__EDITING__HOCUSPOCUS__SECRET
@@ -437,7 +438,7 @@ spec:
             # Der Worker laedt Attachments nach Garage S3 hoch, verschickt
             # Mails und liefert Webhooks aus, braucht die Allowlist also auch.
             - name: OPENPROJECT_SSRF__PROTECTION__IP__ALLOWLIST
-              value: "192.168.179.0/24,192.168.180.0/24,192.168.161.0/24,10.43.0.0/16,10.42.0.0/16"
+              value: "192.168.178.0/24,192.168.179.0/24,192.168.180.0/24,192.168.161.0/24,10.43.0.0/16,10.42.0.0/16"
             - name: OPENPROJECT_ATTACHMENTS__STORAGE
               value: "fog"
             - name: OPENPROJECT_FOG_DIRECTORY
