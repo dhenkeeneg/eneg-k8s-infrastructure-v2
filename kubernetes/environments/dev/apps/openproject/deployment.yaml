@@ -280,8 +280,34 @@ spec:
               value: "openproject-assets"
             - name: OPENPROJECT_FOG_CREDENTIALS_PROVIDER
               value: "aws"
+            # 19.08.2026: Oeffentlicher Endpunkt statt des clusterinternen
+            # Service-Namens. OpenProject liefert Attachments bei fog NICHT
+            # selbst aus, sondern antwortet mit einer Weiterleitung auf eine
+            # vorsignierte S3-URL. Mit garage-s3.garage.svc.cluster.local:3900
+            # zeigte diese URL auf einen Namen, den kein Browser aufloesen
+            # kann - jeder Download scheiterte, unabhaengig vom Attachment.
+            # Einen Streaming-Modus gibt es bei fog nicht, der Endpunkt muss
+            # also vom Browser erreichbar sein.
+            # s3-dev-v2.eneg.de ist der bestehende Traefik-Eintrag auf denselben
+            # Garage-Dienst (Certificate garage-s3-tls). Aus dem Cluster heraus
+            # geprueft: DNS -> 192.168.180.100, ListObjects OK, vorsignierter
+            # Download HTTP 200 mit korrekter Dateigroesse.
             - name: OPENPROJECT_FOG_CREDENTIALS_ENDPOINT
-              value: "http://garage-s3.garage.svc.cluster.local:3900"
+              value: "https://s3-dev-v2.eneg.de"
+            # Uploads laufen durch OpenProject, nicht direkt vom Browser in den
+            # Bucket. OpenProject unterstuetzt offiziell nur den AWS-Ablauf von
+            # fog; der vorsignierte POST-Ablauf ist fuer Garage nicht belegt.
+            # Entspricht ausserdem dem bisherigen faktischen Verhalten.
+            - name: OPENPROJECT_DIRECT__UPLOADS
+              value: "false"
+            # Diese beiden Hosts steuern die Content-Security-Policy der
+            # Weboberflaeche. Ohne sie blockiert der Browser Bilder, die aus dem
+            # Bucket eingebettet werden (img-src), selbst wenn die vorsignierte
+            # URL korrekt ist.
+            - name: OPENPROJECT_REMOTE__STORAGE__DOWNLOAD__HOST
+              value: "s3-dev-v2.eneg.de"
+            - name: OPENPROJECT_REMOTE__STORAGE__UPLOAD__HOST
+              value: "s3-dev-v2.eneg.de"
             - name: OPENPROJECT_FOG_CREDENTIALS_AWS__ACCESS__KEY__ID
               valueFrom:
                 secretKeyRef:
@@ -435,8 +461,15 @@ spec:
               value: "openproject-assets"
             - name: OPENPROJECT_FOG_CREDENTIALS_PROVIDER
               value: "aws"
+            # 19.08.2026: identisch zu web auf den oeffentlichen Endpunkt
+            # umgestellt. Der Worker erzeugt beim Verarbeiten von Anhaengen
+            # ebenfalls vorsignierte URLs; zeigten die auf den clusterinternen
+            # Namen, waeren sie fuer den Empfaenger unbrauchbar. Ausserdem muss
+            # die Signatur denselben Host verwenden wie beim Abruf.
             - name: OPENPROJECT_FOG_CREDENTIALS_ENDPOINT
-              value: "http://garage-s3.garage.svc.cluster.local:3900"
+              value: "https://s3-dev-v2.eneg.de"
+            - name: OPENPROJECT_DIRECT__UPLOADS
+              value: "false"
             - name: OPENPROJECT_FOG_CREDENTIALS_AWS__ACCESS__KEY__ID
               valueFrom:
                 secretKeyRef:
@@ -515,6 +548,39 @@ spec:
             - name: OPENPROJECT_HOST__NAME
               value: "openproject-dev-v2.eneg.de"
             - name: OPENPROJECT_HTTPS
+              value: "true"
+            # 19.08.2026 ergaenzt: Dem Seeder fehlte die komplette
+            # Attachment-Konfiguration. Er lief damit im Standardmodus
+            # "filesystem" und legte die Teaser-Bilder der Demo-Projekte im
+            # Dateisystem seines eigenen Pods ab - das mit dem Pod verschwand.
+            # Ergebnis waren Attachment-Datensaetze in der Datenbank ohne
+            # zugehoerige Datei im Bucket. Muss identisch zu web/worker
+            # konfiguriert sein, sonst schreibt der Seeder erneut ins Leere.
+            - name: OPENPROJECT_SSRF__PROTECTION__IP__ALLOWLIST
+              value: "192.168.178.0/24,192.168.179.0/24,192.168.180.0/24,192.168.161.0/24,10.43.0.0/16,10.42.0.0/16"
+            - name: OPENPROJECT_ATTACHMENTS__STORAGE
+              value: "fog"
+            - name: OPENPROJECT_FOG_DIRECTORY
+              value: "openproject-assets"
+            - name: OPENPROJECT_FOG_CREDENTIALS_PROVIDER
+              value: "aws"
+            - name: OPENPROJECT_FOG_CREDENTIALS_ENDPOINT
+              value: "https://s3-dev-v2.eneg.de"
+            - name: OPENPROJECT_DIRECT__UPLOADS
+              value: "false"
+            - name: OPENPROJECT_FOG_CREDENTIALS_AWS__ACCESS__KEY__ID
+              valueFrom:
+                secretKeyRef:
+                  name: openproject-secrets
+                  key: s3-access-key-id
+            - name: OPENPROJECT_FOG_CREDENTIALS_AWS__SECRET__ACCESS__KEY
+              valueFrom:
+                secretKeyRef:
+                  name: openproject-secrets
+                  key: s3-secret-access-key
+            - name: OPENPROJECT_FOG_CREDENTIALS_REGION
+              value: "eu-central-1"
+            - name: OPENPROJECT_FOG_CREDENTIALS_PATH__STYLE
               value: "true"
             - name: OPENPROJECT_DEFAULT__LANGUAGE
               value: "de"
