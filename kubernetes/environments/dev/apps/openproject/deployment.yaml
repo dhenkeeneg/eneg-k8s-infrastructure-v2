@@ -180,7 +180,13 @@ metadata:
     app.kubernetes.io/managed-by: argocd
 spec:
   # Reaktiviert 2026-05-15: nach Cluster-Recovery wieder aktiv.
-  replicas: 1
+  # 19.08.2026: Voruebergehend auf 0 fuer den Datenumzug aus k8s-dev-microk8s.
+  # Waehrend "DROP SCHEMA public CASCADE" und dem pg_restore darf kein
+  # Rails-Prozess auf der DB sein - offene Verbindungen wuerden den DROP
+  # blockieren, und ein laufender web-Pod wuerde gegen ein halb
+  # wiederhergestelltes Schema arbeiten. Wird direkt nach dem Restore
+  # wieder auf 1 gesetzt.
+  replicas: 0
   strategy:
     type: Recreate
   selector:
@@ -378,7 +384,11 @@ metadata:
     app.kubernetes.io/managed-by: argocd
 spec:
   # Reaktiviert 2026-05-15: nach Cluster-Recovery wieder aktiv.
-  replicas: 1
+  # 19.08.2026: Voruebergehend auf 0 fuer den Datenumzug aus k8s-dev-microk8s.
+  # Der Worker haelt eine dauerhafte DB-Verbindung fuer good_jobs und wuerde
+  # den DROP SCHEMA blockieren. Wird direkt nach dem Restore wieder auf 1
+  # gesetzt.
+  replicas: 0
   selector:
     matchLabels:
       app.kubernetes.io/name: openproject
