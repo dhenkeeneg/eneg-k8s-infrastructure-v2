@@ -36,14 +36,29 @@ spec:
     # wenn der DNS-CNAME von 192.168.180.50 (nginx, MicroK8s) auf
     # traefik-dev.eneg.de (192.168.180.100) umgestellt ist.
     # openproject-dev-v2.eneg.de wird in Schritt 6.4 wieder entfernt.
-    - match: Host(`openproject-dev-v2.eneg.de`, `openproject-dev.eneg.de`) && PathPrefix(`/hocuspocus`)
+    #
+    # ACHTUNG Traefik-v3-Syntax: Host() nimmt genau EINEN Parameter. Die aus
+    # Traefik v2 bekannte Form Host(`a`, `b`) wird von v3 verworfen -
+    # "unexpected number of parameters; got 2, expected one of [1]". Der Router
+    # wird dann komplett fallen gelassen und Traefik antwortet mit 404, ohne
+    # dass die IngressRoute selbst ungueltig aussieht. Mehrere Namen also
+    # immer mit || verknuepfen und die Klammerung beachten, weil && staerker
+    # bindet als ||.
+    #
+    # priority explizit gesetzt: ohne Angabe leitet Traefik sie aus der
+    # Regellaenge ab. Das funktioniert hier zufaellig richtig, ist aber bei
+    # zwei Regeln, die sich nur um den PathPrefix unterscheiden, unnoetig
+    # fragil - /hocuspocus muss zuverlaessig vor der allgemeinen Regel greifen.
+    - match: (Host(`openproject-dev-v2.eneg.de`) || Host(`openproject-dev.eneg.de`)) && PathPrefix(`/hocuspocus`)
       kind: Rule
+      priority: 100
       services:
         - name: openproject-hocuspocus
           namespace: openproject
           port: 1234
-    - match: Host(`openproject-dev-v2.eneg.de`, `openproject-dev.eneg.de`)
+    - match: Host(`openproject-dev-v2.eneg.de`) || Host(`openproject-dev.eneg.de`)
       kind: Rule
+      priority: 10
       services:
         - name: openproject-web
           namespace: openproject
