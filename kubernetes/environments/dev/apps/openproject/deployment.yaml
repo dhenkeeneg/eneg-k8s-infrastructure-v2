@@ -239,8 +239,13 @@ spec:
               value: "4"
             - name: RAILS_MAX_THREADS
               value: "16"
+            # 19.08.2026: Hauptname nach dem Umzug aus k8s-dev-microk8s.
+            # Bestimmt alle absoluten URLs, die OpenProject selbst erzeugt -
+            # vor allem Links in E-Mail-Benachrichtigungen. Der DNS-CNAME
+            # openproject-dev.eneg.de zeigt seit dem Umzug auf
+            # traefik-dev.eneg.de (192.168.180.100).
             - name: OPENPROJECT_HOST__NAME
-              value: "openproject-dev-v2.eneg.de"
+              value: "openproject-dev.eneg.de"
             - name: OPENPROJECT_HTTPS
               value: "true"
             - name: OPENPROJECT_HSTS
@@ -265,30 +270,37 @@ spec:
             #   10.42.0.0/16      Pod-CIDR (Headless Services)
             - name: OPENPROJECT_SSRF__PROTECTION__IP__ALLOWLIST
               value: "192.168.178.0/24,192.168.179.0/24,192.168.180.0/24,192.168.161.0/24,10.43.0.0/16,10.42.0.0/16"
+            # 19.08.2026 mit HOST__NAME umgestellt. Diese URL landet im
+            # Browser des Benutzers und muss deshalb auf denselben Namen
+            # zeigen, unter dem die Weboberflaeche aufgerufen wird - sonst
+            # scheitert die WebSocket-Verbindung an der Content-Security-Policy.
             - name: OPENPROJECT_COLLABORATIVE__EDITING__HOCUSPOCUS__URL
-              value: "wss://openproject-dev-v2.eneg.de/hocuspocus"
+              value: "wss://openproject-dev.eneg.de/hocuspocus"
             - name: OPENPROJECT_COLLABORATIVE__EDITING__HOCUSPOCUS__SECRET
               valueFrom:
                 secretKeyRef:
                   name: openproject-secrets
                   key: hocuspocus-secret
-            # 19.08.2026: openproject-dev.eneg.de ergaenzt, damit OpenProject
-            # den kuenftigen Hauptnamen schon akzeptiert, bevor HOST__NAME
-            # umgestellt wird. Ohne diesen Eintrag antwortet Rails auf einen
-            # unbekannten Host-Header mit 400 "Invalid host_name
-            # configuration". In Schritt 6.4 tauschen die beiden Namen die
-            # Rollen: HOST__NAME wird openproject-dev.eneg.de, und dieser
-            # Eintrag faellt zurueck auf den Service-Namen allein.
+            # 19.08.2026: Rollentausch vollzogen. HOST__NAME ist jetzt
+            # openproject-dev.eneg.de, der alte Name steht uebergangsweise
+            # hier, damit Lesezeichen auf openproject-dev-v2.eneg.de noch
+            # funktionieren, solange die Traefik-Route dafuer existiert.
+            # Wird beim Aufraeumen zusammen mit Route und Zertifikatseintrag
+            # auf den Service-Namen allein zurueckgefuehrt.
+            #
+            # Der Service-Name wird gebraucht, weil hocuspocus OpenProject
+            # ueber openproject-web.openproject.svc.cluster.local:8080
+            # anspricht - ohne diesen Eintrag antwortet Rails dort mit 400.
             #
             # ACHTUNG Notation: mehrere Werte MUESSEN in eckigen Klammern
             # stehen. Nur kommagetrennt ("a,b") erkennt OpenProject sie nicht
             # als Liste - Rails bricht beim Start mit
-            # "Invalid host_name configuration" ab und antwortet auf JEDEN
-            # Host mit 400. Im Job geprueft: "[a,b]" ergibt ein Array mit zwei
-            # Eintraegen, "a,b" liefert kein verwertbares Ergebnis.
+            # "Invalid host_name configuration" ab und antwortet danach auf
+            # JEDEN Host mit 400. Im Job geprueft: "[a,b]" ergibt ein Array
+            # mit zwei Eintraegen, "a,b" liefert kein verwertbares Ergebnis.
             # Gleiche Notation wie beim OIDC-Scope weiter unten.
             - name: OPENPROJECT_ADDITIONAL__HOST__NAMES
-              value: "[openproject-web.openproject.svc.cluster.local,openproject-dev.eneg.de]"
+              value: "[openproject-web.openproject.svc.cluster.local,openproject-dev-v2.eneg.de]"
             - name: OPENPROJECT_ATTACHMENTS__STORAGE
               value: "fog"
             - name: OPENPROJECT_FOG_DIRECTORY
@@ -461,8 +473,12 @@ spec:
               value: "memcache"
             - name: OPENPROJECT_CACHE__MEMCACHE__SERVER
               value: "openproject-memcached.openproject.svc.cluster.local:11211"
+            # 19.08.2026 mit web umgestellt. Der Worker versendet die
+            # E-Mail-Benachrichtigungen und bildet die enthaltenen Links aus
+            # diesem Wert - er MUSS mit web uebereinstimmen, sonst verschicken
+            # Benachrichtigungen Links auf den alten Namen.
             - name: OPENPROJECT_HOST__NAME
-              value: "openproject-dev-v2.eneg.de"
+              value: "openproject-dev.eneg.de"
             - name: OPENPROJECT_HTTPS
               value: "true"
             # SSRF-Schutz-Allowlist (ab 17.5.0) - identisch zu Web.
@@ -560,8 +576,9 @@ spec:
                 secretKeyRef:
                   name: openproject-secrets
                   key: secret-key-base
+            # 19.08.2026 mit web und worker umgestellt.
             - name: OPENPROJECT_HOST__NAME
-              value: "openproject-dev-v2.eneg.de"
+              value: "openproject-dev.eneg.de"
             - name: OPENPROJECT_HTTPS
               value: "true"
             # 19.08.2026 ergaenzt: Dem Seeder fehlte die komplette
