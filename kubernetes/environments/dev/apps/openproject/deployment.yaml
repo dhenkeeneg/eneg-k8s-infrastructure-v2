@@ -281,26 +281,26 @@ spec:
                 secretKeyRef:
                   name: openproject-secrets
                   key: hocuspocus-secret
-            # 19.08.2026: Rollentausch vollzogen. HOST__NAME ist jetzt
-            # openproject-dev.eneg.de, der alte Name steht uebergangsweise
-            # hier, damit Lesezeichen auf openproject-dev-v2.eneg.de noch
-            # funktionieren, solange die Traefik-Route dafuer existiert.
-            # Wird beim Aufraeumen zusammen mit Route und Zertifikatseintrag
-            # auf den Service-Namen allein zurueckgefuehrt.
-            #
             # Der Service-Name wird gebraucht, weil hocuspocus OpenProject
             # ueber openproject-web.openproject.svc.cluster.local:8080
-            # anspricht - ohne diesen Eintrag antwortet Rails dort mit 400.
+            # anspricht - ohne diesen Eintrag antwortet Rails dort mit
+            # 400 "Invalid host_name configuration".
             #
-            # ACHTUNG Notation: mehrere Werte MUESSEN in eckigen Klammern
-            # stehen. Nur kommagetrennt ("a,b") erkennt OpenProject sie nicht
-            # als Liste - Rails bricht beim Start mit
+            # 19.08.2026: Waehrend des Umzugs stand hier zusaetzlich
+            # openproject-dev-v2.eneg.de, damit alte Lesezeichen noch
+            # funktionieren. Umzug abgeschlossen, Eintrag entfallen.
+            #
+            # ACHTUNG fuer den naechsten, der hier einen zweiten Wert
+            # eintraegt - Notation: mehrere Werte MUESSEN in eckigen Klammern
+            # stehen, also "[a,b]". Nur kommagetrennt ("a,b") erkennt
+            # OpenProject sie nicht als Liste; Rails bricht beim Start mit
             # "Invalid host_name configuration" ab und antwortet danach auf
-            # JEDEN Host mit 400. Im Job geprueft: "[a,b]" ergibt ein Array
-            # mit zwei Eintraegen, "a,b" liefert kein verwertbares Ergebnis.
-            # Gleiche Notation wie beim OIDC-Scope weiter unten.
+            # JEDEN Host-Header mit 400 - auch auf den bis dahin
+            # funktionierenden. Ein einzelner Wert geht ohne Klammern durch,
+            # deshalb fiel das lange nicht auf. In einem Job gegen beide
+            # Varianten geprueft. Gleiche Notation wie beim OIDC-Scope unten.
             - name: OPENPROJECT_ADDITIONAL__HOST__NAMES
-              value: "[openproject-web.openproject.svc.cluster.local,openproject-dev-v2.eneg.de]"
+              value: "openproject-web.openproject.svc.cluster.local"
             - name: OPENPROJECT_ATTACHMENTS__STORAGE
               value: "fog"
             - name: OPENPROJECT_FOG_DIRECTORY
