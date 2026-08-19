@@ -275,12 +275,20 @@ spec:
             # 19.08.2026: openproject-dev.eneg.de ergaenzt, damit OpenProject
             # den kuenftigen Hauptnamen schon akzeptiert, bevor HOST__NAME
             # umgestellt wird. Ohne diesen Eintrag antwortet Rails auf einen
-            # unbekannten Host-Header nicht regulaer. In Schritt 6.4 tauschen
-            # die beiden Namen die Rollen: HOST__NAME wird
-            # openproject-dev.eneg.de, und dieser Eintrag faellt zurueck auf
-            # den Service-Namen allein.
+            # unbekannten Host-Header mit 400 "Invalid host_name
+            # configuration". In Schritt 6.4 tauschen die beiden Namen die
+            # Rollen: HOST__NAME wird openproject-dev.eneg.de, und dieser
+            # Eintrag faellt zurueck auf den Service-Namen allein.
+            #
+            # ACHTUNG Notation: mehrere Werte MUESSEN in eckigen Klammern
+            # stehen. Nur kommagetrennt ("a,b") erkennt OpenProject sie nicht
+            # als Liste - Rails bricht beim Start mit
+            # "Invalid host_name configuration" ab und antwortet auf JEDEN
+            # Host mit 400. Im Job geprueft: "[a,b]" ergibt ein Array mit zwei
+            # Eintraegen, "a,b" liefert kein verwertbares Ergebnis.
+            # Gleiche Notation wie beim OIDC-Scope weiter unten.
             - name: OPENPROJECT_ADDITIONAL__HOST__NAMES
-              value: "openproject-web.openproject.svc.cluster.local,openproject-dev.eneg.de"
+              value: "[openproject-web.openproject.svc.cluster.local,openproject-dev.eneg.de]"
             - name: OPENPROJECT_ATTACHMENTS__STORAGE
               value: "fog"
             - name: OPENPROJECT_FOG_DIRECTORY
