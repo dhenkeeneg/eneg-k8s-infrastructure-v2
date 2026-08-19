@@ -272,8 +272,15 @@ spec:
                 secretKeyRef:
                   name: openproject-secrets
                   key: hocuspocus-secret
+            # 19.08.2026: openproject-dev.eneg.de ergaenzt, damit OpenProject
+            # den kuenftigen Hauptnamen schon akzeptiert, bevor HOST__NAME
+            # umgestellt wird. Ohne diesen Eintrag antwortet Rails auf einen
+            # unbekannten Host-Header nicht regulaer. In Schritt 6.4 tauschen
+            # die beiden Namen die Rollen: HOST__NAME wird
+            # openproject-dev.eneg.de, und dieser Eintrag faellt zurueck auf
+            # den Service-Namen allein.
             - name: OPENPROJECT_ADDITIONAL__HOST__NAMES
-              value: "openproject-web.openproject.svc.cluster.local"
+              value: "openproject-web.openproject.svc.cluster.local,openproject-dev.eneg.de"
             - name: OPENPROJECT_ATTACHMENTS__STORAGE
               value: "fog"
             - name: OPENPROJECT_FOG_DIRECTORY
