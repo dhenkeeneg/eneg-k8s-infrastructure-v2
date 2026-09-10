@@ -119,6 +119,15 @@ spec:
         ensure: present
         passwordSecret:
           name: it-info-versand-db-credentials
+      - name: gitea
+        login: true
+        createdb: false
+        superuser: false
+        inherit: true
+        connectionLimit: -1
+        ensure: present
+        passwordSecret:
+          name: gitea-db-credentials
 
   # Monitoring (Phase 7 - aktiviert)
   monitoring:

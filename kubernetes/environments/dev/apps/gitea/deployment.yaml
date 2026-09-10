@@ -1,0 +1,193 @@
+---
+# PersistentVolumeClaim fuer Gitea Daten (Repositories, Avatare, Queues)
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: gitea-data
+  namespace: gitea
+  labels:
+    app.kubernetes.io/name: gitea
+    app.kubernetes.io/managed-by: argocd
+spec:
+  accessModes:
+    - ReadWriteOnce
+  storageClassName: longhorn
+  resources:
+    requests:
+      storage: 5Gi
+---
+# Gitea Deployment (DEV)
+# Image: rootless (UID/GID 1000) - kein root im Container
+# Konfiguration vollstaendig deklarativ via GITEA__<section>__<KEY> Env-Vars,
+# die der Entrypoint per environment-to-ini in die app.ini schreibt.
+# app.ini liegt in einem emptyDir -> wird bei jedem Start aus Env neu erzeugt.
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: gitea
+  namespace: gitea
+  labels:
+    app.kubernetes.io/name: gitea
+    app.kubernetes.io/version: "1.27.3"
+    app.kubernetes.io/part-of: pilot-apps
+    app.kubernetes.io/managed-by: argocd
+spec:
+  replicas: 1
+  strategy:
+    type: Recreate
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: gitea
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: gitea
+    spec:
+      securityContext:
+        runAsUser: 1000
+        runAsGroup: 1000
+        fsGroup: 1000
+      containers:
+        - name: gitea
+          image: gitea/gitea:1.27.3-rootless
+          imagePullPolicy: IfNotPresent
+          ports:
+            - name: http
+              containerPort: 3000
+              protocol: TCP
+          env:
+            # --- Datenbank: CloudNativePG cnpg-shared ---
+            - name: GITEA__database__DB_TYPE
+              value: "postgres"
+            - name: GITEA__database__HOST
+              value: "cnpg-shared-rw.databases.svc.cluster.local:5432"
+            - name: GITEA__database__NAME
+              value: "gitea"
+            - name: GITEA__database__USER
+              value: "gitea"
+            - name: GITEA__database__PASSWD
+              valueFrom:
+                secretKeyRef:
+                  name: gitea-secrets
+                  key: db-password
+            # SSL_MODE=disable: clusterinterne Verbindung, wie bei n8n.
+            # Optionale Haertung spaeter: "require" (CNPG serviert TLS).
+            - name: GITEA__database__SSL_MODE
+              value: "disable"
+            # --- Server / URL ---
+            - name: GITEA__server__PROTOCOL
+              value: "http"
+            - name: GITEA__server__HTTP_PORT
+              value: "3000"
+            - name: GITEA__server__DOMAIN
+              value: "gitea-dev-v2.eneg.de"
+            - name: GITEA__server__ROOT_URL
+              value: "https://gitea-dev-v2.eneg.de/"
+            # Git-SSH bewusst deaktiviert - Clone/Push laeuft ueber HTTPS
+            - name: GITEA__server__DISABLE_SSH
+              value: "true"
+            - name: GITEA__server__START_SSH_SERVER
+              value: "false"
+            - name: GITEA__server__LFS_START_SERVER
+              value: "false"
+            # OFFLINE_MODE: keine externen CDNs/Gravatar - internes System
+            - name: GITEA__server__OFFLINE_MODE
+              value: "true"
+            # --- Security: Schluessel aus SOPS-Secret, kein Web-Installer ---
+            - name: GITEA__security__INSTALL_LOCK
+              value: "true"
+            - name: GITEA__security__SECRET_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: gitea-secrets
+                  key: secret-key
+            - name: GITEA__security__INTERNAL_TOKEN
+              valueFrom:
+                secretKeyRef:
+                  name: gitea-secrets
+                  key: internal-token
+            - name: GITEA__oauth2__JWT_SECRET
+              valueFrom:
+                secretKeyRef:
+                  name: gitea-secrets
+                  key: jwt-secret
+            # --- Dienst: geschlossenes internes System ---
+            - name: GITEA__service__DISABLE_REGISTRATION
+              value: "true"
+            - name: GITEA__service__REQUIRE_SIGNIN_VIEW
+              value: "true"
+            - name: GITEA__service__ENABLE_NOTIFY_MAIL
+              value: "false"
+            - name: GITEA__service__DEFAULT_KEEP_EMAIL_PRIVATE
+              value: "true"
+            # Mailer in DEV aus (wie OpenProject DEV) - Nutzer legt der Admin an
+            - name: GITEA__mailer__ENABLED
+              value: "false"
+            # --- Nicht genutzte Features aus ---
+            # Actions/CI: eigene Phase spaeter. Packages: dafuer laeuft zot.
+            - name: GITEA__actions__ENABLED
+              value: "false"
+            - name: GITEA__packages__ENABLED
+              value: "false"
+            # --- Repository / Cache / Logging ---
+            - name: GITEA__repository__DEFAULT_BRANCH
+              value: "main"
+            - name: GITEA__repository__DEFAULT_PRIVATE
+              value: "private"
+            - name: GITEA__cache__ADAPTER
+              value: "memory"
+            - name: GITEA__log__MODE
+              value: "console"
+            - name: GITEA__log__LEVEL
+              value: "Info"
+            - name: GITEA__time__DEFAULT_UI_LOCATION
+              value: "Europe/Berlin"
+            - name: TZ
+              value: "Europe/Berlin"
+          volumeMounts:
+            - name: gitea-data
+              mountPath: /var/lib/gitea
+            - name: gitea-config
+              mountPath: /etc/gitea
+            - name: tmp
+              mountPath: /tmp
+          resources:
+            requests:
+              cpu: 100m
+              memory: 256Mi
+            limits:
+              cpu: "1"
+              memory: 1Gi
+          # startupProbe deckt die DB-Migration beim Erststart ab (bis 5 Min)
+          startupProbe:
+            httpGet:
+              path: /api/healthz
+              port: http
+            initialDelaySeconds: 15
+            periodSeconds: 10
+            timeoutSeconds: 5
+            failureThreshold: 30
+          livenessProbe:
+            httpGet:
+              path: /api/healthz
+              port: http
+            periodSeconds: 20
+            timeoutSeconds: 5
+            failureThreshold: 5
+          readinessProbe:
+            httpGet:
+              path: /api/healthz
+              port: http
+            periodSeconds: 10
+            timeoutSeconds: 5
+            failureThreshold: 3
+      volumes:
+        - name: gitea-data
+          persistentVolumeClaim:
+            claimName: gitea-data
+        # /etc/gitea: app.ini wird beim Start aus den Env-Vars generiert
+        - name: gitea-config
+          emptyDir: {}
+        # /tmp: GITEA_TEMP des rootless-Images
+        - name: tmp
+          emptyDir: {}

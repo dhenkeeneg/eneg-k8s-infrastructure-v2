@@ -1,0 +1,10 @@
+---
+# Namespace fuer Gitea (internes Git-Hosting)
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: gitea
+  labels:
+    app.kubernetes.io/name: gitea
+    app.kubernetes.io/part-of: pilot-apps
+    app.kubernetes.io/managed-by: argocd

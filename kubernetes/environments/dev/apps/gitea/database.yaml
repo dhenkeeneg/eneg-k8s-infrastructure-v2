@@ -1,0 +1,24 @@
+---
+# CloudNativePG Database: gitea (DEV)
+# Erstellt die gitea-Datenbank deklarativ auf dem cnpg-shared Cluster.
+# Owner ist die managed role "gitea" (definiert in
+# kubernetes/environments/dev/cnpg-cluster/cnpg-shared.yaml).
+#
+# HINWEIS: Bewusst NICHT in kubernetes/base/cloudnative-pg/databases/ abgelegt.
+# Dieses Verzeichnis wird von DEV, TEST und PROD gemeinsam genutzt - die
+# Datenbank soll zunaechst nur in DEV entstehen. Beim Rollout auf TEST/PROD
+# wird dieses App-Verzeichnis mitkopiert.
+apiVersion: postgresql.cnpg.io/v1
+kind: Database
+metadata:
+  name: gitea
+  namespace: databases
+  labels:
+    app.kubernetes.io/part-of: cloudnative-pg
+    app.kubernetes.io/managed-by: argocd
+    app.kubernetes.io/component: database
+spec:
+  name: gitea
+  owner: gitea
+  cluster:
+    name: cnpg-shared

@@ -39,6 +39,8 @@ secrets.yml
 **/secrets/idoit-secrets.yaml
 **/secrets/idoit-db-credentials.yaml
 **/secrets/ghcr-pull-secret.yaml
+**/secrets/gitea-secrets.yaml
+**/cnpg-secrets/gitea-db-credentials.yaml
 
 # Age/SOPS Keys
 .age/
