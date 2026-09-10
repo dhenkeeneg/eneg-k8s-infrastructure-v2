@@ -123,6 +123,26 @@ spec:
             # Mailer in DEV aus (wie OpenProject DEV) - Nutzer legt der Admin an
             - name: GITEA__mailer__ENABLED
               value: "false"
+            # --- OIDC-Anmeldung ueber Entra ID ---
+            # Die Auth-Quelle selbst (Client-ID/Secret, Discovery-URL) liegt in
+            # der Gitea-Datenbank, nicht im Git - sie wird ueber die Gitea-
+            # Administration angelegt. Hier stehen nur die app.ini-Schalter,
+            # die das Verhalten beim externen Login steuern.
+            #
+            # ENABLE_AUTO_REGISTRATION=false: kein Konto ohne Zutun des Admins.
+            # ACCOUNT_LINKING=auto: verknuepft den Entra-Login per E-Mail mit
+            # dem bereits vorhandenen Gitea-Konto (henked -> d.henke@eneg.de).
+            # Lokaler Login bleibt aktiv (Break-Glass: admin-gitea).
+            - name: GITEA__oauth2_client__ENABLE_AUTO_REGISTRATION
+              value: "false"
+            - name: GITEA__oauth2_client__ACCOUNT_LINKING
+              value: "auto"
+            - name: GITEA__oauth2_client__OPENID_CONNECT_SCOPES
+              value: "openid profile email"
+            - name: GITEA__oauth2_client__UPDATE_AVATAR
+              value: "false"
+            - name: GITEA__oauth2_client__REGISTER_EMAIL_CONFIRM
+              value: "false"
             # --- Nicht genutzte Features aus ---
             # Actions/CI: eigene Phase spaeter. Packages: dafuer laeuft zot.
             - name: GITEA__actions__ENABLED
