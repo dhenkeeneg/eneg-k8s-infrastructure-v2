@@ -112,7 +112,14 @@ spec:
                   name: gitea-secrets
                   key: jwt-secret
             # --- Dienst: geschlossenes internes System ---
+            # Registrierung NUR ueber Entra ID. Wichtig ist die Kombination:
+            # DISABLE_REGISTRATION=true wuerde auch die OAuth2-Auto-
+            # Registrierung blockieren. ALLOW_ONLY_EXTERNAL_REGISTRATION
+            # existiert genau fuer diesen Fall - das lokale Registrierungs-
+            # formular ist aus, der externe Weg bleibt offen.
             - name: GITEA__service__DISABLE_REGISTRATION
+              value: "false"
+            - name: GITEA__service__ALLOW_ONLY_EXTERNAL_REGISTRATION
               value: "true"
             - name: GITEA__service__REQUIRE_SIGNIN_VIEW
               value: "true"
@@ -129,12 +136,18 @@ spec:
             # Administration angelegt. Hier stehen nur die app.ini-Schalter,
             # die das Verhalten beim externen Login steuern.
             #
-            # ENABLE_AUTO_REGISTRATION=false: kein Konto ohne Zutun des Admins.
+            # ENABLE_AUTO_REGISTRATION=true: Zugriff wird ausschliesslich in
+            # AD/Entra gesteuert. Wer der Enterprise-Anwendung zugewiesen ist,
+            # bekommt beim ersten Login automatisch ein Gitea-Konto.
+            # USERNAME=email nimmt den Teil vor dem @ (d.henke@eneg.de ->
+            # d.henke). Die anderen Optionen liefern GUIDs oder den UPN mit @.
             # ACCOUNT_LINKING=auto: verknuepft den Entra-Login per E-Mail mit
-            # dem bereits vorhandenen Gitea-Konto (henked -> d.henke@eneg.de).
+            # einem bereits vorhandenen Gitea-Konto (henked -> d.henke@eneg.de).
             # Lokaler Login bleibt aktiv (Break-Glass: admin-gitea).
             - name: GITEA__oauth2_client__ENABLE_AUTO_REGISTRATION
-              value: "false"
+              value: "true"
+            - name: GITEA__oauth2_client__USERNAME
+              value: "email"
             - name: GITEA__oauth2_client__ACCOUNT_LINKING
               value: "auto"
             - name: GITEA__oauth2_client__OPENID_CONNECT_SCOPES
