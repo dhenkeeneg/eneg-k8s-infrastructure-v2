@@ -119,7 +119,15 @@ spec:
         ensure: present
         passwordSecret:
           name: it-info-versand-db-credentials
+      # 2026-09-10: comment nachtraeglich ergaenzt. Die Rolle wurde angelegt,
+      # bevor gitea-db-credentials im Cluster existierte (Manifest-Commit vor
+      # Secret-Commit). CNPG hat sie dadurch ohne Passwort erstellt und danach
+      # als "reconciled" gefuehrt - pg_authid.rolpassword blieb NULL. Eine
+      # Aenderung an der Cluster-Spec erzwingt, dass der Instance-Manager die
+      # Rollenkonfiguration inkl. passwordSecret neu einliest.
+      # LEHRE fuer TEST/PROD: Secret-Commit VOR dem Manifest-Commit pushen.
       - name: gitea
+        comment: "Gitea - internes Git-Hosting"
         login: true
         createdb: false
         superuser: false
